@@ -28,19 +28,19 @@
   <div class="w-full">
     <!-- 工具条：字数 / 行数 / 每行格数 -->
     <div class="flex items-center justify-between gap-3 mb-2 px-1">
-      <div class="flex items-center gap-3 text-xs text-gray-500">
-        <span class="tnum"><b class="text-gray-700 font-medium">{{ charCount }}</b> 字</span>
-        <span class="tnum"><b class="text-gray-700 font-medium">{{ lineCount }}</b> 行</span>
+      <div class="flex items-center gap-3 text-xs text-c-muted">
+        <span class="tnum"><b class="text-c-body font-medium">{{ charCount }}</b> 字</span>
+        <span class="tnum"><b class="text-c-body font-medium">{{ lineCount }}</b> 行</span>
         <span v-if="wordLimit" class="tnum"
-          :class="charCount > wordLimit ? 'text-[#c0392b]' : ''">
+          :class="charCount > wordLimit ? 'text-[#b4552d]' : ''">
           / {{ wordLimit }} 字
         </span>
       </div>
-      <span class="text-xs text-gray-400">每行 {{ cols }} 字</span>
+      <span class="text-xs text-c-muted">每行 {{ cols }} 字</span>
     </div>
 
     <!-- 纸 -->
-    <div class="rounded-xl overflow-hidden shadow-[inset_2px_2px_6px_#c8ccd2] bg-[#fffdfb]">
+    <div class="rounded-xl overflow-hidden shadow-[inset_0_1px_3px_rgba(120,113,108,0.08)] bg-[#fffdfb]">
       <textarea
         ref="el"
         :value="modelValue"
@@ -49,8 +49,8 @@
         :disabled="disabled"
         spellcheck="false"
         class="grid-paper block w-full resize-none outline-none
-          bg-transparent text-[#2b2b2b] placeholder:text-[#dca8a8]
-          disabled:text-gray-400"
+          bg-transparent text-[#3a3632] placeholder:text-[#e2b9a6]
+          disabled:text-c-muted"
       />
     </div>
   </div>
@@ -169,7 +169,7 @@ onBeforeUnmount(() => ro?.disconnect())
 <style scoped>
 .grid-paper {
   --cell: 30px;
-  --line-color: #f0cfcf;
+  --line-color: #f2d9cc;
 
   padding: 0;
   border: 0;

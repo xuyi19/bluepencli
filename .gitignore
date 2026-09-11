@@ -29,6 +29,11 @@ release/.old-*/
 backend/data/*.db
 backend/data/*.db-journal
 
+# 练习归档（运行时产出：每批改一次就新增一对 md+json，文件名带随机 id）
+# 内容随 LLM 输出而变，不适合进版本控制；文件本身仍保留在本机 docs/practice/
+docs/practice/*.md
+docs/practice/*.json
+
 # IDE / 系统
 .idea/
 .vscode/

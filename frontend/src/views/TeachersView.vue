@@ -2,8 +2,8 @@
   <div class="w-full">
 
     <div class="mb-6">
-      <h1 class="text-xl font-semibold text-gray-800">老师档案</h1>
-      <p class="text-sm text-gray-500 mt-1">
+      <h1 class="text-xl font-semibold text-c-ink">老师档案</h1>
+      <p class="text-sm text-c-muted mt-1">
         {{ TEACHER_LIST.length }} 位申论名师的方法论体系 · 每位侧重不同，批改视角不同
       </p>
     </div>
@@ -14,19 +14,19 @@
       <div class="space-y-2.5">
         <button v-for="t in TEACHER_LIST" :key="t.id" @click="pick(t.id)"
           class="w-full text-left rounded-2xl p-4 transition-all duration-200"
-          :class="active === t.id ? 'neu-inset' : 'neu-sm hover:shadow-[inset_3px_3px_6px_#b8bcc2,inset_-3px_-3px_6px_#ffffff]'">
+          :class="active === t.id ? 'neu-inset' : 'neu-sm hover:translate-y-px'">
           <div class="flex items-center gap-3">
             <div class="w-9 h-9 rounded-xl flex items-center justify-center text-sm font-medium shrink-0"
               :style="{
-                background: active === t.id ? t.color : '#e0e5ec',
-                color: active === t.id ? '#fff' : t.color,
-                boxShadow: active === t.id ? 'none' : '3px 3px 6px #b8bcc2, -3px -3px 6px #ffffff',
+                background: active === t.id ? t.color : '#faf6f1',
+                color: active === t.id ? '#fffdfb' : t.color,
+                boxShadow: 'none',
               }">
               {{ t.avatar }}
             </div>
             <div class="min-w-0">
-              <div class="text-sm font-medium text-gray-800">{{ t.name }}</div>
-              <div class="text-xs text-gray-500 truncate">{{ t.school }}</div>
+              <div class="text-sm font-medium text-c-ink">{{ t.name }}</div>
+              <div class="text-xs text-c-muted truncate">{{ t.school }}</div>
             </div>
           </div>
         </button>
@@ -39,44 +39,44 @@
         <div class="rounded-2xl p-6 neu">
           <div class="flex items-start gap-4">
             <div class="w-14 h-14 rounded-2xl flex items-center justify-center text-xl font-medium shrink-0"
-              :style="{ background: teacher.color, color: '#fff' }">
+              :style="{ background: teacher.color, color: '#fffdfb' }">
               {{ teacher.avatar }}
             </div>
             <div class="min-w-0 flex-1">
               <div class="flex flex-wrap items-center gap-2">
-                <h2 class="text-lg font-semibold text-gray-800">{{ teacher.name }}</h2>
+                <h2 class="text-lg font-semibold text-c-ink">{{ teacher.name }}</h2>
                 <span class="text-xs px-2 py-0.5 rounded-md"
                   :style="{ background: teacher.color + '18', color: teacher.color }">
                   {{ teacher.school }}
                 </span>
-                <span class="text-xs px-2 py-0.5 rounded-md neu-inset text-gray-500">
+                <span class="text-xs px-2 py-0.5 rounded-md neu-inset text-c-muted">
                   权重 {{ teacher.weight }}
                 </span>
               </div>
-              <div class="text-sm text-gray-600 mt-1.5">{{ teacher.title }}</div>
+              <div class="text-sm text-c-body mt-1.5">{{ teacher.title }}</div>
               <div class="text-sm mt-2" :style="{ color: teacher.color }">
                 「{{ teacher.tagline }}」
               </div>
             </div>
           </div>
 
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-5 pt-5 border-t border-gray-200">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-5 pt-5 border-t border-c-line">
             <div>
-              <div class="text-xs text-gray-500 mb-1.5">评审侧重</div>
-              <div class="text-sm text-gray-800">{{ teacher.focus }}</div>
-              <div class="text-xs text-gray-500 mt-2 leading-5">{{ teacher.desc }}</div>
+              <div class="text-xs text-c-muted mb-1.5">评审侧重</div>
+              <div class="text-sm text-c-ink">{{ teacher.focus }}</div>
+              <div class="text-xs text-c-muted mt-2 leading-5">{{ teacher.desc }}</div>
             </div>
             <div>
-              <div class="text-xs text-gray-500 mb-1.5">适用场景</div>
+              <div class="text-xs text-c-muted mb-1.5">适用场景</div>
               <div class="flex flex-wrap gap-1.5">
                 <span v-for="s in teacher.scenes" :key="s"
-                  class="text-xs px-2 py-0.5 rounded-md neu-inset text-gray-600">{{ s }}</span>
+                  class="text-xs px-2 py-0.5 rounded-md neu-inset text-c-body">{{ s }}</span>
               </div>
             </div>
           </div>
 
-          <div class="mt-4 pt-4 border-t border-gray-200">
-            <div class="text-xs text-gray-500 mb-2">评分维度（AI 批改时只从这四项评判）</div>
+          <div class="mt-4 pt-4 border-t border-c-line">
+            <div class="text-xs text-c-muted mb-2">评分维度（AI 批改时只从这四项评判）</div>
             <div class="flex flex-wrap gap-1.5">
               <span v-for="d in teacher.dimensions" :key="d"
                 class="text-xs px-2 py-0.5 rounded-md"
@@ -89,19 +89,19 @@
         <div class="flex flex-wrap gap-2">
           <button v-for="v in VIEWS" :key="v.key" @click="view = v.key"
             class="px-4 py-2 rounded-xl text-xs font-medium transition-all duration-200"
-            :class="view === v.key ? 'neu-inset text-[#6d5dfc]' : 'neu-sm text-gray-600 hover:text-[#6d5dfc]'">
+            :class="view === v.key ? 'neu-inset text-[#5c4033]' : 'neu-sm text-c-body hover:text-[#5c4033]'">
             {{ v.label }}
           </button>
         </div>
 
         <!-- 视图一：方法论要点 -->
         <div v-if="view === 'method'" class="rounded-2xl p-6 neu">
-          <div class="text-sm font-medium text-gray-700 mb-3">批改指令（AI 实际收到的系统提示）</div>
+          <div class="text-sm font-medium text-c-body mb-3">批改指令（AI 实际收到的系统提示）</div>
           <div class="rounded-xl p-4 neu-inset">
-            <pre class="text-xs text-gray-600 whitespace-pre-wrap leading-6"
+            <pre class="text-xs text-c-body whitespace-pre-wrap leading-6"
               style="font-family: inherit">{{ teacher.instruction }}</pre>
           </div>
-          <div class="text-xs text-gray-400 mt-3 leading-5">
+          <div class="text-xs text-c-muted mt-3 leading-5">
             上面这段就是这位老师批改时，AI 收到的核心指令。它决定了这位老师会盯什么、放过什么、怎么给分。
           </div>
         </div>
@@ -109,15 +109,15 @@
         <!-- 视图二：原文全文 -->
         <div v-else class="rounded-2xl p-6 neu">
           <div class="flex items-center justify-between mb-3">
-            <div class="text-sm font-medium text-gray-700">方法论原文（完整提炼稿）</div>
-            <div class="text-xs text-gray-400 tnum">{{ docLoading ? '加载中…' : `${(doc.length / 1000).toFixed(1)}k 字符` }}</div>
+            <div class="text-sm font-medium text-c-body">方法论原文（完整提炼稿）</div>
+            <div class="text-xs text-c-muted tnum">{{ docLoading ? '加载中…' : `${(doc.length / 1000).toFixed(1)}k 字符` }}</div>
           </div>
-          <div v-if="docLoading" class="text-xs text-gray-400 py-6 text-center">正在加载…</div>
+          <div v-if="docLoading" class="text-xs text-c-muted py-6 text-center">正在加载…</div>
           <div v-else class="rounded-xl p-4 neu-inset max-h-[620px] overflow-y-auto">
-            <pre class="text-xs text-gray-600 whitespace-pre-wrap leading-6"
+            <pre class="text-xs text-c-body whitespace-pre-wrap leading-6"
               style="font-family: inherit">{{ doc }}</pre>
           </div>
-          <div class="text-xs text-gray-400 mt-3 leading-5">
+          <div class="text-xs text-c-muted mt-3 leading-5">
             原文来自该老师公开课程/讲义的提炼稿。本工具仅提炼其公开做题方法论，与老师本人无关；
             所有批改意见均由 AI 生成，仅供学习参考。
           </div>

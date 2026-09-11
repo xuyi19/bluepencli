@@ -4,14 +4,14 @@
     <div v-if="legend.length" class="flex flex-wrap items-center gap-x-4 gap-y-2 mb-3">
       <span v-for="l in legend" :key="l.id" class="inline-flex items-center gap-1.5 text-xs">
         <span class="w-2.5 h-2.5 rounded-full shrink-0" :style="{ background: l.color }" />
-        <span class="text-gray-600">{{ l.name }}</span>
-        <span class="text-gray-400">{{ l.count }} 处</span>
+        <span class="text-c-body">{{ l.name }}</span>
+        <span class="text-c-muted">{{ l.count }} 处</span>
       </span>
-      <span class="text-xs text-gray-400 ml-auto">划色处悬停看批注</span>
+      <span class="text-xs text-c-muted ml-auto">划色处悬停看批注</span>
     </div>
 
     <!-- 正文：保留原始换行，按老师颜色划色 -->
-    <div class="text-sm leading-8 text-gray-700 whitespace-pre-wrap"><span
+    <div class="text-sm leading-8 text-c-body whitespace-pre-wrap"><span
       v-for="(seg, i) in segments" :key="i"
       :class="seg.color ? 'rounded-sm cursor-help' : ''"
       :style="segStyle(seg)"
@@ -19,12 +19,12 @@
 
     <!-- 没能在原文里定位到的批注，单独列出来，不能默默吞掉 -->
     <div v-if="unlocated.length" class="mt-4 rounded-xl p-3 neu-inset">
-      <div class="text-xs text-gray-500 mb-2">以下批注未能定位到原文片段（AI 引用的句子与作答有出入）</div>
+      <div class="text-xs text-c-muted mb-2">以下批注未能定位到原文片段（AI 引用的句子与作答有出入）</div>
       <div v-for="(a, i) in unlocated" :key="i" class="text-xs leading-6">
         <span class="font-medium" :style="{ color: a.color }">{{ a.teacherName }}</span>
-        <span class="text-gray-500"> ｜ {{ a.type }}</span>
-        <div class="text-gray-600">{{ a.comment }}</div>
-        <div v-if="a.fix" class="text-[#0f6e56]">改：{{ a.fix }}</div>
+        <span class="text-c-muted"> ｜ {{ a.type }}</span>
+        <div class="text-c-body">{{ a.comment }}</div>
+        <div v-if="a.fix" class="text-[#4f7d5e]">改：{{ a.fix }}</div>
       </div>
     </div>
   </div>
@@ -41,7 +41,7 @@ const props = defineProps({
 
 function metaOf(id) {
   const t = TEACHERS[id]
-  return { name: t?.name || id, color: t?.color || '#6d5dfc' }
+  return { name: t?.name || id, color: t?.color || '#5c4033' }
 }
 
 /**
