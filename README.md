@@ -62,14 +62,19 @@
 **先答题，再批改；每位老师一种颜色**
 答题页是沉浸式单栏，答完了才进入批改。结果页把各老师的逐句批注按**各自颜色**标在作答原文上——同一句被多位老师标中时，下划线按人数分段着色，悬停可看全部意见；每位老师另给一段「如果只改一处先改哪里」的修改建议。
 
+**每日一练：进页面就有题有材料**
+打开练习页会自动载入当天的题目（题目 + 给定资料 + 作答要求 + 分值 + 字数限制一并到位），不用自己去别处找题再手抄一遍。选题是**确定性**的（按本地日期散列），同一天刷新多少次都是同一道；旁边「换一题」可随机切换，「从题库选题」可搜索挑选。首页也有今日一练入口。
+
+**内置题库与文章库**
+31 篇官媒时评（约 9.5 万字，覆盖 9 个主题）开箱即用；题库含 **15 道完整题目，覆盖五种题型**（归纳概括 / 综合分析 / 提出对策 / 贯彻执行 / 大作文），每题都带**完整给定资料与参考答案**，材料按「材料1 / 材料2」分则渲染。支持上传文件 / 选整个文件夹批量导入、JSON 文章包导入导出。
+
+> 题库里的材料是**按真题命题风格自编的仿真材料**（题型、材料结构、数据密度对齐真题），不是官方真题原文——界面会明确标注「仿真」。需要真题原文用「录入题目」自行补充。
+
 **记录归档，随时复盘**
 每次批改会落成 `docs/practice/` 下一对文件：`.md` 给人读（VSCode / Typora 直接打开），`.json` 给程序读（复盘页据此还原色标）。**离线也能用**——后端不在时退回浏览器 IndexedDB，两边都有时按 id 合并去重。
 
 **方法论透明可查**
 「老师」页可以读每位老师的完整讲义原文，也能看到 AI 实际收到的系统提示——不存在黑盒。
-
-**内置题库与文章库**
-31 篇官媒时评（约 9.5 万字，覆盖 9 个主题）开箱即用，另附真题题库。支持上传文件 / 选整个文件夹批量导入、JSON 文章包导入导出。
 
 **双运行通道，自动切换**
 有后端时请求经服务器转发（跨域消失、Key 可服务端统一配置）；没有后端时退化为浏览器直连。**同一套代码，既能当网站跑，也能打包成一个 HTML 文件发给别人双击即用。**
@@ -311,15 +316,21 @@ bluepencil/
 │   │   ├── prompts.js              # 追问与范文生成的 Prompt
 │   │   ├── data/
 │   │   │   ├── builtin-articles.json   # 内置 31 篇时评
-│   │   │   ├── builtin-questions.js    # 内置真题
+│   │   │   ├── builtin-questions.js    # 内置 15 道题（含完整材料与参考答案，标注为仿真）
+│   │   │   ├── daily.js                # 每日一练选题：按本地日期散列，确定性出题
 │   │   │   └── teachers/*.md           # 五位老师讲义原文（?raw 懒加载）
 │   │   ├── views/                  # 首页/老师/文章库/题库/练习批改/复盘/统计/设置
 │   │   ├── components/
+│   │   │   ├── GroupedSidebar.vue  # 分组侧边栏（移动端折叠为抽屉）
+│   │   │   ├── GridPaper.vue       # 方格作答纸：每行 25 字，格宽随容器实测
 │   │   │   ├── ScoreRing.vue       # 分数环
+│   │   │   ├── ToastHost.vue       # 轻量提示 / 确认框（替代 Arco）
 │   │   │   └── AnnotatedAnswer.vue # 按老师颜色给作答原文划批注
 │   │   ├── store/db.js             # IndexedDB 封装
 │   │   └── utils/
 │   │       ├── record.js           # 记录规范化：本地 ∪ 归档，统一成一种形态
+│   │       ├── readiness.js        # 批改就绪判定：本机 Key ∪ 服务端托管 Key
+│   │       ├── toast.js            # 命令式提示 / 确认（替代 Arco Message/Modal）
 │   │       ├── parse.js            # 批改结果解析（三层兜底）
 │   │       └── import.js           # 文章导入导出
 │   ├── scripts/
@@ -335,8 +346,11 @@ bluepencil/
 ├── .tools/                         # 开发验证脚本（不参与构建）
 │   ├── mock-llm.mjs                # 假 LLM：无 Key 也能端到端跑批改
 │   ├── e2e-grade.mjs               # 走完「答题→批改→归档」并核对结果
+│   ├── probe-practice.mjs          # 练习页断言：自动载题 + 题库带入字段不丢 + 换题
+│   ├── probe-gridpaper.mjs         # 方格纸断言：25 字必须正好一行
 │   ├── cdp-probe.mjs               # CDP 探针：真实等待 + 读页面文本
 │   ├── batch-shots.mjs             # 全路由截图 + 渲染校验
+│   ├── shot-full.mjs               # 整页截图（viewport 之外的题目/材料/格纸）
 │   └── shot-annotations.mjs        # 放大看色标批注区
 ├── release/                        # 分发包（单文件版 HTML + 桌面版 zip，均由脚本生成）
 ├── pytest.ini                      # pytest 配置（放仓库根，保证任意目录下跑结果一致）
@@ -449,19 +463,37 @@ node .tools/e2e-grade.mjs
 
 # 3) 全路由截图 + 渲染校验（含「导航被拆成逐字换行」这类布局回归）
 node .tools/batch-shots.mjs
+
+# 4) 练习页断言（自动载题、题库带入字段不丢、换题）
+node .tools/probe-practice.mjs
+
+# 5) 方格纸对齐断言（25 字必须正好一行）
+node .tools/probe-gridpaper.mjs
+
+# 6) 整页截图，看折叠线以下的内容（题目 / 材料 / 方格纸）
+node .tools/shot-full.mjs practice full-practice
 ```
 
 | 脚本 | 用途 |
 |---|---|
 | `mock-llm.mjs` | OpenAI 兼容的假接口。按 system prompt 判断是「老师阅卷 / 圆桌辩论 / 合议」，返回对应结构的 JSON。**真 Key 只影响内容质量，不影响链路正确性**，所以用它就能把整条链路验穿 |
 | `e2e-grade.mjs` | CDP 驱动：注入配置 → 填表 → 点「开始批改」→ 真实等待 → 核对结果页元素。用 Vue 的原生 setter 触发 `input`，`v-model` 才会更新 |
+| `probe-practice.mjs` | 练习页断言：进页面自动载入题目、从题库带入时 `requirement/maxScore/wordLimit` 不丢、换一题清空旧作答 |
+| `probe-gridpaper.mjs` | 方格纸断言：24/25/26/50/51 字分别应占 1/1/2/2/3 行 |
 | `cdp-probe.mjs` | 真实等待 N 秒后读 `document.body.innerText` |
 | `batch-shots.mjs` | 逐条路由截图并检查标志性文案 |
+| `shot-full.mjs` | 整页截图（`captureBeyondViewport`）。viewport 截图看不到题目、材料、方格纸，因为它们都在折叠线以下 |
 | `shot-annotations.mjs` | 滚到色标批注区放大截图，并统计「几位老师标了同一句」 |
 
 > **为什么不用 `chrome --headless --screenshot --virtual-time-budget`？**
 > 它会把虚拟时间冻住，依赖 `IndexedDB` 或网络回调的异步流程可能永远不 resolve——页面停在「正在读取记录…」，
 > **看起来完全像一个 bug，实际只是截图方式的假象**。所以涉及本地数据或接口的页面，一律走 CDP 真实等待。
+
+> **CDP 脚本的两个坑**（都踩过，且都会伪装成「成功」）：
+> 1. **不要用固定调试端口**。Windows 上 `proc.kill()` 杀不掉 Chrome 的整个进程树，残留实例继续占着端口；
+>    下一次运行 `spawn` 的新实例绑不上端口，而连 `/json/list` 会连到**旧实例**——截图"成功"，拍的却是上一页。改用随机端口。
+> 2. **`ROUTE = argv[2] || 'practice'` 这种兜底会把首页吃掉**。首页的 route 是空字符串，`'' || 'practice'` 得到 `practice`，
+>    于是"截首页"永远截到练习页。用 `argv[2] !== undefined ? argv[2] : 'practice'`。同理适用任何"空字符串是合法值"的参数。
 
 ---
 

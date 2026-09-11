@@ -1,36 +1,45 @@
 <template>
   <div class="w-full">
 
-    <div class="flex flex-wrap items-center justify-between gap-4 mb-6">
+    <div class="flex flex-wrap items-end justify-between gap-4 mb-6">
       <div>
         <h1 class="text-xl font-semibold text-c-ink">题库</h1>
-        <p class="text-sm text-c-muted mt-1">
-          内置 {{ builtin.length }} 道真题 · 自建 {{ mine.length }} 道
+        <p class="text-sm text-c-muted mt-1.5">
+          内置 {{ builtin.length }} 道 · 自建 {{ mine.length }} 道
+          <span class="text-c-muted">· 题型覆盖 {{ coveredTypes }} / 5</span>
         </p>
       </div>
       <div class="flex items-center gap-2">
-        <input v-model="keyword" type="text" placeholder="搜索题目"
-          class="px-3 py-2 rounded-xl text-sm neu-inset outline-none w-48
+        <input v-model="keyword" type="text" placeholder="搜索题目 / 来源 / 主题"
+          class="px-3.5 py-2.5 rounded-xl text-xs neu-inset outline-none w-52
             text-c-body placeholder:text-c-muted" />
         <button @click="showImport = !showImport"
-          class="px-4 py-2 rounded-xl text-sm font-medium neu-sm text-[#5c4033]">
-          + 录入题目
+          class="px-4 py-2.5 rounded-xl text-xs font-medium neu-sm text-c-bark">
+          {{ showImport ? '收起录入' : '+ 录入题目' }}
         </button>
       </div>
     </div>
 
+    <!-- 诚实说明：不冒充真题 -->
+    <div class="rounded-2xl px-5 py-4 mb-6 text-xs leading-6"
+      style="background: #f7eddc; color: #9c6b2f">
+      内置题目为<strong>按真题命题风格自编的仿真材料</strong>（题型、材料结构、数据密度对齐真题），
+      适合日常练习；需要官方真题原文，用「录入题目」自行补充即可。
+    </div>
+
     <!-- 筛选 -->
     <div class="rounded-2xl p-5 neu mb-6">
-      <div class="text-xs text-c-muted mb-2">按题型</div>
+      <div class="text-xs text-c-muted mb-2.5">按题型</div>
       <div class="flex flex-wrap gap-1.5">
         <button @click="typeFilter = ''"
-          class="px-3 py-1.5 rounded-lg text-xs transition-all"
-          :class="!typeFilter ? 'neu-inset text-[#5c4033] font-medium' : 'neu-sm text-c-body'">
+          class="px-3 py-1.5 rounded-lg text-xs transition-all duration-200"
+          :class="!typeFilter ? 'neu-inset text-c-bark font-medium' : 'neu-sm text-c-body'">
           全部
+          <span class="tnum opacity-60">{{ pool.length }}</span>
         </button>
         <button v-for="t in QUESTION_TYPES" :key="t" @click="typeFilter = t"
-          class="px-3 py-1.5 rounded-lg text-xs transition-all"
-          :class="typeFilter === t ? 'neu-inset text-[#5c4033] font-medium' : 'neu-sm text-c-body'">
+          class="px-3 py-1.5 rounded-lg text-xs transition-all duration-200"
+          :class="typeFilter === t ? 'neu-inset text-c-bark font-medium' : 'neu-sm text-c-body'">
           {{ t }}
           <span class="tnum opacity-60">{{ countByType(t) }}</span>
         </button>
@@ -39,43 +48,46 @@
 
     <!-- 录入面板 -->
     <div v-if="showImport" class="rounded-2xl p-5 neu mb-6">
-      <div class="text-sm font-medium text-c-body mb-3">录入题目</div>
+      <div class="text-sm font-medium text-c-body mb-1">录入题目</div>
+      <div class="text-xs text-c-muted mb-4 leading-5">
+        材料与作答要求一起填，练习页才能一键带入完整题目
+      </div>
       <div class="space-y-3">
-        <input v-model="draft.title" type="text" placeholder="题干"
-          class="w-full px-3 py-2 rounded-lg text-sm neu-inset outline-none
-            text-c-body placeholder:text-c-muted" />
-        <div class="grid grid-cols-3 gap-3">
+        <textarea v-model="draft.title" rows="2" placeholder="题干"
+          class="w-full px-3.5 py-2.5 rounded-xl text-xs neu-inset outline-none resize-none
+            text-c-body placeholder:text-c-muted leading-6" />
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
           <select v-model="draft.type"
-            class="px-3 py-2 rounded-lg text-sm neu-inset outline-none text-c-body">
+            class="px-3 py-2.5 rounded-xl text-xs neu-inset outline-none text-c-body">
             <option value="">题型</option>
             <option v-for="t in QUESTION_TYPES" :key="t" :value="t">{{ t }}</option>
           </select>
+          <input v-model="draft.exam" type="text" placeholder="来源"
+            class="px-3 py-2.5 rounded-xl text-xs neu-inset outline-none
+              text-c-body placeholder:text-c-muted" />
           <input v-model.number="draft.maxScore" type="number" placeholder="满分"
-            class="px-3 py-2 rounded-lg text-sm neu-inset outline-none
+            class="px-3 py-2.5 rounded-xl text-xs neu-inset outline-none
               text-c-body placeholder:text-c-muted tnum" />
           <input v-model.number="draft.wordLimit" type="number" placeholder="字数"
-            class="px-3 py-2 rounded-lg text-sm neu-inset outline-none
+            class="px-3 py-2.5 rounded-xl text-xs neu-inset outline-none
               text-c-body placeholder:text-c-muted tnum" />
         </div>
-        <input v-model="draft.exam" type="text" placeholder="来源（如 2024 国考副省级）"
-          class="w-full px-3 py-2 rounded-lg text-sm neu-inset outline-none
-            text-c-body placeholder:text-c-muted" />
         <textarea v-model="draft.requirement" rows="2" placeholder="作答要求"
-          class="w-full px-3 py-2 rounded-lg text-sm neu-inset outline-none resize-none
-            text-c-body placeholder:text-c-muted" />
-        <textarea v-model="draft.material" rows="6" placeholder="给定资料"
-          class="w-full px-3 py-2 rounded-lg text-sm neu-inset outline-none resize-none
-            text-c-body placeholder:text-c-muted" />
+          class="w-full px-3.5 py-2.5 rounded-xl text-xs neu-inset outline-none resize-none
+            text-c-body placeholder:text-c-muted leading-6" />
+        <textarea v-model="draft.material" rows="8" placeholder="给定资料（建议按「材料1 / 材料2」分行写）"
+          class="w-full px-3.5 py-2.5 rounded-xl text-xs neu-inset outline-none resize-none
+            text-c-body placeholder:text-c-muted leading-6" />
         <textarea v-model="draft.reference" rows="4" placeholder="参考答案 / 范文（选填）"
-          class="w-full px-3 py-2 rounded-lg text-sm neu-inset outline-none resize-none
-            text-c-body placeholder:text-c-muted" />
+          class="w-full px-3.5 py-2.5 rounded-xl text-xs neu-inset outline-none resize-none
+            text-c-body placeholder:text-c-muted leading-6" />
         <div class="flex gap-2">
-          <button @click="saveQuestion" :disabled="!draft.title"
-            class="px-4 py-2 rounded-xl text-sm font-medium neu text-[#5c4033] disabled:opacity-40">
+          <button @click="saveQuestion" :disabled="!draft.title.trim()"
+            class="px-4 py-2 rounded-xl text-xs font-medium neu text-c-bark disabled:opacity-40">
             保存
           </button>
           <button @click="showImport = false"
-            class="px-4 py-2 rounded-xl text-sm font-medium neu-sm text-c-muted">取消</button>
+            class="px-4 py-2 rounded-xl text-xs font-medium neu-sm text-c-muted">取消</button>
         </div>
       </div>
     </div>
@@ -85,28 +97,34 @@
       <div v-for="q in filtered" :key="q.id" class="rounded-2xl p-5 neu-sm">
         <div class="flex items-start justify-between gap-4">
           <div class="min-w-0 flex-1">
-            <div class="flex items-center gap-2">
-              <span v-if="q.builtin" class="text-xs px-1.5 py-0.5 rounded shrink-0"
-                style="background: #f2ebe2; color: #5c4033">内置</span>
+            <div class="flex flex-wrap items-center gap-2">
+              <span v-if="q.id === dailyId" class="text-xs px-2 py-0.5 rounded-full shrink-0 font-medium"
+                style="background: #f2ebe2; color: #5c4033">今日一练</span>
+              <span class="text-xs px-1.5 py-0.5 rounded shrink-0"
+                style="background: #f2ebe2; color: #5c4033">{{ q.builtin ? '内置' : '自建' }}</span>
               <span v-if="q.type" class="text-xs px-1.5 py-0.5 rounded shrink-0"
                 style="background: #e8ecdf; color: #3d5a7a">{{ q.type }}</span>
-              <div class="text-sm font-medium text-c-ink truncate">{{ q.title }}</div>
+              <span v-if="q.builtin" class="text-xs text-c-muted shrink-0">仿真</span>
             </div>
-            <div class="flex flex-wrap items-center gap-2 mt-2">
-              <span v-if="q.exam" class="text-xs px-2 py-0.5 rounded-md neu-inset text-c-muted">
-                {{ q.exam }}
-              </span>
-              <span v-if="q.maxScore" class="text-xs text-c-muted tnum">{{ q.maxScore }} 分</span>
-              <span v-if="q.wordLimit" class="text-xs text-c-muted tnum">≤{{ q.wordLimit }} 字</span>
+            <div class="text-sm font-medium text-c-ink mt-2 leading-6">{{ q.title }}</div>
+            <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5 mt-2.5 text-xs text-c-muted">
+              <span v-if="q.exam">{{ q.exam }}</span>
+              <span v-if="q.maxScore" class="tnum">{{ q.maxScore }} 分</span>
+              <span v-if="q.wordLimit" class="tnum">≤{{ q.wordLimit }} 字</span>
+              <span v-if="q.difficulty">{{ DIFFICULTY_LABEL[q.difficulty] }}</span>
+              <span v-if="q.material" class="tnum">材料 {{ q.material.length }} 字</span>
               <span v-for="t in q.topics || []" :key="t"
-                class="text-xs px-1.5 py-0.5 rounded" style="background: #f5f1ea; color: #78716c">
+                class="px-1.5 py-0.5 rounded" style="background: #f5f1ea; color: #78716c">
                 {{ t }}
               </span>
             </div>
+            <div v-if="q.requirement" class="text-xs text-c-muted mt-2.5 leading-5">
+              要求：{{ q.requirement }}
+            </div>
           </div>
-          <div class="flex items-center gap-1 shrink-0">
+          <div class="flex flex-col items-end gap-2 shrink-0">
             <button @click="practiceWith(q)"
-              class="px-3 py-1.5 rounded-lg text-xs neu-inset text-c-body hover:text-[#5c4033]">
+              class="px-3.5 py-2 rounded-lg text-xs font-medium neu-inset text-c-bark whitespace-nowrap">
               做这道题
             </button>
             <button v-if="!q.builtin" @click="del(q.id)"
@@ -118,13 +136,22 @@
             </button>
           </div>
         </div>
+
+        <!-- 参考答案：折叠，做完再看 -->
+        <details v-if="q.reference" class="mt-3 pt-3 border-t border-c-line">
+          <summary class="text-xs text-c-muted cursor-pointer hover:text-c-bark list-none">
+            ▸ 参考答案
+          </summary>
+          <div class="mt-2.5 text-xs text-c-body leading-7 whitespace-pre-wrap
+            max-h-72 overflow-y-auto pr-1">{{ q.reference }}</div>
+        </details>
       </div>
     </div>
 
     <div v-else class="rounded-2xl p-12 neu text-center text-c-muted">
       <div class="text-sm">{{ keyword || typeFilter ? '没有匹配的题目' : '题库还是空的' }}</div>
       <div class="text-xs text-c-muted mt-2 leading-5">
-        可以录入自己的题目，或等内置题库补充
+        可以录入自己的题目，或清空筛选看看内置题库
       </div>
     </div>
   </div>
@@ -135,7 +162,8 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { toast } from '../utils/toast'
 import { getAll, put, remove, uid, STORES } from '../store/db'
-import { BUILTIN_QUESTIONS, QUESTION_TYPES, withPrefix } from '../data/builtin-questions'
+import { BUILTIN_QUESTIONS, QUESTION_TYPES, DIFFICULTY_LABEL, withPrefix } from '../data/builtin-questions'
+import { pickDaily } from '../data/daily'
 
 const router = useRouter()
 
@@ -152,14 +180,25 @@ const draft = reactive({
 
 const pool = computed(() => [...mine.value, ...builtin.value])
 
+/** 今日一练是哪道：与练习页共用同一套确定性选题，两处必然一致 */
+const dailyId = computed(() => pickDaily(pool.value)?.id || '')
+
 const filtered = computed(() => {
   const k = keyword.value.trim().toLowerCase()
   return pool.value.filter((q) => {
     if (typeFilter.value && q.type !== typeFilter.value) return false
     if (!k) return true
-    return q.title.toLowerCase().includes(k) || (q.exam || '').toLowerCase().includes(k)
+    return (
+      (q.title || '').toLowerCase().includes(k) ||
+      (q.exam || '').toLowerCase().includes(k) ||
+      (q.topics || []).some((t) => t.toLowerCase().includes(k))
+    )
   })
 })
+
+const coveredTypes = computed(
+  () => QUESTION_TYPES.filter((t) => pool.value.some((q) => q.type === t)).length
+)
 
 function countByType(t) {
   return pool.value.filter((q) => q.type === t).length
@@ -199,11 +238,15 @@ async function del(id) {
   await load()
 }
 
+/**
+ * 带进练习页。
+ * 只传 questionId —— 练习页会回题库池里按 id 取完整题目（字段最全，也不怕 URL 过长）。
+ * 早期版本只传 title + material，作答要求、满分、字数全丢，用户还得手填一遍；
+ * 后来改成把五个字段都塞进 query，虽然不丢了但 URL 会变成几千字符。
+ * id 是唯一稳定标识，传它就够了。
+ */
 function practiceWith(q) {
-  router.push({
-    path: '/practice',
-    query: { title: q.title, material: q.material, questionId: q.id },
-  })
+  router.push({ path: '/practice', query: { questionId: q.id } })
 }
 
 onMounted(load)

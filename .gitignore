@@ -40,6 +40,9 @@ docs/practice/*.json
 .DS_Store
 Thumbs.db
 
+# 工作记忆（本机使用，不进版本控制）
+.workbuddy/
+
 # 日志
 *.log
 npm-debug.log*

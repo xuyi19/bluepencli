@@ -317,13 +317,13 @@ export const MODE_LABEL = {
 
 /** 预设组合 */
 export const PRESETS = [
-  { key: 'yuandong', ids: ['yuandong'], label: '东哥 · 只查采分词', hint: '最快看清漏了哪些词' },
-  { key: 'zhoutairan', ids: ['zhoutairan'], label: '周泰然 · 只查要点处理', hint: '拆点/整句抄/材料贴合' },
-  { key: 'bailu', ids: ['bailu'], label: '白鹭 · 只查应题形式', hint: '形式有没有回应问法' },
-  { key: 'kiwi', ids: ['kiwi'], label: 'Kiwi · 只查分类逻辑', hint: 'MECE 与层次' },
-  { key: 'lichongli', ids: ['lichongli'], label: '李崇立 · 只查表述规范', hint: '原词有没有被自编词替换' },
-  { key: 'kd', ids: ['yuandong', 'zhoutairan'], label: '采分词 + 要点处理', hint: '两派最硬的两关' },
-  { key: 'bd', ids: ['bailu', 'yuandong'], label: '应题形式 + 采分词', hint: '形式与内容双查' },
-  { key: 'core3', ids: ['yuandong', 'zhoutairan', 'bailu'], label: '三师圆桌（推荐）', hint: '采分词 / 要点 / 应题，三维互补' },
-  { key: 'all', ids: ['yuandong', 'zhoutairan', 'bailu', 'kiwi', 'lichongli'], label: '五师圆桌（全席）', hint: '全真模考、高分打磨，耗时最长' },
+  { key: 'yuandong', ids: ['yuandong'], label: '东哥', hint: '袁东 · 只查采分词：最快看清漏了哪些词' },
+  { key: 'zhoutairan', ids: ['zhoutairan'], label: '周泰然', hint: '周泰然 · 只查要点处理：拆点 / 整句抄 / 材料贴合' },
+  { key: 'bailu', ids: ['bailu'], label: '白鹭', hint: '白鹭 · 只查应题形式：形式有没有回应问法' },
+  { key: 'kiwi', ids: ['kiwi'], label: 'Kiwi', hint: 'Kiwi · 只查分类逻辑：MECE 与层次' },
+  { key: 'lichongli', ids: ['lichongli'], label: '李崇立', hint: '李崇立 · 只查表述规范：原词有没有被自编词替换' },
+  { key: 'kd', ids: ['yuandong', 'zhoutairan'], label: '采分+要点', hint: '袁东 + 周泰然：两派最硬的两关' },
+  { key: 'bd', ids: ['bailu', 'yuandong'], label: '应题+采分', hint: '白鹭 + 袁东：形式与内容双查' },
+  { key: 'core3', ids: ['yuandong', 'zhoutairan', 'bailu'], label: '三师圆桌', hint: '推荐：采分词 / 要点 / 应题，三维互补' },
+  { key: 'all', ids: ['yuandong', 'zhoutairan', 'bailu', 'kiwi', 'lichongli'], label: '五师圆桌', hint: '全席：全真模考、高分打磨，耗时最长' },
 ]

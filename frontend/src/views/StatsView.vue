@@ -7,7 +7,7 @@
     <div v-if="!records.length" class="rounded-2xl p-16 neu text-center text-c-muted">
       <div class="text-sm">还没有练习记录，批改一次就有了</div>
       <RouterLink to="/practice"
-        class="inline-block mt-4 px-4 py-2 rounded-xl text-xs font-medium neu text-[#5c4033]">
+        class="inline-block mt-4 px-4 py-2 rounded-xl text-xs font-medium neu text-c-bark">
         去练习 →
       </RouterLink>
     </div>

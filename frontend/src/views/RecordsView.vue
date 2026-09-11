@@ -94,7 +94,7 @@
             <div class="flex items-center justify-between mb-3">
               <span class="text-sm font-medium text-c-body">我的作答 · 老师批注</span>
               <button @click="showQuestion = !showQuestion"
-                class="text-xs text-c-muted hover:text-[#5c4033] transition-colors">
+                class="text-xs text-c-muted hover:text-c-bark transition-colors">
                 {{ showQuestion ? '收起题目' : '查看题目' }}
               </button>
             </div>
@@ -134,7 +134,7 @@
             </div>
 
             <details v-if="r.annotations?.length" class="mb-2">
-              <summary class="text-xs text-c-muted cursor-pointer hover:text-[#5c4033]">
+              <summary class="text-xs text-c-muted cursor-pointer hover:text-c-bark">
                 逐句批注（{{ r.annotations.length }}）
               </summary>
               <div class="space-y-2 mt-2">
@@ -151,7 +151,7 @@
             </details>
 
             <details v-if="r.dimensions?.length" class="mb-2">
-              <summary class="text-xs text-c-muted cursor-pointer hover:text-[#5c4033]">
+              <summary class="text-xs text-c-muted cursor-pointer hover:text-c-bark">
                 分项得分（{{ r.dimensions.length }}）
               </summary>
               <div class="space-y-2 mt-2">
@@ -169,7 +169,7 @@
             </details>
 
             <details v-if="r.deductions?.length" class="mb-2">
-              <summary class="text-xs text-c-muted cursor-pointer hover:text-[#5c4033]">
+              <summary class="text-xs text-c-muted cursor-pointer hover:text-c-bark">
                 扣分点（{{ r.deductions.length }}）
               </summary>
               <div class="space-y-2 mt-2">
@@ -182,7 +182,7 @@
             </details>
 
             <details v-if="r.rewrites?.length" class="mb-2">
-              <summary class="text-xs text-c-muted cursor-pointer hover:text-[#5c4033]">
+              <summary class="text-xs text-c-muted cursor-pointer hover:text-c-bark">
                 改写示例（{{ r.rewrites.length }}）
               </summary>
               <div class="space-y-2 mt-2">
@@ -204,7 +204,7 @@
             <div class="space-y-2">
               <div v-for="(d, i) in detail.debate.disputes" :key="i" class="rounded-xl p-3 neu-inset">
                 <div class="text-xs font-medium text-c-body">{{ d.topic }}</div>
-                <div class="text-xs text-[#5c4033] mt-1.5 leading-6">裁定：{{ d.ruling }}</div>
+                <div class="text-xs text-c-bark mt-1.5 leading-6">裁定：{{ d.ruling }}</div>
               </div>
             </div>
           </div>
@@ -230,7 +230,7 @@
             <div class="text-xs text-c-muted mb-2">改进建议</div>
             <ul class="space-y-1.5">
               <li v-for="(s, i) in detail.suggestions" :key="i" class="text-sm text-c-body flex gap-2 leading-6">
-                <span class="text-[#5c4033] shrink-0 tnum">{{ i + 1 }}.</span><span>{{ s }}</span>
+                <span class="text-c-bark shrink-0 tnum">{{ i + 1 }}.</span><span>{{ s }}</span>
               </li>
             </ul>
           </div>
@@ -248,7 +248,7 @@
     <div v-else class="rounded-2xl p-16 neu text-center text-c-muted">
       <div class="text-sm">{{ keyword || modeFilter ? '没有匹配的记录' : '还没有练习记录' }}</div>
       <RouterLink v-if="!keyword && !modeFilter" to="/practice"
-        class="inline-block mt-4 px-4 py-2 rounded-xl text-xs font-medium neu text-[#5c4033]">
+        class="inline-block mt-4 px-4 py-2 rounded-xl text-xs font-medium neu text-c-bark">
         去练习 →
       </RouterLink>
     </div>
