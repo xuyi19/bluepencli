@@ -1,0 +1,76 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============ Arco 主题覆盖（紫色主色）============ */
+:root {
+  --primary-1: 240, 238, 255;
+  --primary-2: 214, 209, 254;
+  --primary-3: 189, 181, 253;
+  --primary-4: 163, 152, 253;
+  --primary-5: 137, 124, 252;
+  --primary-6: 109, 93, 252;      /* #6d5dfc 主色 */
+  --primary-7: 89, 76, 204;
+  --primary-8: 71, 61, 163;
+  --primary-9: 53, 46, 122;
+  --primary-10: 35, 30, 82;
+}
+
+html, body, #app { height: 100%; }
+body {
+  margin: 0;
+  background: #e0e5ec;
+  color: #333333;
+  font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: #e0e5ec; }
+::-webkit-scrollbar-thumb { background: #b8bcc2; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #a0a5ad; }
+
+.arco-message { border-radius: 12px; }
+.arco-table-th { background-color: #f5f6f8 !important; }
+.arco-table-td { border-color: #e5e7eb !important; }
+
+/* ============ 拟态工具类 ============ */
+.neu {
+  background: #e0e5ec;
+  box-shadow: 6px 6px 12px #b8bcc2, -6px -6px 12px #ffffff;
+}
+.neu-sm {
+  background: #e0e5ec;
+  box-shadow: 4px 4px 8px #b8bcc2, -4px -4px 8px #ffffff;
+}
+.neu-inset {
+  background: #e0e5ec;
+  box-shadow: inset 3px 3px 6px #b8bcc2, inset -3px -3px 6px #ffffff;
+}
+.neu-press {
+  background: #e0e5ec;
+  box-shadow: inset 4px 4px 8px #b8bcc2, inset -4px -4px 8px #ffffff;
+}
+
+/* 分栏用等宽数字 */
+.tnum { font-variant-numeric: tabular-nums; }
+
+/* 批改结果里的 markdown 简排 */
+.md-body { line-height: 1.8; font-size: 14px; }
+.md-body p { margin: 0 0 10px; }
+.md-body ul { margin: 0 0 10px; padding-left: 20px; list-style: disc; }
+.md-body ol { margin: 0 0 10px; padding-left: 20px; list-style: decimal; }
+.md-body strong { font-weight: 600; color: #1f2937; }
+.md-body h1, .md-body h2, .md-body h3 { font-weight: 600; margin: 14px 0 8px; }
+
+/* 流式输出光标 */
+.stream-caret::after {
+  content: '';
+  display: inline-block;
+  width: 2px; height: 14px;
+  margin-left: 2px;
+  vertical-align: -2px;
+  background: #6d5dfc;
+  animation: caret 1s steps(1) infinite;
+}
+@keyframes caret { 50% { opacity: 0; } }
