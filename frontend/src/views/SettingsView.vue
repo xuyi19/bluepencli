@@ -1,5 +1,5 @@
 <template>
-  <div class="max-w-3xl mx-auto px-6 md:px-8 py-8">
+  <div class="max-w-3xl">
 
     <h1 class="text-xl font-semibold text-gray-800 mb-1">设置</h1>
     <p class="text-sm text-gray-500 mb-8">配置大模型 API，Key 仅保存在这台电脑的浏览器里</p>

@@ -1,5 +1,5 @@
 <template>
-  <div class="max-w-6xl mx-auto px-6 md:px-8 py-10">
+  <div class="w-full">
 
     <section class="mb-10">
       <h1 class="text-2xl font-semibold text-gray-800">蓝笔申论</h1>

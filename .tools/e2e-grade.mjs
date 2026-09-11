@@ -119,7 +119,8 @@ const filled = await evaluate(`
   }
   const title = document.querySelector('input[type="text"]')
   const ta = [...document.querySelectorAll('textarea')]
-  const answer = ta.find(t => (t.placeholder||'').includes('在这里作答'))
+  // 作答框现在是方格纸组件（GridPaper），用 class 定位比 placeholder 稳
+  const answer = document.querySelector('textarea.grid-paper') || ta.find(t => (t.placeholder||'').includes('作答'))
   const req = ta.find(t => (t.placeholder||'').includes('观点明确'))
   setVal(title, '结合给定资料，围绕「养老刚需也是产业蓝海」自拟题目，写一篇文章')
   setVal(req, '观点明确，结构完整，语言流畅，1000 字左右')

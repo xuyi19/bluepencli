@@ -1,6 +1,5 @@
 <template>
-  <div :class="step === 'answer' ? 'max-w-3xl' : 'max-w-5xl'"
-    class="mx-auto px-6 md:px-8 py-10">
+  <div :class="step === 'answer' ? 'max-w-3xl' : 'w-full'">
 
     <!-- ==================== 页头 ==================== -->
     <div class="flex items-end justify-between gap-4 mb-8">
@@ -92,70 +91,68 @@
         </div>
       </section>
 
-      <!-- 题目 -->
-      <section class="rounded-2xl p-5 neu mb-6">
-        <div class="text-sm font-medium text-gray-700 mb-4">题目</div>
+      <!-- 题目 + 给定资料：并排，仿考场卷面 -->
+      <div class="grid grid-cols-1 lg:grid-cols-5 gap-6 mb-6">
 
-        <label class="block text-xs text-gray-500 mb-1.5">题干</label>
-        <input v-model="form.title" type="text"
-          placeholder="例：结合给定资料，围绕「养老刚需也是产业蓝海」自拟题目，写一篇文章"
-          class="w-full px-3.5 py-2.5 rounded-xl text-sm bg-[#e0e5ec] neu-inset outline-none
-            text-gray-700 placeholder:text-gray-400" />
-
-        <label class="block text-xs text-gray-500 mt-4 mb-1.5">作答要求</label>
-        <textarea v-model="form.requirement" rows="2"
-          placeholder="例：观点明确，结构完整，语言流畅，1000 字左右"
-          class="w-full px-3.5 py-2.5 rounded-xl text-sm bg-[#e0e5ec] neu-inset outline-none resize-none
-            text-gray-700 placeholder:text-gray-400 leading-6" />
-
-        <div class="grid grid-cols-2 gap-4 mt-4">
-          <div>
-            <label class="block text-xs text-gray-500 mb-1.5">满分</label>
-            <input v-model.number="form.maxScore" type="number" min="1"
-              class="w-full px-3.5 py-2.5 rounded-xl text-sm bg-[#e0e5ec] neu-inset outline-none text-gray-700 tnum" />
+        <!-- 左：给定资料（答题时占主位） -->
+        <section class="lg:col-span-3 rounded-2xl p-5 neu flex flex-col min-h-[16rem]">
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-sm font-medium text-gray-700">给定资料</span>
+            <button @click="showMaterial = !showMaterial"
+              class="text-xs text-gray-500 hover:text-[#6d5dfc] transition-colors">
+              {{ showMaterial ? '收起' : '展开' }}
+            </button>
           </div>
-          <div>
-            <label class="block text-xs text-gray-500 mb-1.5">字数要求</label>
-            <input v-model.number="form.wordLimit" type="number" placeholder="不限"
-              class="w-full px-3.5 py-2.5 rounded-xl text-sm bg-[#e0e5ec] neu-inset outline-none
-                text-gray-700 placeholder:text-gray-400 tnum" />
+          <textarea v-if="showMaterial" v-model="form.material" rows="16"
+            placeholder="把材料原样粘进来（材料 1、材料 2……）"
+            class="w-full flex-1 px-3.5 py-2.5 rounded-xl text-sm bg-[#e0e5ec] neu-inset outline-none resize-none
+              text-gray-700 placeholder:text-gray-400 leading-7" />
+          <div v-else class="text-xs text-gray-400 py-1">
+            {{ form.material ? `已填写 ${countChars(form.material)} 字（点击展开查看/编辑）` : '未填写（点击展开填写）' }}
           </div>
-        </div>
-      </section>
+        </section>
 
-      <!-- 给定资料 -->
-      <section class="rounded-2xl p-5 neu mb-6">
-        <div class="flex items-center justify-between mb-3">
-          <span class="text-sm font-medium text-gray-700">给定资料</span>
-          <button @click="showMaterial = !showMaterial"
-            class="text-xs text-gray-500 hover:text-[#6d5dfc] transition-colors">
-            {{ showMaterial ? '收起' : '展开' }}
-          </button>
-        </div>
-        <textarea v-if="showMaterial" v-model="form.material" rows="8"
-          placeholder="把材料原样粘进来（材料 1、材料 2……）"
-          class="w-full px-3.5 py-2.5 rounded-xl text-sm bg-[#e0e5ec] neu-inset outline-none resize-none
-            text-gray-700 placeholder:text-gray-400 leading-6" />
-        <div v-else class="text-xs text-gray-400 py-1">
-          {{ form.material ? `已填写 ${countChars(form.material)} 字（点击展开查看/编辑）` : '未填写（点击展开填写）' }}
-        </div>
-      </section>
+        <!-- 右：题目要求 -->
+        <section class="lg:col-span-2 rounded-2xl p-5 neu">
+          <div class="text-sm font-medium text-gray-700 mb-4">题目</div>
 
-      <!-- 我的作答：整个页面的主角，给足空间 -->
+          <label class="block text-xs text-gray-500 mb-1.5">题干</label>
+          <input v-model="form.title" type="text"
+            placeholder="例：结合给定资料，围绕「养老刚需也是产业蓝海」自拟题目，写一篇文章"
+            class="w-full px-3.5 py-2.5 rounded-xl text-sm bg-[#e0e5ec] neu-inset outline-none
+              text-gray-700 placeholder:text-gray-400" />
+
+          <label class="block text-xs text-gray-500 mt-4 mb-1.5">作答要求</label>
+          <textarea v-model="form.requirement" rows="4"
+            placeholder="例：观点明确，结构完整，语言流畅，1000 字左右"
+            class="w-full px-3.5 py-2.5 rounded-xl text-sm bg-[#e0e5ec] neu-inset outline-none resize-none
+              text-gray-700 placeholder:text-gray-400 leading-6" />
+
+          <div class="grid grid-cols-2 gap-4 mt-4">
+            <div>
+              <label class="block text-xs text-gray-500 mb-1.5">满分</label>
+              <input v-model.number="form.maxScore" type="number" min="1"
+                class="w-full px-3.5 py-2.5 rounded-xl text-sm bg-[#e0e5ec] neu-inset outline-none text-gray-700 tnum" />
+            </div>
+            <div>
+              <label class="block text-xs text-gray-500 mb-1.5">字数要求</label>
+              <input v-model.number="form.wordLimit" type="number" placeholder="不限"
+                class="w-full px-3.5 py-2.5 rounded-xl text-sm bg-[#e0e5ec] neu-inset outline-none
+                  text-gray-700 placeholder:text-gray-400 tnum" />
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <!-- 我的作答：方格纸，仿考场卷面 -->
       <section class="rounded-2xl p-5 neu mb-6">
         <div class="flex items-center justify-between mb-3">
           <span class="text-sm font-medium text-gray-700">我的作答</span>
-          <span class="text-xs tnum"
-            :class="overLimit ? 'text-[#a32d2d]' : 'text-gray-500'">
-            {{ countChars(form.answer) }} 字
-            <span v-if="form.wordLimit"> / {{ form.wordLimit }}</span>
-            <span v-if="overLimit" class="ml-1">超出 {{ countChars(form.answer) - form.wordLimit }} 字</span>
+          <span v-if="overLimit" class="text-xs tnum text-[#a32d2d]">
+            超出 {{ countChars(form.answer) - form.wordLimit }} 字
           </span>
         </div>
-        <textarea v-model="form.answer" rows="18"
-          placeholder="在这里作答。写多长都行，不急着提交——答完再点下面的按钮开始批改。"
-          class="w-full px-4 py-3.5 rounded-xl text-sm bg-[#e0e5ec] neu-inset outline-none resize-none
-            text-gray-700 placeholder:text-gray-400 leading-8" />
+        <GridPaper v-model="form.answer" :word-limit="form.wordLimit || 0" />
       </section>
 
       <!-- 提交：常驻底部，长作答不用滚回去找按钮 -->
@@ -509,6 +506,7 @@ import { RouterLink, useRoute } from 'vue-router'
 import { Message } from '@arco-design/web-vue'
 import ScoreRing from '../components/ScoreRing.vue'
 import AnnotatedAnswer from '../components/AnnotatedAnswer.vue'
+import GridPaper from '../components/GridPaper.vue'
 import { chat, hasApiKey } from '../api/llm'
 import { buildFollowupMessages, buildSampleMessages } from '../prompts'
 import { TEACHERS, TEACHER_LIST, MODE_LABEL, PRESETS, detectMode } from '../agents/teachers'
