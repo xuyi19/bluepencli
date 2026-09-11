@@ -13,11 +13,11 @@
           class="px-3 py-2 rounded-xl text-sm neu-inset outline-none w-44
             text-c-body placeholder:text-c-muted" />
         <button @click="showImport = !showImport"
-          class="px-4 py-2 rounded-xl text-sm font-medium neu-sm text-[#5c4033]">
+          class="px-4 py-2 rounded-xl text-sm font-medium neu-sm text-c-bark">
           {{ showImport ? '收起' : '+ 导入' }}
         </button>
         <button v-if="mine.length" @click="exportMine"
-          class="px-4 py-2 rounded-xl text-sm font-medium neu-sm text-c-body hover:text-[#5c4033]">
+          class="px-4 py-2 rounded-xl text-sm font-medium neu-sm text-c-body hover:text-c-bark">
           导出
         </button>
       </div>
@@ -28,7 +28,7 @@
       <div class="flex flex-wrap items-center gap-2 mb-4">
         <button v-for="s in SOURCES" :key="s.key" @click="source = s.key"
           class="px-3.5 py-1.5 rounded-lg text-xs transition-all duration-200"
-          :class="source === s.key ? 'neu-inset text-[#5c4033] font-medium' : 'neu-sm text-c-body'">
+          :class="source === s.key ? 'neu-inset text-c-bark font-medium' : 'neu-sm text-c-body'">
           {{ s.label }}
           <span class="tnum ml-1 opacity-60">{{ s.count }}</span>
         </button>
@@ -39,12 +39,12 @@
         <div class="flex flex-wrap gap-1.5">
           <button @click="topic = ''"
             class="px-2.5 py-1 rounded-lg text-xs transition-all"
-            :class="!topic ? 'neu-inset text-[#5c4033] font-medium' : 'neu-sm text-c-body'">
+            :class="!topic ? 'neu-inset text-c-bark font-medium' : 'neu-sm text-c-body'">
             全部
           </button>
           <button v-for="t in topicList" :key="t.name" @click="topic = t.name"
             class="px-2.5 py-1 rounded-lg text-xs transition-all"
-            :class="topic === t.name ? 'neu-inset text-[#5c4033] font-medium' : 'neu-sm text-c-body'">
+            :class="topic === t.name ? 'neu-inset text-c-bark font-medium' : 'neu-sm text-c-body'">
             {{ t.name }} <span class="tnum opacity-60">{{ t.count }}</span>
           </button>
         </div>
@@ -56,7 +56,7 @@
       <div class="flex flex-wrap items-center gap-1.5 mb-4">
         <button v-for="m in IMPORT_MODES" :key="m.key" @click="importMode = m.key"
           class="px-3.5 py-1.5 rounded-lg text-xs transition-all duration-200"
-          :class="importMode === m.key ? 'neu-inset text-[#5c4033] font-medium' : 'neu-sm text-c-body'">
+          :class="importMode === m.key ? 'neu-inset text-c-bark font-medium' : 'neu-sm text-c-body'">
           {{ m.label }}
         </button>
       </div>
@@ -82,7 +82,7 @@
             text-c-body placeholder:text-c-muted" />
         <div class="flex gap-2">
           <button @click="saveArticle" :disabled="!draft.title || !draft.content"
-            class="px-4 py-2 rounded-xl text-sm font-medium neu text-[#5c4033] disabled:opacity-40">
+            class="px-4 py-2 rounded-xl text-sm font-medium neu text-c-bark disabled:opacity-40">
             保存
           </button>
           <button @click="showImport = false"
@@ -102,11 +102,11 @@
 
         <div class="flex flex-wrap gap-2">
           <button @click="fileInput?.click()"
-            class="px-4 py-2 rounded-xl text-sm font-medium neu-sm text-[#5c4033]">
+            class="px-4 py-2 rounded-xl text-sm font-medium neu-sm text-c-bark">
             选择文件
           </button>
           <button @click="folderInput?.click()"
-            class="px-4 py-2 rounded-xl text-sm font-medium neu-sm text-[#5c4033]">
+            class="px-4 py-2 rounded-xl text-sm font-medium neu-sm text-c-bark">
             选择文件夹
           </button>
           <button v-if="pending.length" @click="pending = []"
@@ -124,7 +124,7 @@
               class="flex-1 px-3 py-2 rounded-lg text-sm neu-inset outline-none
                 text-c-body placeholder:text-c-muted" />
             <button @click="confirmPending"
-              class="px-4 py-2 rounded-xl text-sm font-medium neu text-[#5c4033] shrink-0">
+              class="px-4 py-2 rounded-xl text-sm font-medium neu text-c-bark shrink-0">
               导入 {{ pending.length }} 篇
             </button>
           </div>
@@ -132,7 +132,7 @@
           <div class="max-h-64 overflow-y-auto space-y-1.5">
             <label v-for="(p, i) in pending" :key="i"
               class="flex items-center gap-2.5 px-3 py-2 rounded-lg neu-inset cursor-pointer">
-              <input type="checkbox" v-model="p._keep" class="accent-[#5c4033] shrink-0" />
+              <input type="checkbox" v-model="p._keep" class="accent-c-bark shrink-0" />
               <span class="text-xs text-c-body truncate flex-1">{{ p.title }}</span>
               <span class="text-xs text-c-muted tnum shrink-0">{{ p.wordCount }} 字</span>
             </label>
@@ -158,7 +158,7 @@
             text-c-body placeholder:text-c-muted font-mono" />
         <div class="flex gap-2">
           <button @click="importPack" :disabled="!packText.trim()"
-            class="px-4 py-2 rounded-xl text-sm font-medium neu text-[#5c4033] disabled:opacity-40">
+            class="px-4 py-2 rounded-xl text-sm font-medium neu text-c-bark disabled:opacity-40">
             解析并导入
           </button>
           <button @click="packInput?.click()"
@@ -177,7 +177,7 @@
               <span v-if="a.builtin"
                 class="text-xs px-1.5 py-0.5 rounded shrink-0"
                 style="background: #f2ebe2; color: #5c4033">内置</span>
-              <div class="text-sm font-medium text-c-ink cursor-pointer hover:text-[#5c4033]
+              <div class="text-sm font-medium text-c-ink cursor-pointer hover:text-c-bark
                 transition-colors truncate" @click="open(a)">
                 {{ a.title }}
               </div>
@@ -187,14 +187,14 @@
                 {{ a.source }}
               </span>
               <span v-for="t in a.topics" :key="t"
-                class="text-xs px-2 py-0.5 rounded-md neu-inset text-[#5c4033]">{{ t }}</span>
+                class="text-xs px-2 py-0.5 rounded-md neu-inset text-c-bark">{{ t }}</span>
               <span class="text-xs text-c-muted tnum">{{ a.wordCount }} 字</span>
               <span v-if="a.date" class="text-xs text-c-muted tnum">{{ a.date }}</span>
             </div>
           </div>
           <div class="flex items-center gap-1 shrink-0">
             <button @click="practiceWith(a)" title="用这篇文章出题练习"
-              class="px-3 py-1.5 rounded-lg text-xs neu-inset text-c-body hover:text-[#5c4033]">
+              class="px-3 py-1.5 rounded-lg text-xs neu-inset text-c-body hover:text-c-bark">
               练习
             </button>
             <button v-if="!a.builtin" @click="del(a.id)" title="删除"
@@ -210,7 +210,7 @@
 
       <div v-if="filtered.length > pageSize" class="text-center pt-4">
         <button @click="pageSize += 20"
-          class="px-5 py-2 rounded-xl text-xs font-medium neu-sm text-c-body hover:text-[#5c4033]">
+          class="px-5 py-2 rounded-xl text-xs font-medium neu-sm text-c-body hover:text-c-bark">
           加载更多（{{ pageSize }} / {{ filtered.length }}）
         </button>
       </div>
@@ -241,10 +241,10 @@
         </div>
         <div class="px-6 py-4 border-t border-c-line flex items-center justify-between gap-3">
           <a v-if="reading.url" :href="reading.url" target="_blank" rel="noopener"
-            class="text-xs text-c-muted hover:text-[#5c4033] truncate">查看原文 →</a>
+            class="text-xs text-c-muted hover:text-c-bark truncate">查看原文 →</a>
           <span v-else />
           <button @click="practiceWith(reading); reading = null"
-            class="px-4 py-2 rounded-xl text-xs font-medium neu text-[#5c4033] shrink-0">
+            class="px-4 py-2 rounded-xl text-xs font-medium neu text-c-bark shrink-0">
             用这篇练习
           </button>
         </div>

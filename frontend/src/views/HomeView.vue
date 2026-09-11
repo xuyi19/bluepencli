@@ -1,12 +1,40 @@
 <template>
-  <div class="w-full">
+  <div class="w-full max-w-6xl">
 
-    <section class="mb-10">
-      <h1 class="text-2xl font-semibold text-c-ink">蓝笔申论</h1>
+    <section class="mb-8">
+      <h1 class="font-serif text-2xl font-semibold text-c-ink">蓝笔申论</h1>
       <p class="text-sm text-c-muted mt-2 leading-6">
-        输入作答 → 五位老师按申论标准批改 → 记录归档到本机 docs，随时复盘<br />
+        每日一练 → 五位老师按申论标准批改 → 记录归档到本机 docs，随时复盘<br />
         所有数据存在本机，只有批改那一刻才联网
       </p>
+    </section>
+
+    <!-- 今日一练：首页最显眼的位置，进来就能开始 -->
+    <section v-if="todayQ" class="rounded-2xl p-6 md:p-7 neu mb-8">
+      <div class="flex flex-wrap items-start justify-between gap-6">
+        <div class="min-w-0 flex-1">
+          <div class="flex flex-wrap items-center gap-2 mb-3">
+            <span class="px-2.5 py-1 rounded-full text-xs font-medium"
+              style="background: #f2ebe2; color: #5c4033">今日一练</span>
+            <span class="text-xs text-c-muted tnum">{{ todayLabel }}</span>
+            <span class="text-xs px-1.5 py-0.5 rounded"
+              style="background: #e8ecdf; color: #3d5a7a">{{ todayQ.type }}</span>
+            <span v-if="doneToday" class="text-xs" style="color: #4f7d5e">✓ 今天已经练过一次</span>
+          </div>
+          <h2 class="font-serif text-lg md:text-xl text-c-ink leading-8">{{ todayQ.title }}</h2>
+          <div class="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-c-muted mt-3.5">
+            <span>{{ todayQ.exam }}</span>
+            <span class="tnum">满分 {{ todayQ.maxScore }}</span>
+            <span v-if="todayQ.wordLimit" class="tnum">≤ {{ todayQ.wordLimit }} 字</span>
+            <span v-if="todayQ.difficulty">{{ DIFFICULTY_LABEL[todayQ.difficulty] }}</span>
+          </div>
+        </div>
+        <RouterLink :to="`/practice?questionId=${todayQ.id}`"
+          class="shrink-0 px-6 py-3 rounded-full text-sm font-medium text-c-cream
+            bg-c-bark transition-colors duration-300">
+          {{ doneToday ? '再练一遍' : '开始今日一练' }}
+        </RouterLink>
+      </div>
     </section>
 
     <section class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
@@ -23,10 +51,10 @@
         <RouterLink v-for="a in ACTIONS" :key="a.path" :to="a.path"
           class="rounded-2xl p-5 neu-sm group transition-all duration-300
             hover:translate-y-px">
-          <div class="w-10 h-10 rounded-xl neu-inset flex items-center justify-center mb-3 text-[#5c4033]">
+          <div class="w-10 h-10 rounded-xl neu-inset flex items-center justify-center mb-3 text-c-bark">
             <span v-html="a.icon" />
           </div>
-          <div class="text-sm font-medium text-c-body group-hover:text-[#5c4033] transition-colors">
+          <div class="text-sm font-medium text-c-body group-hover:text-c-bark transition-colors">
             {{ a.title }}
           </div>
           <div class="text-xs text-c-muted mt-1.5 leading-5">{{ a.desc }}</div>
@@ -37,7 +65,7 @@
     <section v-if="recent.length" class="mb-10">
       <div class="flex items-center justify-between mb-4">
         <h2 class="text-sm font-medium text-c-body">最近练习</h2>
-        <RouterLink to="/records" class="text-xs text-c-muted hover:text-[#5c4033]">全部 →</RouterLink>
+        <RouterLink to="/records" class="text-xs text-c-muted hover:text-c-bark">全部 →</RouterLink>
       </div>
       <div class="rounded-2xl neu overflow-hidden">
         <div v-for="(r, i) in recent" :key="r.id" class="px-5 py-4 flex items-center gap-4"
@@ -50,7 +78,7 @@
             </div>
           </div>
           <RouterLink :to="`/records?id=${r.id}`"
-            class="text-xs text-c-muted hover:text-[#5c4033] shrink-0">复盘</RouterLink>
+            class="text-xs text-c-muted hover:text-c-bark shrink-0">复盘</RouterLink>
         </div>
       </div>
     </section>
@@ -61,7 +89,7 @@
         批改需要用你自己的大模型 API。到设置页填 API 地址、Key 和模型名即可，配置只存在本机浏览器里。
       </p>
       <RouterLink to="/settings"
-        class="inline-block px-4 py-2 rounded-xl text-xs font-medium neu text-[#5c4033]">
+        class="inline-block px-4 py-2 rounded-xl text-xs font-medium neu text-c-bark">
         去配置 →
       </RouterLink>
     </section>
@@ -73,10 +101,24 @@ import { ref, onMounted, computed } from 'vue'
 import { RouterLink } from 'vue-router'
 import ScoreRing from '../components/ScoreRing.vue'
 import { listAllRecords, fmtDateTime } from '../utils/record'
-import { hasApiKey } from '../api/llm'
+import { getAll, STORES } from '../store/db'
+import { BUILTIN_QUESTIONS, DIFFICULTY_LABEL, withPrefix } from '../data/builtin-questions'
+import { pickDaily, practicedToday } from '../data/daily'
+import { useReadiness } from '../utils/readiness'
 
 const records = ref([])
-const hasKey = computed(() => hasApiKey())
+const mine = ref([])
+const todayQ = ref(null)
+const doneToday = ref(false)
+
+const { ready: hasKey, probeReadiness } = useReadiness()
+
+const pool = computed(() => [...mine.value, ...BUILTIN_QUESTIONS.map(withPrefix)])
+
+const todayLabel = computed(() => {
+  const d = new Date()
+  return `${d.getMonth() + 1} 月 ${d.getDate()} 日`
+})
 
 const ACTIONS = [
   {
@@ -86,9 +128,9 @@ const ACTIONS = [
     icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg>',
   },
   {
-    path: '/articles',
-    title: '文章库',
-    desc: '官媒时评作为练习素材，按主题标签挑题练',
+    path: '/questions',
+    title: '题库',
+    desc: '15 道内置题目，覆盖五种题型，每题都有完整材料与参考答案',
     icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19.5A2.5 2.5 0 016.5 17H20M4 19.5A2.5 2.5 0 016.5 22H20V2H6.5A2.5 2.5 0 004 4.5z"/></svg>',
   },
   {
@@ -119,6 +161,10 @@ const stats = computed(() => {
 })
 
 onMounted(async () => {
+  probeReadiness()
+  mine.value = (await getAll(STORES.questions)).map((q) => ({ ...q, kind: '自建' }))
+  todayQ.value = pickDaily(pool.value)
   records.value = await listAllRecords()
+  doneToday.value = practicedToday(records.value)
 })
 </script>

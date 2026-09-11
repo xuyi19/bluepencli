@@ -17,14 +17,14 @@
 
     <!-- 桌面端侧边栏（固定）：用 1px 描边分区，不用阴影——纸感的做法 -->
     <aside class="hidden md:block fixed left-0 top-0 bottom-0 w-56 z-40 bg-c-cream border-r border-c-line">
-      <GroupedSidebar :nav="NAV" :dot="dot" />
+      <GroupedSidebar :nav="NAV" :dot="dot" :version="version" />
     </aside>
 
     <!-- 移动端抽屉 -->
     <div v-if="drawerOpen" class="md:hidden fixed inset-0 z-40">
       <div class="absolute inset-0 bg-c-ink/25" @click="drawerOpen = false" />
       <aside class="relative w-56 h-full bg-c-cream border-r border-c-line">
-        <GroupedSidebar :nav="NAV" :dot="dot" @navigate="drawerOpen = false" />
+        <GroupedSidebar :nav="NAV" :dot="dot" :version="version" @navigate="drawerOpen = false" />
       </aside>
     </div>
 
@@ -41,8 +41,8 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { RouterView } from 'vue-router'
-import { hasApiKey } from './api/llm'
-import { probeBackend } from './api/backend'
+import { backendInfo, probeBackend } from './api/backend'
+import { useReadiness } from './utils/readiness'
 import GroupedSidebar from './components/GroupedSidebar.vue'
 import ToastHost from './components/ToastHost.vue'
 
@@ -59,9 +59,15 @@ const NAV = [
 
 const backendUp = ref(false)
 const drawerOpen = ref(false)
+const version = ref('0.2.0')
+
+// 批改能否直接用：本机填了 Key，或服务端托管了 Key（桌面版/部署版）
+const { ready, probeReadiness } = useReadiness()
 
 onMounted(async () => {
   backendUp.value = await probeBackend()
+  await probeReadiness()
+  version.value = backendInfo()?.version || '0.2.0'
 })
 
 // 一个圆点表达三种状态，避免堆太多指示器
@@ -69,7 +75,7 @@ const dot = computed(() => {
   if (backendUp.value) {
     return { color: '#8b9d77', title: '服务端通道已连接：请求经后端转发，无跨域问题' }
   }
-  if (hasApiKey()) {
+  if (ready.value) {
     return { color: '#d4a373', title: '本地直连：已配置 API Key' }
   }
   return { color: '#d6d3d1', title: '尚未配置：请到设置页填写 API' }

@@ -1,9 +1,9 @@
 <template>
-  <div :class="step === 'answer' ? 'max-w-3xl' : 'w-full'">
+  <div :class="step === 'answer' ? 'w-full max-w-5xl' : 'w-full'">
 
     <!-- ==================== 页头 ==================== -->
     <div class="flex items-end justify-between gap-4 mb-8">
-      <div>
+      <div class="min-w-0">
         <h1 class="text-xl font-semibold text-c-ink">
           {{ step === 'answer' ? '练习批改' : step === 'grading' ? '批改中' : '批改结果' }}
         </h1>
@@ -15,36 +15,113 @@
               : `${fmtDateTime(record?.createdAt)} · ${MODE_LABEL[report?.mode] || ''}` }}
         </p>
       </div>
-      <button v-if="step === 'result'" @click="backToAnswer"
-        class="shrink-0 px-4 py-2 rounded-xl text-sm font-medium text-c-body neu-sm
-          hover:text-[#5c4033] transition-colors duration-200">
-        修改作答
-      </button>
-      <button v-else-if="step === 'answer'" @click="resetAll"
-        class="shrink-0 px-4 py-2 rounded-xl text-xs font-medium text-c-muted neu-sm
-          hover:text-[#5c4033] transition-colors duration-200">
-        清空
-      </button>
+      <div class="flex items-center gap-2 shrink-0">
+        <button v-if="step === 'result'" @click="backToAnswer"
+          class="px-4 py-2 rounded-xl text-sm font-medium text-c-body neu-sm
+            hover:text-c-bark transition-colors duration-200">
+          修改作答
+        </button>
+        <button v-else-if="step === 'answer'" @click="resetAll"
+          class="px-4 py-2 rounded-xl text-xs font-medium text-c-muted neu-sm
+            hover:text-c-bark transition-colors duration-200">
+          清空
+        </button>
+      </div>
     </div>
 
-    <div v-if="!hasKey" class="rounded-2xl p-5 mb-8 neu-sm border-l-4 border-[#5c4033]">
+    <div v-if="!hasKey" class="rounded-2xl p-5 mb-8 neu-sm border-l-4 border-c-bark">
       <div class="text-sm text-c-body">
         还没配置 API Key，批改功能用不了。
-        <RouterLink to="/settings" class="text-[#5c4033] font-medium hover:underline">去设置 →</RouterLink>
+        <RouterLink to="/settings" class="text-c-bark font-medium hover:underline">去设置 →</RouterLink>
       </div>
     </div>
 
     <!-- ==================== 第一步：答题 ==================== -->
     <template v-if="step === 'answer'">
 
-      <!-- 阅卷老师：紧凑一行，不再铺五张大卡 -->
-      <section class="rounded-2xl p-5 neu mb-6">
-        <div class="flex items-center justify-between gap-3 mb-3.5">
+      <!-- 今日一练：进页面就有题有材料，不用自己找。做成扁条，别把材料挤到折线以下 -->
+      <section v-if="todayQ" class="rounded-2xl px-5 py-4 neu mb-5">
+        <div class="flex flex-wrap items-center justify-between gap-x-5 gap-y-3">
+          <div class="min-w-0 flex-1">
+            <div class="flex flex-wrap items-center gap-x-2.5 gap-y-1 mb-1.5">
+              <span class="px-2 py-0.5 rounded-full text-xs font-medium shrink-0"
+                style="background: #f2ebe2; color: #5c4033">今日一练</span>
+              <span class="text-xs text-c-muted tnum">{{ todayLabel }}</span>
+              <span class="text-xs px-1.5 py-0.5 rounded shrink-0"
+                style="background: #e8ecdf; color: #3d5a7a">{{ todayQ.type }}</span>
+              <span v-if="todayQ.kind" class="text-xs text-c-muted shrink-0">{{ todayQ.kind }}</span>
+              <span class="text-xs text-c-muted truncate">{{ todayQ.exam }}</span>
+              <span v-if="doneToday" class="text-xs shrink-0" style="color: #4f7d5e">✓ 今天已练过</span>
+            </div>
+
+            <h2 class="font-serif text-sm md:text-base text-c-ink leading-7">{{ todayQ.title }}</h2>
+
+            <div class="flex flex-wrap items-center gap-x-3.5 gap-y-1 text-xs text-c-muted mt-2">
+              <span class="tnum">满分 {{ todayQ.maxScore }}</span>
+              <span v-if="todayQ.wordLimit" class="tnum">≤ {{ todayQ.wordLimit }} 字</span>
+              <span>{{ DIFFICULTY_LABEL[todayQ.difficulty] || '' }}</span>
+              <span class="tnum">材料 {{ (todayQ.material || '').length }} 字</span>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-2 shrink-0">
+            <button v-if="loadedId !== todayQ.id" @click="applyQuestion(todayQ)"
+              class="px-4 py-2 rounded-xl text-xs font-medium text-c-cream
+                bg-c-bark transition-colors duration-300">
+              用今日一练作答
+            </button>
+            <span v-else
+              class="px-4 py-2 rounded-xl text-xs font-medium neu-inset text-c-bark">
+              已在作答这一题
+            </span>
+            <button @click="shuffle"
+              class="px-4 py-2 rounded-xl text-xs font-medium neu-sm text-c-body
+                hover:text-c-bark transition-colors duration-300">
+              换一题
+            </button>
+          </div>
+        </div>
+
+        <!-- 材料速览：不点开只占一行，点开在卡片下方铺开，不挡下面的题目区 -->
+        <details class="mt-3 pt-3 border-t border-c-line group">
+          <summary class="text-xs text-c-muted cursor-pointer hover:text-c-bark transition-colors list-none">
+            <span class="transition-transform duration-300 group-open:rotate-90 inline-block mr-1">▸</span>
+            先读材料（{{ materialBlocks(todayQ.material).length }} 则）
+          </summary>
+          <div class="mt-3 max-h-72 overflow-y-auto space-y-3 pr-1">
+            <div v-for="(b, i) in materialBlocks(todayQ.material)" :key="i">
+              <div v-if="b.label" class="text-xs font-medium text-c-bark mb-1">{{ b.label }}</div>
+              <p class="text-xs text-c-body leading-7 whitespace-pre-wrap">{{ b.body }}</p>
+            </div>
+          </div>
+        </details>
+      </section>
+
+      <!-- 阅卷老师：压成两行，把纵向空间让给题目与材料 -->
+      <section class="rounded-2xl px-5 py-4 neu mb-5">
+        <div class="flex flex-wrap items-center gap-x-3 gap-y-2 mb-3">
           <span class="text-sm font-medium text-c-body">谁来批改</span>
           <span class="text-xs text-c-muted">
-            {{ MODE_LABEL[mode] }}
-            <span v-if="selected.length" class="text-[#5c4033]">· {{ selected.length }} 位</span>
+            {{ MODE_LABEL[mode] }}<span v-if="selected.length" class="text-c-bark"> · {{ selected.length }} 位</span>
           </span>
+
+          <div class="ml-auto flex flex-wrap items-center gap-1.5">
+            <button v-for="p in PRESETS" :key="p.key" @click="selected = [...p.ids]"
+              class="px-2.5 py-1 rounded-lg text-xs transition-all duration-200"
+              :class="samePreset(p.ids)
+                ? 'neu-inset text-c-bark font-medium'
+                : 'text-c-muted hover:text-c-bark'"
+              :title="p.hint">
+              {{ p.label }}
+            </button>
+            <span class="w-px h-4 bg-c-line mx-1 hidden sm:block" />
+            <button @click="deep = !deep"
+              title="深度模式：注入老师方法论全文，判断更贴原始标准；代价是更慢更贵。日常练习建议关闭。"
+              class="px-2.5 py-1 rounded-lg text-xs transition-all duration-200"
+              :class="deep ? 'neu-inset text-c-bark font-medium' : 'text-c-muted hover:text-c-bark'">
+              深度模式{{ deep ? ' · 开' : '' }}
+            </button>
+          </div>
         </div>
 
         <div class="flex flex-wrap gap-2">
@@ -62,84 +139,127 @@
               :class="selected.includes(t.id) ? 'font-medium' : ''">{{ t.name }}</span>
           </button>
         </div>
-
-        <div class="pt-3.5 mt-4 border-t border-c-line">
-          <div class="flex flex-wrap gap-1.5">
-            <button v-for="p in PRESETS" :key="p.key" @click="selected = [...p.ids]"
-              class="px-2.5 py-1 rounded-lg text-xs transition-all duration-200"
-              :class="samePreset(p.ids)
-                ? 'neu-inset text-[#5c4033] font-medium'
-                : 'text-c-muted hover:text-[#5c4033]'"
-              :title="p.hint">
-              {{ p.label }}
-            </button>
-          </div>
-        </div>
-
-        <div class="pt-3 mt-3 border-t border-c-line flex items-start justify-between gap-4">
-          <div class="min-w-0">
-            <div class="text-xs text-c-body">深度模式</div>
-            <div class="text-xs text-c-muted mt-0.5 leading-5">
-              注入老师方法论全文，判断更贴原始标准；代价是更慢更贵。日常练习建议关闭。
-            </div>
-          </div>
-          <button @click="deep = !deep"
-            class="shrink-0 px-3 py-1.5 rounded-lg text-xs transition-all duration-200"
-            :class="deep ? 'neu-inset text-[#5c4033] font-medium' : 'neu-sm text-c-body'">
-            {{ deep ? '已开启' : '未开启' }}
-          </button>
-        </div>
       </section>
 
-      <!-- 题目 + 给定资料：并排，仿考场卷面 -->
+      <!-- 给定资料 + 题目：并排，仿考场卷面 -->
       <div class="grid grid-cols-1 lg:grid-cols-5 gap-6 mb-6">
 
-        <!-- 左：给定资料（答题时占主位） -->
-        <section class="lg:col-span-3 rounded-2xl p-5 neu flex flex-col min-h-[16rem]">
-          <div class="flex items-center justify-between mb-3">
-            <span class="text-sm font-medium text-c-body">给定资料</span>
-            <button @click="showMaterial = !showMaterial"
-              class="text-xs text-c-muted hover:text-[#5c4033] transition-colors">
-              {{ showMaterial ? '收起' : '展开' }}
-            </button>
+        <!-- 左：给定资料 -->
+        <section class="lg:col-span-3 rounded-2xl p-5 neu flex flex-col">
+          <div class="flex items-center justify-between gap-3 mb-3">
+            <span class="text-sm font-medium text-c-body">
+              给定资料
+              <span v-if="form.material" class="text-xs text-c-muted font-normal tnum ml-1">
+                {{ countChars(form.material) }} 字
+              </span>
+            </span>
+            <div class="flex items-center gap-3 shrink-0">
+              <button @click="togglePicker"
+                class="text-xs text-c-muted hover:text-c-bark transition-colors">
+                {{ showPicker ? '收起题库' : '从题库选题' }}
+              </button>
+              <button v-if="form.material && !showPicker" @click="materialEdit = !materialEdit"
+                class="text-xs text-c-muted hover:text-c-bark transition-colors">
+                {{ materialEdit ? '完成编辑' : '编辑' }}
+              </button>
+            </div>
           </div>
-          <textarea v-if="showMaterial" v-model="form.material" rows="16"
-            placeholder="把材料原样粘进来（材料 1、材料 2……）"
-            class="w-full flex-1 px-3.5 py-2.5 rounded-xl text-sm neu-inset outline-none resize-none
-              text-c-body placeholder:text-c-muted leading-7" />
-          <div v-else class="text-xs text-c-muted py-1">
-            {{ form.material ? `已填写 ${countChars(form.material)} 字（点击展开查看/编辑）` : '未填写（点击展开填写）' }}
+
+          <!-- 选题面板：空态与主动换题都走这里，左边不再是一片空白 -->
+          <div v-if="showPicker" class="flex-1">
+            <input v-model="pickKeyword" type="text" placeholder="搜索题目 / 来源 / 主题"
+              class="w-full px-3.5 py-2.5 rounded-xl text-xs neu-inset outline-none mb-3
+                text-c-body placeholder:text-c-muted" />
+            <div class="space-y-2 max-h-[22rem] overflow-y-auto pr-1">
+              <button v-for="q in pickList" :key="q.id" @click="applyQuestion(q)"
+                class="w-full text-left rounded-xl p-3.5 neu-sm transition-all duration-200
+                  hover:translate-y-px">
+                <div class="flex items-center gap-2 mb-1.5">
+                  <span class="text-xs px-1.5 py-0.5 rounded shrink-0"
+                    style="background: #e8ecdf; color: #3d5a7a">{{ q.type }}</span>
+                  <span class="text-xs text-c-muted truncate">{{ q.exam }}</span>
+                  <span v-if="q.id === loadedId" class="text-xs text-c-bark shrink-0 ml-auto">当前</span>
+                </div>
+                <div class="text-xs text-c-body leading-6">{{ q.title }}</div>
+              </button>
+              <div v-if="!pickList.length" class="text-xs text-c-muted py-6 text-center">
+                没有匹配的题目
+              </div>
+            </div>
+          </div>
+
+          <!-- 有材料：阅读态（默认）/ 编辑态 -->
+          <div v-else-if="form.material" class="flex-1 min-h-0">
+            <textarea v-if="materialEdit" v-model="form.material" rows="14"
+              placeholder="把材料原样粘进来（材料 1、材料 2……）"
+              class="w-full h-full px-3.5 py-2.5 rounded-xl text-xs neu-inset outline-none resize-none
+                text-c-body placeholder:text-c-muted leading-7" />
+            <div v-else class="max-h-[26rem] overflow-y-auto space-y-3.5 pr-1">
+              <div v-for="(b, i) in materialBlocks(form.material)" :key="i">
+                <div v-if="b.label" class="text-xs font-medium text-c-bark mb-1">{{ b.label }}</div>
+                <p class="text-sm text-c-body leading-7 whitespace-pre-wrap">{{ b.body }}</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- 空态：直接给选题入口，别留一片白 -->
+          <div v-else class="flex-1 flex flex-col items-center justify-center py-10 text-center">
+            <div class="text-sm text-c-body mb-1.5">还没有题目</div>
+            <div class="text-xs text-c-muted leading-6 mb-4 max-w-xs">
+              从题库挑一道开始，或直接粘贴你自己的材料
+            </div>
+            <div class="flex gap-2">
+              <button @click="togglePicker"
+                class="px-4 py-2 rounded-xl text-xs font-medium neu-inset text-c-bark">
+                从题库选题
+              </button>
+              <button @click="startBlank"
+                class="px-4 py-2 rounded-xl text-xs font-medium neu-sm text-c-body">
+                空白作答
+              </button>
+            </div>
           </div>
         </section>
 
         <!-- 右：题目要求 -->
         <section class="lg:col-span-2 rounded-2xl p-5 neu">
-          <div class="text-sm font-medium text-c-body mb-4">题目</div>
+          <div class="flex items-center justify-between mb-4">
+            <span class="text-sm font-medium text-c-body">题目</span>
+            <span v-if="loadedMeta.type" class="text-xs px-1.5 py-0.5 rounded"
+              style="background: #e8ecdf; color: #3d5a7a">{{ loadedMeta.type }}</span>
+          </div>
 
           <label class="block text-xs text-c-muted mb-1.5">题干</label>
-          <input v-model="form.title" type="text"
+          <textarea v-model="form.title" rows="3"
             placeholder="例：结合给定资料，围绕「养老刚需也是产业蓝海」自拟题目，写一篇文章"
-            class="w-full px-3.5 py-2.5 rounded-xl text-sm neu-inset outline-none
-              text-c-body placeholder:text-c-muted" />
+            class="w-full px-3.5 py-2.5 rounded-xl text-xs neu-inset outline-none resize-none
+              text-c-body placeholder:text-c-muted leading-6" />
 
           <label class="block text-xs text-c-muted mt-4 mb-1.5">作答要求</label>
           <textarea v-model="form.requirement" rows="4"
             placeholder="例：观点明确，结构完整，语言流畅，1000 字左右"
-            class="w-full px-3.5 py-2.5 rounded-xl text-sm neu-inset outline-none resize-none
+            class="w-full px-3.5 py-2.5 rounded-xl text-xs neu-inset outline-none resize-none
               text-c-body placeholder:text-c-muted leading-6" />
 
           <div class="grid grid-cols-2 gap-4 mt-4">
             <div>
               <label class="block text-xs text-c-muted mb-1.5">满分</label>
               <input v-model.number="form.maxScore" type="number" min="1"
-                class="w-full px-3.5 py-2.5 rounded-xl text-sm neu-inset outline-none text-c-body tnum" />
+                class="w-full px-3.5 py-2.5 rounded-xl text-xs neu-inset outline-none text-c-body tnum" />
             </div>
             <div>
               <label class="block text-xs text-c-muted mb-1.5">字数要求</label>
               <input v-model.number="form.wordLimit" type="number" placeholder="不限"
-                class="w-full px-3.5 py-2.5 rounded-xl text-sm neu-inset outline-none
+                class="w-full px-3.5 py-2.5 rounded-xl text-xs neu-inset outline-none
                   text-c-body placeholder:text-c-muted tnum" />
             </div>
+          </div>
+
+          <div v-if="loadedMeta.topics?.length" class="flex flex-wrap gap-1.5 mt-4 pt-4 border-t border-c-line">
+            <span v-for="t in loadedMeta.topics" :key="t"
+              class="text-xs px-1.5 py-0.5 rounded" style="background: #f5f1ea; color: #78716c">
+              {{ t }}
+            </span>
           </div>
         </section>
       </div>
@@ -152,7 +272,9 @@
             超出 {{ countChars(form.answer) - form.wordLimit }} 字
           </span>
         </div>
-        <GridPaper v-model="form.answer" :word-limit="form.wordLimit || 0" />
+        <div class="mx-auto w-full max-w-[760px]">
+          <GridPaper v-model="form.answer" :word-limit="form.wordLimit || 0" />
+        </div>
       </section>
 
       <!-- 提交：常驻底部，长作答不用滚回去找按钮 -->
@@ -162,7 +284,7 @@
             <button @click="start" :disabled="!canGrade"
               class="flex-1 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300
                 disabled:opacity-40 disabled:cursor-not-allowed neu-sm"
-              :class="canGrade ? 'text-[#5c4033] hover:translate-y-px' : 'text-c-muted'">
+              :class="canGrade ? 'text-c-bark hover:translate-y-px' : 'text-c-muted'">
               答完了，开始批改（{{ selected.length }} 位老师）
             </button>
           </div>
@@ -178,7 +300,7 @@
       <section class="rounded-2xl p-6 neu mb-6">
         <div class="flex items-center justify-between mb-5">
           <div class="flex items-center gap-2.5">
-            <span class="w-2 h-2 rounded-full bg-[#5c4033] animate-pulse" />
+            <span class="w-2 h-2 rounded-full bg-c-bark animate-pulse" />
             <span class="text-sm font-medium text-c-body">{{ stageText }}</span>
           </div>
           <span class="text-xs text-c-muted tnum">{{ elapsed }}s</span>
@@ -205,10 +327,10 @@
         </div>
 
         <div v-if="stage === 'debate' || stage === 'fusion'"
-          class="rounded-xl p-4 mt-4 neu-inset border-l-2 border-[#5c4033]">
+          class="rounded-xl p-4 mt-4 neu-inset border-l-2 border-c-bark">
           <div class="flex items-center gap-2 mb-2">
-            <span class="w-1.5 h-1.5 rounded-full bg-[#5c4033] animate-pulse" />
-            <span class="text-xs font-medium text-[#5c4033]">
+            <span class="w-1.5 h-1.5 rounded-full bg-c-bark animate-pulse" />
+            <span class="text-xs font-medium text-c-bark">
               {{ stage === 'debate' ? '圆桌辩论：复核争议点' : '圆桌合议：融合观点结论' }}
             </span>
           </div>
@@ -331,7 +453,7 @@
 
           <!-- 扣分点 -->
           <details v-if="r.deductions?.length" class="mb-3">
-            <summary class="text-xs text-c-muted cursor-pointer hover:text-[#5c4033]">
+            <summary class="text-xs text-c-muted cursor-pointer hover:text-c-bark">
               扣分点（{{ r.deductions.length }}）
             </summary>
             <div class="space-y-2 mt-2">
@@ -358,7 +480,7 @@
 
           <!-- 改写示例 -->
           <details v-if="r.rewrites?.length" class="mt-3 pt-3 border-t border-c-line">
-            <summary class="text-xs text-c-muted cursor-pointer hover:text-[#5c4033]">
+            <summary class="text-xs text-c-muted cursor-pointer hover:text-c-bark">
               改写示例（{{ r.rewrites.length }}）
             </summary>
             <div class="space-y-2.5 mt-2.5">
@@ -407,7 +529,7 @@
             <div v-for="(p, j) in d.positions || []" :key="j" class="text-xs text-c-muted mt-1.5 leading-6">
               <span :style="{ color: teacherColor(p.teacher) }">{{ teacherName(p.teacher) }}</span>：{{ p.view }}
             </div>
-            <div class="text-xs text-[#5c4033] mt-2 leading-6">裁定：{{ d.ruling }}</div>
+            <div class="text-xs text-c-bark mt-2 leading-6">裁定：{{ d.ruling }}</div>
             <div v-if="d.reason" class="text-xs text-c-muted mt-1 leading-5">{{ d.reason }}</div>
           </div>
         </div>
@@ -442,7 +564,7 @@
         </div>
 
         <details v-if="report.final.minorIssues?.length" class="mb-5">
-          <summary class="text-xs text-c-muted cursor-pointer hover:text-[#5c4033]">
+          <summary class="text-xs text-c-muted cursor-pointer hover:text-c-bark">
             次要问题（{{ report.final.minorIssues.length }} 条）
           </summary>
           <div class="space-y-2 mt-2">
@@ -457,7 +579,7 @@
           <div class="text-xs text-c-muted mb-2.5">改进建议（按优先级）</div>
           <ul class="space-y-2">
             <li v-for="(s, i) in report.final.suggestions" :key="i" class="text-sm text-c-body flex gap-2 leading-6">
-              <span class="text-[#5c4033] shrink-0 tnum">{{ i + 1 }}.</span><span>{{ s }}</span>
+              <span class="text-c-bark shrink-0 tnum">{{ i + 1 }}.</span><span>{{ s }}</span>
             </li>
           </ul>
         </div>
@@ -468,12 +590,12 @@
         <div class="flex gap-3">
           <button @click="askFollowup"
             class="flex-1 px-4 py-2.5 rounded-xl text-xs font-medium neu-sm text-c-body
-              hover:text-[#5c4033] transition-colors">
+              hover:text-c-bark transition-colors">
             追问老师
           </button>
           <button @click="genSample" :disabled="sampling"
             class="flex-1 px-4 py-2.5 rounded-xl text-xs font-medium neu-sm text-c-body
-              hover:text-[#5c4033] transition-colors disabled:opacity-40">
+              hover:text-c-bark transition-colors disabled:opacity-40">
             {{ sampling ? '生成中…' : '看示范答案' }}
           </button>
         </div>
@@ -492,7 +614,7 @@
 
       <div class="flex justify-center gap-3 pb-4">
         <RouterLink to="/records"
-          class="px-5 py-2.5 rounded-xl text-xs font-medium neu text-[#5c4033]">
+          class="px-5 py-2.5 rounded-xl text-xs font-medium neu text-c-bark">
           去复盘 →
         </RouterLink>
       </div>
@@ -501,17 +623,21 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onUnmounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { toast } from '../utils/toast'
 import ScoreRing from '../components/ScoreRing.vue'
 import AnnotatedAnswer from '../components/AnnotatedAnswer.vue'
 import GridPaper from '../components/GridPaper.vue'
-import { chat, hasApiKey } from '../api/llm'
+import { chat } from '../api/llm'
 import { buildFollowupMessages, buildSampleMessages } from '../prompts'
 import { TEACHERS, TEACHER_LIST, MODE_LABEL, PRESETS, detectMode } from '../agents/teachers'
 import { runGrading } from '../agents/orchestrator'
-import { buildRecord, archiveRecord, countChars, fmtDateTime } from '../utils/record'
+import { buildRecord, archiveRecord, countChars, fmtDateTime, listAllRecords } from '../utils/record'
+import { getAll, STORES } from '../store/db'
+import { BUILTIN_QUESTIONS, DIFFICULTY_LABEL, withPrefix } from '../data/builtin-questions'
+import { pickDaily, pickRandom, practicedToday } from '../data/daily'
+import { useReadiness } from '../utils/readiness'
 
 const route = useRoute()
 
@@ -520,15 +646,14 @@ const route = useRoute()
 const step = ref('answer')
 
 const form = reactive({
-  title: route.query.title || '',
+  title: '',
   requirement: '',
-  material: route.query.material || '',
+  material: '',
   answer: '',
   maxScore: 40,
   wordLimit: null,
 })
 
-const showMaterial = ref(false)
 const selected = ref(['yuandong', 'zhoutairan', 'bailu'])
 const deep = ref(false)
 const stage = ref('')
@@ -543,17 +668,79 @@ const sampleText = ref('')
 const sampling = ref(false)
 const teacherProgress = reactive({})
 
+// —— 题库与每日一练 ——
+const builtin = BUILTIN_QUESTIONS.map(withPrefix)
+const mine = ref([])
+const todayQ = ref(null)
+const doneToday = ref(false)
+const loadedId = ref('')
+const loadedMeta = reactive({ type: '', exam: '', difficulty: 0, kind: '', topics: [] })
+const showPicker = ref(false)
+const materialEdit = ref(false)
+const pickKeyword = ref('')
+
 let controller = null
 let timer = null
 
-const hasKey = computed(() => hasApiKey())
+const { ready: hasKey, probeReadiness } = useReadiness()
+
+const pool = computed(() => [...mine.value, ...builtin])
 const mode = computed(() => detectMode(selected.value))
 const overLimit = computed(() => form.wordLimit && countChars(form.answer) > form.wordLimit)
 const canGrade = computed(
   () => hasKey.value && selected.value.length > 0 && form.answer.trim().length > 20
 )
+
+const todayLabel = computed(() => {
+  const d = new Date()
+  return `${d.getMonth() + 1} 月 ${d.getDate()} 日`
+})
+
+/** 选题面板：按关键词过滤，未加载的排前面 */
+const pickList = computed(() => {
+  const k = pickKeyword.value.trim().toLowerCase()
+  const list = pool.value.filter((q) => {
+    if (!k) return true
+    return (
+      (q.title || '').toLowerCase().includes(k) ||
+      (q.exam || '').toLowerCase().includes(k) ||
+      (q.type || '').toLowerCase().includes(k) ||
+      (q.topics || []).some((t) => t.toLowerCase().includes(k))
+    )
+  })
+  return [...list].sort((a, b) => (a.id === loadedId.value ? -1 : b.id === loadedId.value ? 1 : 0))
+})
+
 const pct = (a, b) => (b ? Math.min(100, Math.round((a / b) * 100)) : 0)
 const truncate = (s, n) => (String(s || '').length > n ? String(s).slice(0, n) + '…' : s)
+
+/**
+ * 把给定资料按「材料1 / 材料2」拆成块。
+ * 真题材料就是这种分则结构，拆开渲染比一整块 textarea 好读得多。
+ * 不在行首出现的「材料」二字（正文里提到）不会被误切——只认整行匹配。
+ */
+function materialBlocks(text) {
+  const src = String(text || '')
+  if (!src.trim()) return []
+  const blocks = []
+  let cur = null
+  for (const line of src.split('\n')) {
+    const m = line.match(/^材料\s*([0-9一二三四五六七八九十]+)\s*$/)
+    if (m) {
+      cur = { label: `材料${m[1]}`, body: [] }
+      blocks.push(cur)
+      continue
+    }
+    if (!cur) {
+      cur = { label: '', body: [] }
+      blocks.push(cur)
+    }
+    cur.body.push(line)
+  }
+  return blocks
+    .map((b) => ({ label: b.label, body: b.body.join('\n').trim() }))
+    .filter((b) => b.label || b.body)
+}
 
 const stageText = computed(() => {
   const map = {
@@ -611,6 +798,61 @@ function samePreset(ids) {
   return ids.length === selected.value.length && ids.every((i) => selected.value.includes(i))
 }
 
+/**
+ * 把一道题带进表单。这是「题目和材料都没有」的解药——
+ * 不论来自每日一练、选题面板还是题库页跳转，都走这一条路，
+ * 保证 title / material / requirement / maxScore / wordLimit 五个字段一起到位。
+ */
+function applyQuestion(q, { resetAnswer = true } = {}) {
+  if (!q) return
+  form.title = q.title || ''
+  form.material = q.material || ''
+  form.requirement = q.requirement || ''
+  form.maxScore = Number(q.maxScore) || 40
+  form.wordLimit = Number(q.wordLimit) || null
+  if (resetAnswer) form.answer = ''
+
+  loadedId.value = q.id || ''
+  Object.assign(loadedMeta, {
+    type: q.type || '',
+    exam: q.exam || '',
+    difficulty: q.difficulty || 0,
+    kind: q.kind || (q.builtin ? '仿真' : '自建'),
+    topics: q.topics || [],
+  })
+
+  showPicker.value = false
+  materialEdit.value = false
+  nextTick(() => window.scrollTo({ top: 0, behavior: 'smooth' }))
+}
+
+/** 换一题：随机，但不与当前这题重复 */
+function shuffle() {
+  const q = pickRandom(pool.value, loadedId.value)
+  if (!q) return toast.warning('题库是空的，先录入题目')
+  applyQuestion(q)
+  toast.success('已换一题')
+}
+
+function togglePicker() {
+  showPicker.value = !showPicker.value
+  if (showPicker.value) materialEdit.value = false
+}
+
+/** 空白作答：清掉题目，只留输入框，方便粘贴自己的材料 */
+function startBlank() {
+  form.title = ''
+  form.material = ''
+  form.requirement = ''
+  form.maxScore = 40
+  form.wordLimit = null
+  form.answer = ''
+  loadedId.value = ''
+  Object.assign(loadedMeta, { type: '', exam: '', difficulty: 0, kind: '', topics: [] })
+  showPicker.value = false
+  materialEdit.value = true
+}
+
 function clearRun() {
   report.value = null
   error.value = ''
@@ -623,9 +865,7 @@ function clearRun() {
 
 function resetAll() {
   clearRun()
-  form.title = ''
-  form.requirement = ''
-  form.material = ''
+  startBlank()
   form.answer = ''
 }
 
@@ -688,6 +928,7 @@ async function start() {
     const rec = buildRecord({ form, report: result, elapsedMs: result.elapsed })
     record.value = rec
     archiveState.value = (await archiveRecord(rec)) ? 'docs' : 'local'
+    doneToday.value = true
   } catch (e) {
     if (e.name !== 'AbortError') {
       error.value = e.message
@@ -736,6 +977,38 @@ async function genSample() {
     sampling.value = false
   }
 }
+
+onMounted(async () => {
+  // 服务端托管 Key 的情况（桌面版/部署版）也要算「已配置」
+  probeReadiness()
+
+  // 用户自建的题目也进池子，每日一练与选题面板一并覆盖
+  mine.value = (await getAll(STORES.questions)).map((q) => ({ ...q, kind: '自建' }))
+
+  todayQ.value = pickDaily(pool.value)
+  const recs = await listAllRecords()
+  doneToday.value = practicedToday(recs)
+
+  // 从题库页跳过来：优先按 id 回池子里取完整题目，取不到再用 query 字段兜底
+  let q = null
+  if (route.query.questionId) {
+    q = pool.value.find((x) => x.id === route.query.questionId) || null
+  }
+  if (!q && route.query.material) {
+    q = {
+      id: '',
+      title: route.query.title || '',
+      material: route.query.material || '',
+      requirement: route.query.requirement || '',
+      maxScore: Number(route.query.maxScore) || 40,
+      wordLimit: Number(route.query.wordLimit) || null,
+      type: route.query.type || '',
+      exam: route.query.exam || '',
+    }
+  }
+  // 都没有就默认用今日一练 —— 进页面就有题有材料，不再是空白表单
+  applyQuestion(q || todayQ.value, { resetAnswer: false })
+})
 
 onUnmounted(() => {
   clearInterval(timer)

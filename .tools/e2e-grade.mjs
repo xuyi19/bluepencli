@@ -6,7 +6,9 @@
 // 用法：node e2e-grade.mjs [screenshotPath]
 
 const BASE = 'http://127.0.0.1:5273'
-const PORT = 9334
+// 端口每次不同：Windows 上 proc.kill() 杀不掉 Chrome 进程树，
+// 残留实例会占着固定端口，导致新进程连到旧实例、拍到/操作到上一页。
+const PORT = 9600 + Math.floor(Math.random() * 300)
 const shot = process.argv[2] || 'E:/code/bluepencil/.shots/e2e-result.png'
 
 const { spawn } = await import('node:child_process')
@@ -117,9 +119,10 @@ const filled = await evaluate(`
     el.dispatchEvent(new Event('input', { bubbles: true }))
     return true
   }
-  const title = document.querySelector('input[type="text"]')
   const ta = [...document.querySelectorAll('textarea')]
-  // 作答框现在是方格纸组件（GridPaper），用 class 定位比 placeholder 稳
+  // 题干与作答要求现在都是 textarea（题目卡里可编辑），按 placeholder 定位
+  const title = ta.find(t => (t.placeholder||'').includes('自拟题目'))
+  // 作答框是方格纸组件（GridPaper），用 class 定位比 placeholder 稳
   const answer = document.querySelector('textarea.grid-paper') || ta.find(t => (t.placeholder||'').includes('作答'))
   const req = ta.find(t => (t.placeholder||'').includes('观点明确'))
   setVal(title, '结合给定资料，围绕「养老刚需也是产业蓝海」自拟题目，写一篇文章')

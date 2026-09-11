@@ -89,7 +89,7 @@
         <div class="flex flex-wrap gap-2">
           <button v-for="v in VIEWS" :key="v.key" @click="view = v.key"
             class="px-4 py-2 rounded-xl text-xs font-medium transition-all duration-200"
-            :class="view === v.key ? 'neu-inset text-[#5c4033]' : 'neu-sm text-c-body hover:text-[#5c4033]'">
+            :class="view === v.key ? 'neu-inset text-c-bark' : 'neu-sm text-c-body hover:text-c-bark'">
             {{ v.label }}
           </button>
         </div>
