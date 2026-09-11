@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+env/
+
+# 环境变量与本地数据库
+.env
+data/*.db
+data/*.db-journal

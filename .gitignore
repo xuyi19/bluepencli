@@ -1,0 +1,40 @@
+# 依赖
+node_modules/
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# 构建产物（可随时重建）
+frontend/dist/
+frontend/dist-single/
+
+# 桌面版打包产物（用 backend/build_desktop.py 一键重建）
+backend/build/
+release/蓝笔申论-桌面版/
+release/*.zip
+release/*.html
+release/.old-*/
+
+# 本地验证用临时目录（无头浏览器截图 / 烟测产物）
+.smoke/
+.shots/
+
+# 环境变量
+.env
+.env.local
+
+# 本地数据库
+backend/data/*.db
+backend/data/*.db-journal
+
+# IDE / 系统
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# 日志
+*.log
+npm-debug.log*
