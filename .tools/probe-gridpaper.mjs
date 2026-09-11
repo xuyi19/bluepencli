@@ -147,17 +147,18 @@ if (info.找到) {
   setter.call(gp, t)
   gp.dispatchEvent(new Event('input', { bubbles: true }))
   await new Promise(r => setTimeout(r, 400))
-  window.scrollTo(0, 0)
   return 'ok'
 })()
 `)
   await sleep(600)
 
-  // 全页截图
+  // 滚到方格纸再截视口图，否则纸在折叠下方，截图里看不到
+  await evaluate(`document.querySelector('textarea.grid-paper').scrollIntoView({ block: 'center' })`)
+  await sleep(800)
   const shot = await send('Page.captureScreenshot', { format: 'png' })
   if (shot?.data) {
     writeFileSync(`${OUT}/gridpaper-closeup.png`, Buffer.from(shot.data, 'base64'))
-    console.log('截图：gridpaper-closeup.png')
+    console.log('截图：gridpaper-closeup.png（已滚到作答区）')
   }
 
   // 局部 4 倍放大：缩略图上数不清格线，必须放大才看得准对齐

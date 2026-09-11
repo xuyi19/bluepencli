@@ -45,9 +45,31 @@ bluepencil/
   - `docs/articles/*.md` → 给人看（由 `frontend/scripts/export-articles-to-docs.mjs` 生成）
 - **老师讲义只在 `frontend/src/data/teachers/*.md`**（被前端 `?raw` 引用），不要复制到别处。
 - **五位老师必须有差异化评审侧重**，否则分数趋同、圆桌分歧检测会变成演戏。
-- UI 风格：新拟态（`#e0e5ec` 底 + 双阴影），主色 `#6d5dfc`，顶部三栏 header。
-  样式与 resumatch-ai 统一。顶栏用 **flex**（`justify-between` + nav `flex-1 min-w-0`），
-  **不要用 `grid grid-cols-3`**——会把导航锁在 1/3 宽度里，8 个菜单项被挤成逐字换行。
+- **UI 结构（2026-09-11 改版后）**：**左侧固定侧边栏**（`App.vue` 的 `aside`，w-56）+ 右侧主区。
+  侧边栏内容在 `components/GroupedSidebar.vue`，导航数据由 `App.vue` 的 `NAV` 提供，
+  **按数组项里的 `group` 字段自动分组**（学习 / 内容 / 实战 / 复盘 + 底部设置）——
+  改导航只改 `NAV` 一处，别再写第二份分组数组。
+  移动端（<768px）侧边栏 `display:none`，改为汉堡按钮 + 抽屉。
+  主区容器内边距（`px-6 md:px-8 py-8`）**统一由 App.vue 的 `main` 提供**，
+  各 view 顶层只写 `w-full`（需要限读宽的如设置页用 `max-w-3xl`），**不要再各写一套 `mx-auto px-* py-*`**。
+- **UI 风格**：**Natural Organic（自然有机风）**，2026-09-11 从新拟态换过来。
+  暖米底 `#faf6f1`、主色胡桃棕 `#5c4033`、鼠尾草 `#8b9d77`、衬线标题、大圆角。
+  **颜色一律走 `c-*` 语义 token**（定义在 `frontend/tailwind.config.js` 的 `colors.c`），
+  业务代码里不要再写十六进制。token 表见 README「设计风格」节。
+  > 与 resumatch-ai 的样式统一**已断开**（那边还是新拟态），用户明确选择了换风格。
+- **`.neu*` 工具类名保留、定义已换**（`.neu`/`.neu-sm` = 暖米卡片，`.neu-inset` = 白底输入，
+  `.neu-press` = 按压态）。**改样式时改 `style.css` 里的定义即可**，161 处调用点自动跟随 ——
+  这是换肤时的关键决策，别去逐个改类名。
+- **老师色标是功能性例外**，必须 5 色可区分：深湖蓝 `#3d5a7a` / 苔绿 `#4f7d5e` /
+  赤陶红 `#9c4a42` / 藕紫 `#7a6a9b` / 赭黄 `#9c6b2f`（定义在 `frontend/src/agents/teachers.js`）。
+  改动时注意别让任何一个跟主色 `#5c4033` 撞色。
+- **不再依赖 Arco Design**。提示/确认框用自实现 `utils/toast.js` + `components/ToastHost.vue`，
+  挂在 `App.vue`。调用：`toast.success/error/warning/info`、`await toast.confirm(text, {okText})`。
+  （换肤+摘除 Arco 后 CSS 从 405KB 降到 24KB。）
+- **作答区是 `components/GridPaper.vue`（方格纸），不是 textarea**。
+  改作答相关代码时注意：它是 `<textarea class="grid-paper">`，
+  选择器用 `textarea.grid-paper` 定位（`.tools/e2e-grade.mjs` 已按此更新）。
+  三个不可回退的设计点见下方"方格纸对齐"小节。
 - **同一逻辑存在两处时必须同步改**：LLM 地址拼接有两份实现——
   `frontend/src/api/llm.js::buildUrl`（浏览器直连）与
   `backend/app/agents/llm.py::build_url`（后端通道）。
@@ -113,6 +135,11 @@ node .tools/batch-shots.mjs                 # 全路由截图 + 渲染/布局回
 | **hash 路由下 CDP `Page.navigate` 到同一 URL 不会重载** | JS 上下文不重建，`computed` 持旧值 → 新注入的 localStorage 配置"看似没生效"。**必须 `Page.reload`** |
 | 前端给 Vue `v-model` 赋值不生效 | 直接改 `el.value` 不触发响应式。要用原生 setter + `dispatchEvent(new Event('input',{bubbles:true}))` |
 | **uvicorn `--reload` 的 fork worker 是孤儿进程** | `taskkill /F /PID <主进程>` 报"成功"，但 `multiprocessing-fork` worker 仍持有端口；绑端口会 `WinError 10048`。**别信 netstat 的 PID**（Windows 网络栈显示 stale），用 `Get-CimInstance Win32_Process` 看 CommandLine 找 `--multiprocessing-fork` 一并杀掉。**或干脆别开 reload**——开发模式代码改了手动重启更可控 |
+| **CDP `captureScreenshot` 的 `clip` 用的是文档坐标** | 要加 `scrollY`，不是 `getBoundingClientRect` 的视口坐标；否则会截到旁边一片空白。配 `captureBeyondViewport: true` |
+| **`scrollHeight` 会被 `min-height` 撑住** | 元素设了 min-height 时 `scrollHeight` 永远 ≥ min-height，量不出真实内容高度（我量出恒定的"12 行"）。**先把 `height` 压到 `0`**，clientHeight 归零后再读 |
+| **细节验证必须局部放大截图** | `clip` + `scale: 4` 才看得清格线对齐、1px 边框这类细节。**缩略图上根本数不清**——我在方格纸上被缩略图误导过，以为格线错位，放大后发现是严丝合缝的 |
+| **改 `tailwind.config.js` 后 Vite dev server 不会自动重载** | 表现极具迷惑性：`c-*` token 全不生效，但 `style.css` 里手写的 CSS 照常生效，页面「看起来对了一半」。**确诊**：`curl -s --compressed http://127.0.0.1:5273/src/style.css \| grep -o '\.bg-c-cream'`，无输出就是没重载 → **重启 dev server**。别靠看截图猜 |
+| **换肤别逐个改类名，要「保留类名换定义」** | 161 处 `neu-*` 调用点，逐个改必漏。把 `style.css` 里 `.neu*` 的定义换成新风格，调用点全部自动跟随。同理：颜色用表格化脚本替换（`.tools/retheme.py`），**但记得十六进制之外还有 `rgba(109,93,252,)` 和 JS 对象里的 `boxShadow:`** |
 
 ## 工作流约定（用户明确要求）
 
@@ -129,10 +156,14 @@ node .tools/batch-shots.mjs                 # 全路由截图 + 渲染/布局回
 - 文章：`C:\Users\许\Documents\晟安申论\articles`（31 篇官媒时评，9.5 万字）
 - 老师讲义：`D:\downloads\{袁东,周泰然,白鹭,kiwi,李崇立}-申论.md`（188KB / 3200 行）
 
-## 版本控制现状（重要）
+## 版本控制现状
 
-**本项目不是 git 仓库**（无 `.git` 目录）。`git status` 会返回空且**不报错**，别把它当"工作区干净"。
-后果：**任何删除都没有回滚网**。清理非产物文件（尤其是用户的学习内容、文章库）前必须先确认。
+**已 `git init`（2026-09-11 布局改造前建立）**，分支 `master`，首个提交是"改造前快照：新拟态 + 顶部导航版本"。
+`.gitignore` 已写好（忽略 `node_modules/`、`.venv/`、`frontend/dist*/`、`release/*.zip|html`、`.shots/`、`.smoke/`、`*.db`、`.env`）。
+动手改大范围代码前，先 `git commit` 留个点。
+
+> 注意：这是**本地仓库**，没有 remote。仍然不要把 git 当成万能回滚网——
+> 未提交的改动照样会丢。
 
 ## 代码成熟度（2026-09-11 全库扫描结论）
 
@@ -163,6 +194,24 @@ node .tools/batch-shots.mjs                 # 全路由截图 + 渲染/布局回
 则 161 处 `neu-*` 全部失效，属于**整套视觉语言替换而非调色**。
 两者是设计哲学冲突，**不能混着做**——中间态会既不像这也不像那。
 详见 `docs/界面改造可行性分析.md`。
+
+### 方格纸对齐（GridPaper.vue，改动前必读）
+
+三个**不可回退**的设计点，都是踩出来的：
+
+1. **格宽必须由容器实测宽度算**：`格宽 = 容器宽 / 25`。写死像素会错位——
+   原先写 `--cell: 30px`，而作答容器只有 728px，25 格需 750px，
+   结果每行只挤得下 24 字、格线全部错位。配 `ResizeObserver` 跟随变化。
+2. **网格用 `background-size` 声明格块**，不要靠 `repeating-linear-gradient` 的色标周期：
+   `linear-gradient(to right, var(--line-color) 1px, transparent 1px)` 两层
+   + `background-size: var(--cell) var(--cell)`。这样格宽写多少就是多少。
+3. **不假定「中文 = 1em」**：用 canvas 实测全角字占用 em 比例再反推 `font-size`。
+   本次实测是 1.0，但代码保留测量，换字体环境不会崩。
+
+判据：往格纸里填 **25 个字必须正好占 1 行**。这是格宽算没算对的一票否决测试
+（`node .tools/probe-gridpaper.mjs` 已内置 24/25/26/50/51 字的折行断言）。
+
+已知限制：半角数字/字母只占半格，会导致该行后续字符偏移。申论作答里半角少，接受。
 
 ## 未完成
 

@@ -183,11 +183,20 @@ const checks = await evaluate(`
 `)
 console.log(JSON.stringify(checks, null, 2))
 
-// 6) 截图
+// 6) 截图：整页存档 + 第一屏特写（缩小图看不清细节）
 const shotRes = await send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true })
 if (shotRes?.data) {
   writeFileSync(shot, Buffer.from(shotRes.data, 'base64'))
   console.log('截图已保存：' + shot)
+}
+const topRes = await send('Page.captureScreenshot', {
+  format: 'png',
+  clip: { x: 0, y: 0, width: 1280, height: 900, scale: 1 },
+})
+if (topRes?.data) {
+  const topShot = shot.replace(/\.png$/, '-top.png')
+  writeFileSync(topShot, Buffer.from(topRes.data, 'base64'))
+  console.log('首屏截图已保存：' + topShot)
 }
 
 ws.close()

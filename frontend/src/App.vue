@@ -1,36 +1,40 @@
 <template>
-  <div class="min-h-screen bg-[#e0e5ec] text-gray-800">
+  <div class="min-h-screen bg-c-cream text-c-body">
 
     <!-- 移动端汉堡按钮（抽屉打开时隐藏，避免浮在抽屉之上） -->
     <button
       v-if="!drawerOpen"
       @click="drawerOpen = true"
-      class="md:hidden fixed top-3 left-3 z-50 w-10 h-10 rounded-xl bg-[#e0e5ec]
-        shadow-[4px_4px_8px_#b8bcc2,-4px_-4px_8px_#ffffff]
-        flex items-center justify-center text-gray-600 active:shadow-[inset_3px_3px_6px_#b8bcc2,inset_-3px_-3px_6px_#ffffff]"
+      class="md:hidden fixed top-3 left-3 z-50 w-11 h-11 rounded-full bg-c-paper
+        border border-c-line shadow-[0_1px_2px_rgba(120,113,108,0.06)]
+        flex items-center justify-center text-c-body
+        transition-colors duration-300 active:translate-y-px active:bg-c-barkSoft"
       aria-label="打开导航">
       <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <path d="M3 6h18M3 12h18M3 18h18" stroke-linecap="round"/>
       </svg>
     </button>
 
-    <!-- 桌面端侧边栏（固定） -->
-    <aside class="hidden md:block fixed left-0 top-0 bottom-0 w-56 z-40 bg-[#e0e5ec]">
+    <!-- 桌面端侧边栏（固定）：用 1px 描边分区，不用阴影——纸感的做法 -->
+    <aside class="hidden md:block fixed left-0 top-0 bottom-0 w-56 z-40 bg-c-cream border-r border-c-line">
       <GroupedSidebar :nav="NAV" :dot="dot" />
     </aside>
 
     <!-- 移动端抽屉 -->
     <div v-if="drawerOpen" class="md:hidden fixed inset-0 z-40">
-      <div class="absolute inset-0 bg-black/30" @click="drawerOpen = false" />
-      <aside class="relative w-56 h-full bg-[#e0e5ec]">
+      <div class="absolute inset-0 bg-c-ink/25" @click="drawerOpen = false" />
+      <aside class="relative w-56 h-full bg-c-cream border-r border-c-line">
         <GroupedSidebar :nav="NAV" :dot="dot" @navigate="drawerOpen = false" />
       </aside>
     </div>
 
     <!-- 主区：内边距统一在这里给，各 view 不再各写一套 -->
-    <main class="md:ml-56 min-w-0 min-h-screen px-6 md:px-8 py-8">
+    <main class="md:ml-56 min-w-0 min-h-screen px-6 md:px-10 py-10">
       <RouterView />
     </main>
+
+    <!-- 全局提示 / 确认框（替代 Arco Message + Modal） -->
+    <ToastHost />
   </div>
 </template>
 
@@ -40,6 +44,7 @@ import { RouterView } from 'vue-router'
 import { hasApiKey } from './api/llm'
 import { probeBackend } from './api/backend'
 import GroupedSidebar from './components/GroupedSidebar.vue'
+import ToastHost from './components/ToastHost.vue'
 
 // 导航数据：分组由 group 字段标定，避免再写一份冗余数组
 const NAV = [
@@ -62,11 +67,11 @@ onMounted(async () => {
 // 一个圆点表达三种状态，避免堆太多指示器
 const dot = computed(() => {
   if (backendUp.value) {
-    return { color: '#1f9d55', title: '服务端通道已连接：请求经后端转发，无跨域问题' }
+    return { color: '#8b9d77', title: '服务端通道已连接：请求经后端转发，无跨域问题' }
   }
   if (hasApiKey()) {
-    return { color: '#6d5dfc', title: '本地直连：已配置 API Key' }
+    return { color: '#d4a373', title: '本地直连：已配置 API Key' }
   }
-  return { color: '#d0d4da', title: '尚未配置：请到设置页填写 API' }
+  return { color: '#d6d3d1', title: '尚未配置：请到设置页填写 API' }
 })
 </script>

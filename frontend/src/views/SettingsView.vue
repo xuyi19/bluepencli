@@ -1,8 +1,8 @@
 <template>
   <div class="max-w-3xl">
 
-    <h1 class="text-xl font-semibold text-gray-800 mb-1">设置</h1>
-    <p class="text-sm text-gray-500 mb-8">配置大模型 API，Key 仅保存在这台电脑的浏览器里</p>
+    <h1 class="text-xl font-semibold text-c-ink mb-1">设置</h1>
+    <p class="text-sm text-c-muted mb-8">配置大模型 API，Key 仅保存在这台电脑的浏览器里</p>
 
     <!-- 状态卡片 -->
     <section class="rounded-2xl p-6 neu mb-6">
@@ -12,23 +12,23 @@
             {{ ready ? '✅' : '⚠️' }}
           </div>
           <div>
-            <div class="font-medium text-gray-800 mb-0.5">
+            <div class="font-medium text-c-ink mb-0.5">
               {{ ready ? 'API 已就绪' : '尚未配置 API' }}
             </div>
-            <div class="text-xs text-gray-500">{{ readyHint }}</div>
+            <div class="text-xs text-c-muted">{{ readyHint }}</div>
           </div>
         </div>
-        <div v-if="ready" class="w-3 h-3 rounded-full bg-green-500 shrink-0"
-          style="box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.15)" />
+        <div v-if="ready" class="w-3 h-3 rounded-full bg-c-sage shrink-0"
+          style="box-shadow: 0 0 0 4px rgba(139, 157, 119, 0.18)" />
       </div>
     </section>
 
     <!-- API 配置 -->
     <section class="rounded-2xl p-6 md:p-8 neu mb-6">
       <div class="flex items-center justify-between mb-6">
-        <h2 class="text-base font-medium text-gray-800">API 配置</h2>
+        <h2 class="text-base font-medium text-c-ink">API 配置</h2>
         <button @click="showAdvanced = !showAdvanced"
-          class="text-xs text-gray-400 hover:text-[#6d5dfc] transition-colors">
+          class="text-xs text-c-muted hover:text-[#5c4033] transition-colors">
           {{ showAdvanced ? '收起高级' : '高级' }}
         </button>
       </div>
@@ -37,98 +37,98 @@
 
         <!-- 服务商预设 -->
         <div>
-          <label class="text-xs text-gray-500 mb-3 block">服务商预设</label>
+          <label class="text-xs text-c-muted mb-3 block">服务商预设</label>
           <div class="grid grid-cols-3 gap-3">
             <button v-for="p in PRESETS" :key="p.name" @click="applyPreset(p)"
               class="px-3 py-3 text-xs md:text-sm font-medium rounded-xl transition-all duration-300"
               :class="samePreset(p)
-                ? 'neu-inset text-[#6d5dfc]'
-                : 'neu-sm text-gray-700 hover:text-[#6d5dfc]'">
+                ? 'neu-inset text-[#5c4033]'
+                : 'neu-sm text-c-body hover:text-[#5c4033]'">
               {{ p.name }}
             </button>
           </div>
-          <div class="text-xs text-gray-400 mt-2">
+          <div class="text-xs text-c-muted mt-2">
             <a href="https://platform.deepseek.com" target="_blank" rel="noreferrer"
-              class="hover:text-[#6d5dfc]">DeepSeek 注册</a>
+              class="hover:text-[#5c4033]">DeepSeek 注册</a>
             ·
             <a href="https://open.bigmodel.cn" target="_blank" rel="noreferrer"
-              class="hover:text-[#6d5dfc]">智谱 GLM 注册</a>
+              class="hover:text-[#5c4033]">智谱 GLM 注册</a>
           </div>
         </div>
 
         <!-- API Key -->
         <div>
-          <label class="text-xs text-gray-500 mb-3 block">
+          <label class="text-xs text-c-muted mb-3 block">
             API Key
-            <span v-if="serverKey" class="text-gray-400">（服务端已托管，可留空）</span>
-            <span v-else class="text-red-500">*</span>
+            <span v-if="serverKey" class="text-c-muted">（服务端已托管，可留空）</span>
+            <span v-else class="text-c-clay">*</span>
           </label>
           <div class="relative">
             <input v-model="cfg.api_key" :type="showKey ? 'text' : 'password'" placeholder="sk-..."
-              class="w-full px-4 py-3 pr-16 rounded-xl text-sm text-gray-700 placeholder:text-gray-400
-                font-mono bg-[#e0e5ec] neu-inset outline-none" />
+              class="w-full px-4 py-3 pr-16 rounded-xl text-sm text-c-body placeholder:text-c-muted
+                font-mono neu-inset outline-none" />
             <button @click="showKey = !showKey"
-              class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 hover:text-[#6d5dfc]">
+              class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-c-muted hover:text-[#5c4033]">
               {{ showKey ? '隐藏' : '显示' }}
             </button>
           </div>
-          <div class="text-xs text-gray-400 mt-2">只保存在浏览器 localStorage，不会上传服务器</div>
+          <div class="text-xs text-c-muted mt-2">只保存在浏览器 localStorage，不会上传服务器</div>
         </div>
 
         <!-- Base URL -->
         <div>
-          <label class="text-xs text-gray-500 mb-3 block">Base URL</label>
+          <label class="text-xs text-c-muted mb-3 block">Base URL</label>
           <input v-model="cfg.base_url" type="text" placeholder="https://api.deepseek.com/v1"
-            class="w-full px-4 py-3 rounded-xl text-sm text-gray-700 placeholder:text-gray-400
-              font-mono bg-[#e0e5ec] neu-inset outline-none" />
+            class="w-full px-4 py-3 rounded-xl text-sm text-c-body placeholder:text-c-muted
+              font-mono neu-inset outline-none" />
         </div>
 
         <!-- 模型名称 -->
         <div>
-          <label class="text-xs text-gray-500 mb-3 block">模型名称</label>
+          <label class="text-xs text-c-muted mb-3 block">模型名称</label>
           <input v-model="cfg.model" type="text" placeholder="deepseek-chat"
-            class="w-full px-4 py-3 rounded-xl text-sm text-gray-700 placeholder:text-gray-400
-              font-mono bg-[#e0e5ec] neu-inset outline-none" />
+            class="w-full px-4 py-3 rounded-xl text-sm text-c-body placeholder:text-c-muted
+              font-mono neu-inset outline-none" />
         </div>
 
         <!-- 高级：自定义服务端地址 -->
         <div v-if="showAdvanced" class="pt-1 space-y-3">
           <div>
-            <label class="text-xs text-gray-500 mb-2 block">自定义服务端地址（可选）</label>
+            <label class="text-xs text-c-muted mb-2 block">自定义服务端地址（可选）</label>
             <input v-model="backendUrl" type="text" placeholder="留空则自动探测"
-              class="w-full px-4 py-3 rounded-xl text-sm text-gray-700 placeholder:text-gray-400
-                font-mono bg-[#e0e5ec] neu-inset outline-none" />
-            <div class="text-xs text-gray-400 mt-2 leading-5">
+              class="w-full px-4 py-3 rounded-xl text-sm text-c-body placeholder:text-c-muted
+                font-mono neu-inset outline-none" />
+            <div class="text-xs text-c-muted mt-2 leading-5">
               当前：<span :style="{ color: channel.color }">{{ channel.label }}</span>。
               填域名即可，程序会自动补 /api/v1。
             </div>
           </div>
           <button @click="saveBackend"
-            class="px-4 py-2 rounded-xl text-xs font-medium neu-sm text-gray-600 hover:text-[#6d5dfc]">
+            class="px-4 py-2 rounded-xl text-xs font-medium neu-sm text-c-body hover:text-[#5c4033]">
             保存并重新探测
           </button>
         </div>
       </div>
 
       <div v-if="testResult" class="mt-6 p-4 rounded-xl text-sm leading-6"
-        :class="testResult.ok ? 'bg-[#e1f5ee] text-[#0f6e56]' : 'bg-[#fcebeb] text-[#a32d2d]'">
+        :class="testResult.ok ? 'bg-[#e8ecdf] text-[#4f7d5e]' : 'bg-[#f7e9e4] text-[#b4552d]'">
         <div class="whitespace-pre-wrap">{{ testResult.msg }}</div>
       </div>
 
       <div class="flex gap-3 mt-8">
         <button @click="clearConfig"
-          class="px-5 py-3 rounded-xl text-sm font-medium neu-sm text-gray-500 hover:text-red-500">
+          class="px-5 py-3 rounded-xl text-sm font-medium neu-sm text-c-muted hover:text-c-clay">
           清空
         </button>
         <button @click="test" :disabled="testing || !ready"
-          class="px-5 py-3 rounded-xl text-sm font-medium neu-sm text-gray-700
-            hover:text-[#6d5dfc] disabled:opacity-50">
+          class="px-5 py-3 rounded-xl text-sm font-medium neu-sm text-c-body
+            hover:text-[#5c4033] disabled:opacity-50">
           {{ testing ? '测试中…' : '测试连接' }}
         </button>
         <button @click="save" :disabled="!ready"
-          class="flex-1 px-5 py-3 rounded-xl text-sm font-medium text-white
+          class="flex-1 px-5 py-3 rounded-xl text-sm font-medium text-c-cream
             disabled:opacity-50"
-          style="background: #6d5dfc; box-shadow: 6px 6px 12px #b8bcc2, -6px -6px 12px #ffffff">
+          style="background: #5c4033; box-shadow: 0 4px 14px rgba(92,64,51,0.18)">
           保存配置
         </button>
       </div>
@@ -136,46 +136,46 @@
 
     <!-- 使用说明 -->
     <section class="rounded-2xl p-6 md:p-8 neu mb-6">
-      <h2 class="text-base font-medium text-gray-800 mb-5">使用说明</h2>
-      <div class="space-y-3 text-sm text-gray-600 leading-relaxed">
+      <h2 class="text-base font-medium text-c-ink mb-5">使用说明</h2>
+      <div class="space-y-3 text-sm text-c-body leading-relaxed">
         <div v-for="(s, i) in steps" :key="i" class="flex gap-3">
-          <span class="text-[#6d5dfc] font-semibold shrink-0">{{ BULLETS[i] }}</span>
+          <span class="text-[#5c4033] font-semibold shrink-0">{{ BULLETS[i] }}</span>
           <span>{{ s }}</span>
         </div>
       </div>
       <div class="mt-5 p-4 rounded-xl text-xs leading-relaxed"
-        style="background: #fdf6e3; color: #8a6d3b">
+        style="background: #f7eddc; color: #9c6b2f">
         <strong>💡 说明：</strong>{{ note }}
       </div>
     </section>
 
     <!-- 数据 -->
     <section class="rounded-2xl p-6 neu-sm mb-6">
-      <div class="text-sm font-medium text-gray-700 mb-4">数据</div>
+      <div class="text-sm font-medium text-c-body mb-4">数据</div>
       <div class="flex flex-wrap items-center gap-3">
         <button @click="doExport"
-          class="px-4 py-2 rounded-xl text-xs font-medium neu-inset text-gray-600 hover:text-[#6d5dfc]">
+          class="px-4 py-2 rounded-xl text-xs font-medium neu-inset text-c-body hover:text-[#5c4033]">
           导出全部数据
         </button>
         <button @click="fileInput?.click()"
-          class="px-4 py-2 rounded-xl text-xs font-medium neu-inset text-gray-600 hover:text-[#6d5dfc]">
+          class="px-4 py-2 rounded-xl text-xs font-medium neu-inset text-c-body hover:text-[#5c4033]">
           导入数据
         </button>
         <input ref="fileInput" type="file" accept=".json" class="hidden" @change="doImport" />
         <button @click="doClearAll"
-          class="px-4 py-2 rounded-xl text-xs font-medium neu-inset text-gray-500 hover:text-red-500">
+          class="px-4 py-2 rounded-xl text-xs font-medium neu-inset text-c-muted hover:text-c-clay">
           清空所有数据
         </button>
       </div>
-      <div class="text-xs text-gray-400 mt-3 leading-5">
+      <div class="text-xs text-c-muted mt-3 leading-5">
         导出的是 JSON 文件，可以拿到另一台电脑导入，或在换设备时备份
       </div>
     </section>
 
     <!-- 关于 -->
     <section class="rounded-2xl p-6 neu-sm">
-      <div class="text-sm font-medium text-gray-700 mb-3">关于</div>
-      <div class="text-xs text-gray-500 leading-6 space-y-1.5">
+      <div class="text-sm font-medium text-c-body mb-3">关于</div>
+      <div class="text-xs text-c-muted leading-6 space-y-1.5">
         <div>蓝笔申论 · 版本 {{ backendMeta?.version || '0.2.0' }}</div>
         <div>作答、笔记、错题、复习卡片全部存在本地，后端不保存这些内容</div>
         <div>批改费用由你自己的 API 账户承担，单次约几分钱</div>
@@ -186,7 +186,7 @@
 
 <script setup>
 import { computed, reactive, ref, onMounted } from 'vue'
-import { Message, Modal } from '@arco-design/web-vue'
+import { toast } from '../utils/toast'
 import { getConfig, saveConfig, testConnection } from '../api/llm'
 import {
   backendInfo,
@@ -230,8 +230,8 @@ const readyHint = computed(() => {
 
 const channel = computed(() =>
   backendAvailable.value
-    ? { label: '已连上本地服务', color: '#1f9d55' }
-    : { label: '浏览器直连', color: '#9aa0a6' }
+    ? { label: '已连上本地服务', color: '#4f7d5e' }
+    : { label: '浏览器直连', color: '#a8a29e' }
 )
 
 const steps = computed(() =>
@@ -270,7 +270,7 @@ async function refreshBackend(force = false) {
   backendMeta.value = backendInfo()
   const def = await fetchLLMDefault()
   serverKey.value = def?.server_key_configured ? def : null
-  if (force) Message.success(ok ? '已连接本地服务' : '未检测到本地服务，将使用浏览器直连')
+  if (force) toast.success(ok ? '已连接本地服务' : '未检测到本地服务，将使用浏览器直连')
 }
 
 function samePreset(p) {
@@ -300,7 +300,7 @@ function persist() {
 function save() {
   persist()
   testResult.value = null
-  Message.success('配置已保存')
+  toast.success('配置已保存')
 }
 
 function clearConfig() {
@@ -309,7 +309,7 @@ function clearConfig() {
   cfg.model = PRESETS[0].model
   saveConfig({ base_url: cfg.base_url, api_key: '', model: cfg.model })
   testResult.value = null
-  Message.success('已清空')
+  toast.success('已清空')
 }
 
 async function test() {
@@ -337,7 +337,7 @@ async function doExport() {
   a.download = `蓝笔申论-备份-${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}.json`
   a.click()
   URL.revokeObjectURL(a.href)
-  Message.success('已导出')
+  toast.success('已导出')
 }
 
 async function doImport(e) {
@@ -346,24 +346,20 @@ async function doImport(e) {
   try {
     const text = await file.text()
     const count = await importAll(JSON.parse(text))
-    Message.success(`已导入 ${count} 条记录`)
+    toast.success(`已导入 ${count} 条记录`)
   } catch (err) {
-    Message.error('导入失败：文件格式不对')
+    toast.error('导入失败：文件格式不对')
   }
   e.target.value = ''
 }
 
-function doClearAll() {
-  Modal.warning({
-    title: '确认清空',
-    content: '会删除所有练习记录、文章、笔记和复习卡片，且无法恢复。建议先导出备份。',
-    okText: '确认清空',
-    cancelText: '取消',
-    hideCancel: false,
-    onOk: async () => {
-      for (const s of Object.values(STORES)) await clear(s)
-      Message.success('已清空')
-    },
-  })
+async function doClearAll() {
+  const ok = await toast.confirm(
+    '会删除所有练习记录、文章和笔记，且无法恢复。建议先导出备份。',
+    { title: '确认清空', okText: '确认清空' },
+  )
+  if (!ok) return
+  for (const s of Object.values(STORES)) await clear(s)
+  toast.success('已清空')
 }
 </script>

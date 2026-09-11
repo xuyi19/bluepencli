@@ -1,13 +1,13 @@
 <template>
   <div class="w-full">
 
-    <h1 class="text-xl font-semibold text-gray-800 mb-1">统计</h1>
-    <p class="text-sm text-gray-500 mb-8">看得见的进步，才撑得住坚持</p>
+    <h1 class="text-xl font-semibold text-c-ink mb-1">统计</h1>
+    <p class="text-sm text-c-muted mb-8">看得见的进步，才撑得住坚持</p>
 
-    <div v-if="!records.length" class="rounded-2xl p-16 neu text-center text-gray-400">
+    <div v-if="!records.length" class="rounded-2xl p-16 neu text-center text-c-muted">
       <div class="text-sm">还没有练习记录，批改一次就有了</div>
       <RouterLink to="/practice"
-        class="inline-block mt-4 px-4 py-2 rounded-xl text-xs font-medium neu text-[#6d5dfc]">
+        class="inline-block mt-4 px-4 py-2 rounded-xl text-xs font-medium neu text-[#5c4033]">
         去练习 →
       </RouterLink>
     </div>
@@ -16,46 +16,46 @@
       <!-- 概览 -->
       <section class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
         <div v-for="s in overview" :key="s.label" class="rounded-2xl p-5 neu">
-          <div class="text-xs text-gray-500 mb-2">{{ s.label }}</div>
-          <div class="text-2xl font-semibold tnum text-gray-800">{{ s.value }}</div>
-          <div class="text-xs text-gray-400 mt-1">{{ s.hint }}</div>
+          <div class="text-xs text-c-muted mb-2">{{ s.label }}</div>
+          <div class="text-2xl font-semibold tnum text-c-ink">{{ s.value }}</div>
+          <div class="text-xs text-c-muted mt-1">{{ s.hint }}</div>
         </div>
       </section>
 
       <!-- 得分趋势 -->
       <section class="rounded-2xl p-6 neu mb-6">
-        <div class="text-sm font-medium text-gray-700 mb-5">得分率趋势</div>
+        <div class="text-sm font-medium text-c-body mb-5">得分率趋势</div>
         <div ref="trendEl" style="height: 240px" />
       </section>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
         <!-- 维度雷达 -->
         <section class="rounded-2xl p-6 neu">
-          <div class="text-sm font-medium text-gray-700 mb-5">能力维度</div>
+          <div class="text-sm font-medium text-c-body mb-5">能力维度</div>
           <div ref="radarEl" style="height: 260px" />
         </section>
 
         <!-- 练习频次 -->
         <section class="rounded-2xl p-6 neu">
-          <div class="text-sm font-medium text-gray-700 mb-5">近 30 天练习</div>
+          <div class="text-sm font-medium text-c-body mb-5">近 30 天练习</div>
           <div ref="heatEl" style="height: 260px" />
         </section>
       </div>
 
       <!-- 高频失分点 -->
       <section v-if="topDeductions.length" class="rounded-2xl p-6 neu">
-        <div class="text-sm font-medium text-gray-700 mb-5">最该改的毛病</div>
+        <div class="text-sm font-medium text-c-body mb-5">最该改的毛病</div>
         <div class="space-y-3">
           <div v-for="(d, i) in topDeductions" :key="i" class="flex items-center gap-3">
-            <span class="text-xs text-gray-400 tnum w-5 shrink-0">{{ i + 1 }}</span>
+            <span class="text-xs text-c-muted tnum w-5 shrink-0">{{ i + 1 }}</span>
             <div class="flex-1 min-w-0">
-              <div class="text-sm text-gray-700 truncate">{{ d.point }}</div>
+              <div class="text-sm text-c-body truncate">{{ d.point }}</div>
               <div class="h-1.5 rounded-full neu-inset overflow-hidden mt-1.5">
-                <div class="h-full rounded-full bg-[#a32d2d]"
+                <div class="h-full rounded-full bg-[#b4552d]"
                   :style="{ width: (d.count / topDeductions[0].count) * 100 + '%' }" />
               </div>
             </div>
-            <span class="text-xs text-gray-500 tnum shrink-0">{{ d.count }} 次</span>
+            <span class="text-xs text-c-muted tnum shrink-0">{{ d.count }} 次</span>
           </div>
         </div>
       </section>
@@ -123,8 +123,8 @@ function initCharts() {
   const rs = records.value.slice().reverse()
   if (!rs.length) return
 
-  const AXIS = { color: '#888780', fontSize: 11 }
-  const SPLIT = { lineStyle: { color: '#d3d1c7', type: 'dashed' } }
+  const AXIS = { color: '#78716c', fontSize: 11 }
+  const SPLIT = { lineStyle: { color: '#e7e5e4', type: 'dashed' } }
 
   // 趋势
   if (trendEl.value) {
@@ -136,7 +136,7 @@ function initCharts() {
         type: 'category',
         data: rs.map((r, i) => `#${i + 1}`),
         axisLabel: AXIS,
-        axisLine: { lineStyle: { color: '#b4b2a9' } },
+        axisLine: { lineStyle: { color: '#a8a29e' } },
       },
       yAxis: {
         type: 'value',
@@ -150,9 +150,9 @@ function initCharts() {
           smooth: true,
           symbolSize: 6,
           data: rs.map((r) => +(((r.finalScore || 0) / (r.maxScore || 40)) * 100).toFixed(1)),
-          itemStyle: { color: '#6d5dfc' },
-          lineStyle: { width: 2, color: '#6d5dfc' },
-          areaStyle: { color: 'rgba(109,93,252,0.12)' },
+          itemStyle: { color: '#5c4033' },
+          lineStyle: { width: 2, color: '#5c4033' },
+          areaStyle: { color: 'rgba(92,64,51,0.12)' },
         },
       ],
     })
@@ -181,17 +181,17 @@ function initCharts() {
           text: '还没有分项评分数据',
           left: 'center',
           top: 'middle',
-          textStyle: { color: '#b4b2a9', fontSize: 12, fontWeight: 400 },
+          textStyle: { color: '#a8a29e', fontSize: 12, fontWeight: 400 },
         },
       })
     } else {
       c.setOption({
         radar: {
           indicator: entries.map(([name]) => ({ name, max: 100 })),
-          axisName: { color: '#5f5e5a', fontSize: 11 },
-          splitLine: { lineStyle: { color: '#d3d1c7' } },
-          splitArea: { areaStyle: { color: ['rgba(224,229,236,0.3)', 'rgba(224,229,236,0.6)'] } },
-          axisLine: { lineStyle: { color: '#d3d1c7' } },
+          axisName: { color: '#78716c', fontSize: 11 },
+          splitLine: { lineStyle: { color: '#e7e5e4' } },
+          splitArea: { areaStyle: { color: ['rgba(250,246,241,0.3)', 'rgba(250,246,241,0.6)'] } },
+          axisLine: { lineStyle: { color: '#e7e5e4' } },
         },
         series: [
           {
@@ -200,9 +200,9 @@ function initCharts() {
               {
                 value: entries.map(([, v]) => (v.max ? +((v.got / v.max) * 100).toFixed(1) : 0)),
                 name: '平均得分率',
-                itemStyle: { color: '#6d5dfc' },
-                lineStyle: { color: '#6d5dfc', width: 2 },
-                areaStyle: { color: 'rgba(109,93,252,0.2)' },
+                itemStyle: { color: '#5c4033' },
+                lineStyle: { color: '#5c4033', width: 2 },
+                areaStyle: { color: 'rgba(92,64,51,0.2)' },
               },
             ],
           },
@@ -243,13 +243,13 @@ function initCharts() {
         show: false,
         min: 0,
         max,
-        inRange: { color: ['#eeedfe', '#7f77dd', '#534ab7'] },
+        inRange: { color: ['#f2ebe2', '#7a6a9b', '#5c4033'] },
       },
       series: [
         {
           type: 'heatmap',
           data: counts.map((v, i) => [i, 0, v]),
-          itemStyle: { borderRadius: 4, borderColor: '#e0e5ec', borderWidth: 3 },
+          itemStyle: { borderRadius: 4, borderColor: '#faf6f1', borderWidth: 3 },
         },
       ],
     })
