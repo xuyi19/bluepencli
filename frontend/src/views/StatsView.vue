@@ -1,5 +1,5 @@
 <template>
-  <div class="max-w-6xl mx-auto px-6 md:px-8 py-8">
+  <div class="w-full">
 
     <h1 class="text-xl font-semibold text-gray-800 mb-1">统计</h1>
     <p class="text-sm text-gray-500 mb-8">看得见的进步，才撑得住坚持</p>

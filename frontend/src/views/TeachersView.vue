@@ -1,5 +1,5 @@
 <template>
-  <div class="max-w-6xl mx-auto px-6 md:px-8 py-8">
+  <div class="w-full">
 
     <div class="mb-6">
       <h1 class="text-xl font-semibold text-gray-800">老师档案</h1>
