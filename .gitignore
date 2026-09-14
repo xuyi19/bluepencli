@@ -12,7 +12,8 @@ frontend/dist-single/
 
 # 桌面版打包产物（用 backend/build_desktop.py 一键重建）
 backend/build/
-release/蓝笔申论-桌面版/
+# release/ 只保留最新一版产物，文件名带版本号（版本取自 CHANGELOG.md）
+release/蓝笔申论-桌面版*/
 release/*.zip
 release/*.html
 release/.old-*/

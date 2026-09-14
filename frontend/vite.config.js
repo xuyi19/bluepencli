@@ -30,6 +30,10 @@ export default defineConfig(({ mode }) => {
       strictPort: true,
       allowedHosts: true,
       hmr: { clientPort: 443 },
+      // 「更新日志」页直接 ?raw 导入仓库根的 CHANGELOG.md（它是唯一数据源），
+      // 该文件在 frontend/ 之外，默认会被 Vite 的文件白名单拦成 403。
+      // 注意 fs.allow 是整体覆盖而非追加，所以 '.'（前端自身）也要写回来。
+      fs: { allow: ['.', '..'] },
       // 代理到 FastAPI 后端，前端无需处理跨域
       // 注意：8000 常被 resumatch-ai 占用，本项目固定用 8100，避免两个项目抢端口
       proxy: {
