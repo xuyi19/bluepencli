@@ -7,8 +7,11 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:local": "vite build --mode full",
     "build:single": "vite build --mode single",
+    "build:single:local": "vite build --mode single-full",
     "release:single": "npm run build:single && node scripts/publish-single.mjs",
+    "release:single:local": "npm run build:single:local && node scripts/publish-single.mjs --local",
     "preview": "vite preview"
   },
   "dependencies": {

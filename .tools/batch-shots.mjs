@@ -7,7 +7,9 @@ const PORT = 9336
 const OUT = 'E:/code/bluepencil/.shots'
 
 const ROUTES = [
-  ['', 'home', ['蓝笔申论', '累计练习', '更新日志']],
+  // 首页页脚现在放的是「作者与开源」（GitHub / Gitee / 更新日志三个入口
+  // 已常驻到侧边栏底部），所以这里检查的是作者与开源地址，而非日志字样
+  ['', 'home', ['蓝笔申论', '累计练习', '开源地址', 'xuconghui_03@qq.com']],
   ['teachers', 'teachers', ['老师']],
   ['questions', 'questions', ['题库']],
   ['articles', 'articles', ['文章库']],

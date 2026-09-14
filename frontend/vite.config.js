@@ -1,17 +1,56 @@
+// ──────────────────────────────────────────────────────────────
+// 蓝笔申论 BluePencil · 作者 许一 <xuconghui_03@qq.com>
+// GitHub: https://github.com/xuyi19/bluepencli
+// Gitee : https://gitee.com/xuyi_19/bluepencil
+// 许可: AGPL-3.0 · 转发或修改请保留本署名
+// ──────────────────────────────────────────────────────────────
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { viteSingleFile } from 'vite-plugin-singlefile'
+import { existsSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
-// 两种构建产物：
-//   pnpm build         → dist/       多文件，用于部署到网站
-//   pnpm build:single  → dist-single/单文件 index.html，双击即用，可直接发给别人
+const HERE = dirname(fileURLToPath(import.meta.url))
+
+// 私有真题目录：2022 年起的国考卷。**不进版本库**，只在本机存在。
+const PRIVATE_DIR = resolve(HERE, 'src/data/real-exams-private')
+// 空实现：随仓库走，别人 clone 后靠它构建
+const PRIVATE_STUB = resolve(HERE, 'src/data/real-exams-private-stub')
+
+// 四种构建产物，靠 --mode 区分（Windows 下 npm script 里没法直接写 `FOO=1 cmd`，
+// 所以用 mode 而不是环境变量，免得多装一个 cross-env）：
+//
+//   vite build                      → dist/              公开·网站版
+//   vite build --mode single        → dist-single/       公开·单文件版（发给别人）
+//   vite build --mode full          → dist/              本机·网站版（含私有卷）
+//   vite build --mode single-full   → dist-single-local/ 本机·单文件版（含私有卷）
+//
+// mode 里带 `full` 才把私有卷编进去。默认（不带 mode）是**不含私有卷**的，
+// 这一点是刻意的：忘记加 mode 时宁可少东西，也不能把私有资产漏出去。
+//
+// 为什么不叫 `local`：Vite 明确禁止 mode 名以 `.local` 后缀冲突（会与 .env.local 打架），
+// `--mode local` 会在 loadEnv 阶段直接抛错。踩过，别再改回去。
 export default defineConfig(({ mode }) => {
-  const single = mode === 'single'
+  const single = mode.startsWith('single')
+  const includePrivate = mode.includes('full')
+
+  const privateEntry = includePrivate && existsSync(PRIVATE_DIR)
+    ? resolve(PRIVATE_DIR, 'index.js')
+    : resolve(PRIVATE_STUB, 'index.js')
+
   return {
     plugins: [vue(), ...(single ? [viteSingleFile()] : [])],
+    resolve: {
+      alias: {
+        // 私有卷的唯一入口。data/questions.js 只认这个别名，
+        // 换目录 / 换空实现都在这一处完成，业务代码不用动。
+        '@private-exams': privateEntry,
+      },
+    },
     base: './',
     build: {
-      outDir: single ? 'dist-single' : 'dist',
+      outDir: mode === 'single-full' ? 'dist-single-local' : single ? 'dist-single' : 'dist',
       emptyOutDir: true,
       // 单文件模式必须关闭代码分割，否则会产生多个 chunk
       cssCodeSplit: !single,

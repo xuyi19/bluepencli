@@ -1,3 +1,9 @@
+// ──────────────────────────────────────────────────────────────
+// 蓝笔申论 BluePencil · 作者 许一 <xuconghui_03@qq.com>
+// GitHub: https://github.com/xuyi19/bluepencli
+// Gitee : https://gitee.com/xuyi_19/bluepencil
+// 许可: AGPL-3.0 · 转发或修改请保留本署名
+// ──────────────────────────────────────────────────────────────
 const DB_NAME = 'bluepencil'
 // 加了 questions 表，版本号必须递增，否则老用户的库不会升级
 const DB_VERSION = 2

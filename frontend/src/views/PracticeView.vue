@@ -60,7 +60,7 @@
               <span class="tnum">满分 {{ todayQ.maxScore }}</span>
               <span v-if="todayQ.wordLimit" class="tnum">≤ {{ todayQ.wordLimit }} 字</span>
               <span>{{ DIFFICULTY_LABEL[todayQ.difficulty] || '' }}</span>
-              <span class="tnum">材料 {{ (todayQ.material || '').length }} 字</span>
+              <span class="tnum">材料 {{ todayQ.materialChars || (todayQ.material || '').length }} 字</span>
             </div>
           </div>
 
@@ -83,7 +83,12 @@
         </div>
 
         <!-- 材料速览：不点开只占一行，点开在卡片下方铺开，不挡下面的题目区 -->
-        <details class="mt-3 pt-3 border-t border-c-line group">
+        <!-- 真题的材料要等「用这道题」载入对应卷才有，这里先给个提示 -->
+        <div v-if="todayQ.needLoad"
+          class="mt-3 pt-3 border-t border-c-line text-xs text-c-muted leading-6">
+          真题的整卷材料约 {{ todayQ.materialChars }} 字，点「用今日一练作答」后载入。
+        </div>
+        <details v-else class="mt-3 pt-3 border-t border-c-line group">
           <summary class="text-xs text-c-muted cursor-pointer hover:text-c-bark transition-colors list-none">
             <span class="transition-transform duration-300 group-open:rotate-90 inline-block mr-1">▸</span>
             先读材料（{{ materialBlocks(todayQ.material).length }} 则）
@@ -225,8 +230,13 @@
         <section class="lg:col-span-2 rounded-2xl p-5 neu">
           <div class="flex items-center justify-between mb-4">
             <span class="text-sm font-medium text-c-body">题目</span>
-            <span v-if="loadedMeta.type" class="text-xs px-1.5 py-0.5 rounded"
-              style="background: #e8ecdf; color: #3d5a7a">{{ loadedMeta.type }}</span>
+            <div class="flex items-center gap-1.5">
+              <!-- 来源标签：导入的私有真题必须能一眼认出来（"这卷别外传"的前提是看得见） -->
+              <span v-if="loadedMeta.kind" class="text-xs px-1.5 py-0.5 rounded font-medium"
+                :style="kindBadgeStyle">{{ loadedMeta.kind }}</span>
+              <span v-if="loadedMeta.type" class="text-xs px-1.5 py-0.5 rounded"
+                style="background: #e8ecdf; color: #3d5a7a">{{ loadedMeta.type }}</span>
+            </div>
           </div>
 
           <label class="block text-xs text-c-muted mb-1.5">题干</label>
@@ -635,7 +645,8 @@ import { TEACHERS, TEACHER_LIST, MODE_LABEL, PRESETS, detectMode } from '../agen
 import { runGrading } from '../agents/orchestrator'
 import { buildRecord, archiveRecord, countChars, fmtDateTime, listAllRecords } from '../utils/record'
 import { getAll, STORES } from '../store/db'
-import { BUILTIN_QUESTIONS, DIFFICULTY_LABEL, withPrefix } from '../data/builtin-questions'
+import { DIFFICULTY_LABEL } from '../data/builtin-questions'
+import { BUILTIN_POOL, resolveQuestion } from '../data/questions'
 import { pickDaily, pickRandom, practicedToday } from '../data/daily'
 import { useReadiness } from '../utils/readiness'
 
@@ -669,7 +680,8 @@ const sampling = ref(false)
 const teacherProgress = reactive({})
 
 // —— 题库与每日一练 ——
-const builtin = BUILTIN_QUESTIONS.map(withPrefix)
+// BUILTIN_POOL = 仿真题（资源在包内）+ 真题（只有摘要，材料与答案练习时才载入）
+const builtin = BUILTIN_POOL
 const mine = ref([])
 const todayQ = ref(null)
 const doneToday = ref(false)
@@ -683,6 +695,15 @@ let controller = null
 let timer = null
 
 const { ready: hasKey, probeReadiness } = useReadiness()
+
+/** 来源标签配色，与题库页 kindStyle 保持一致：真题赭黄 / 私有用藕紫 / 仿真暖棕 / 自建灰 */
+const kindBadgeStyle = computed(() => {
+  const k = loadedMeta.kind
+  if (k === '真题') return 'background:#f7eddc;color:#9c6b2f'
+  if (k === '私有') return 'background:#efeaf4;color:#7a6a9b'
+  if (k === '仿真') return 'background:#f2ebe2;color:#5c4033'
+  return 'background:#f5f1ea;color:#78716c'
+})
 
 const pool = computed(() => [...mine.value, ...builtin])
 const mode = computed(() => detectMode(selected.value))
@@ -802,9 +823,18 @@ function samePreset(ids) {
  * 把一道题带进表单。这是「题目和材料都没有」的解药——
  * 不论来自每日一练、选题面板还是题库页跳转，都走这一条路，
  * 保证 title / material / requirement / maxScore / wordLimit 五个字段一起到位。
+ *
+ * 必须 await：真题从池子里拿到的只是摘要（材料与答案是空的），
+ * 真正的内容要 loadFullQuestion 去 await 对应卷的 chunk。
  */
-function applyQuestion(q, { resetAnswer = true } = {}) {
+async function applyQuestion(q, { resetAnswer = true } = {}) {
   if (!q) return
+  const full = await resolveQuestion(q)
+  if (!full) {
+    toast.error('这道题的正文没能载入，换一道试试')
+    return
+  }
+  q = full
   form.title = q.title || ''
   form.material = q.material || ''
   form.requirement = q.requirement || ''
@@ -827,10 +857,10 @@ function applyQuestion(q, { resetAnswer = true } = {}) {
 }
 
 /** 换一题：随机，但不与当前这题重复 */
-function shuffle() {
+async function shuffle() {
   const q = pickRandom(pool.value, loadedId.value)
   if (!q) return toast.warning('题库是空的，先录入题目')
-  applyQuestion(q)
+  await applyQuestion(q)
   toast.success('已换一题')
 }
 
@@ -982,8 +1012,10 @@ onMounted(async () => {
   // 服务端托管 Key 的情况（桌面版/部署版）也要算「已配置」
   probeReadiness()
 
-  // 用户自建的题目也进池子，每日一练与选题面板一并覆盖
-  mine.value = (await getAll(STORES.questions)).map((q) => ({ ...q, kind: '自建' }))
+  // 用户自建的题目也进池子，每日一练与选题面板一并覆盖。
+  // kind **只在没有时**补「自建」：导入的题库包带 kind:'私有'，不能用默认值盖掉，
+  // 否则练习页会把私有真题标成自建（真的踩过）。
+  mine.value = (await getAll(STORES.questions)).map((q) => ({ kind: '自建', ...q }))
 
   todayQ.value = pickDaily(pool.value)
   const recs = await listAllRecords()

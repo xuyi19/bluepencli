@@ -26,6 +26,7 @@
 - [开发验证工具](#开发验证工具)
 - [常见问题](#常见问题)
 - [上线部署](#上线部署)
+- [作者与开源](#作者与开源)
 - [免责声明](#免责声明)
 
 ---
@@ -317,11 +318,18 @@ bluepencil/
 │   │   │   ├── skills.js           # Prompt 组装（含深度模式、辩论、合议、批注契约）
 │   │   │   └── orchestrator.js     # 圆桌调度：并行阅卷 → 分歧检测 → 辩论 → 合议
 │   │   ├── prompts.js              # 追问与范文生成的 Prompt
+│   │   ├── bpq/
+│   │   │   └── importer.js         # .bpq 私有题库包：解析 / 校验和 / 入库
 │   │   ├── data/
+│   │   │   ├── author.js               # **作者信息唯一来源**（署名 / 邮箱 / 仓库 / 许可）
 │   │   │   ├── builtin-articles.json   # 内置 31 篇时评
 │   │   │   ├── builtin-questions.js    # 内置 15 道题（含完整材料与参考答案，标注为仿真）
+│   │   │   ├── questions.js            # 题库统一入口：仿真 + 公开真题 + 私有真题
+│   │   │   ├── real-exams/             # 公开真题（2010–2021，自动生成，进仓库）
+│   │   │   ├── real-exams-private/     # 私有真题（2022 起，自动生成，**已 gitignore**）
+│   │   │   ├── real-exams-private-stub/ # 私有卷空实现：别人 clone 后构建走它
 │   │   │   ├── daily.js                # 每日一练选题：按本地日期散列，确定性出题
-│   │   │   ├── site.js                 # 仓库地址与产品名
+│   │   │   ├── site.js                 # 仓库地址与产品名（转发 author.js）
 │   │   │   ├── changelog.js            # 解析仓库根 CHANGELOG.md，供首页与日志页使用
 │   │   │   └── teachers/*.md           # 五位老师讲义原文（?raw 懒加载）
 │   │   ├── views/                  # 首页/老师/文章库/题库/练习批改/复盘/统计/设置/更新日志
@@ -615,6 +623,43 @@ SQLite 文件在 `backend/data/bluepencil.db`，启动时自动创建。如果�
 
 ---
 
+## 作者与开源
+
+**作者 许一** · [xuconghui_03@qq.com](mailto:xuconghui_03@qq.com)
+
+| 入口 | 地址 |
+|---|---|
+| GitHub | <https://github.com/xuyi19/bluepencli> |
+| Gitee | <https://gitee.com/xuyi_19/bluepencil> |
+| 开源地址 | <https://github.com/xuyi19/bluepencli> |
+
+两个仓库内容一致，国内访问走 Gitee，海外或提 issue 走 GitHub。作者信息在代码里只有一处来源：
+[`frontend/src/data/author.js`](frontend/src/data/author.js) —— 侧边栏、首页页脚、设置页「关于」、
+浏览器控制台横幅都从它取；`.tools/add_watermark.py` 负责给核心源文件打作者注释头。
+
+### 公开层与私有层
+
+| 层 | 内容 | 分发方式 |
+|---|---|---|
+| 公开 | 框架代码 + **2010–2021 年国考真题（24 套 / 119 题）** + 15 道仿真题 | 本仓库，AGPL-3.0 |
+| 私有 | **2022 年起的国考真题（9 套 / 45 题）** | 作者定向分发 `.bpq` 题库包，使用者自行导入 |
+
+私有卷**不在本仓库，也不在任何一个分发包里**（源码见 `frontend/src/data/real-exams-private/`，
+已 gitignore；构建走 `frontend/src/data/real-exams-private-stub/` 的空实现）。
+拿不到私有卷时软件照常可用，只是题库里没有 2022 年起的卷 —— 需要向作者索取题库包，
+在「题库 → 导入题库包」里导入。每个包带使用者水印，**请勿二次转发**。
+
+构建时的分层开关（默认不含私有卷，这一条是刻意的）：
+
+```bash
+npm run build               # 公开·网站版        → dist/
+npm run build:single        # 公开·单文件版      → dist-single/   （发给别人用这个）
+npm run build:local         # 本机·网站版（含私有卷）
+npm run build:single:local  # 本机·单文件版（含私有卷）
+```
+
+---
+
 ## 免责声明
 
 - 本项目为个人学习与技术研究成果，**不得用于任何商业用途**。
@@ -626,4 +671,7 @@ SQLite 文件在 `backend/data/bluepencil.db`，启动时自动创建。如果�
 
 ## License
 
-MIT
+[AGPL-3.0](LICENSE) © 2026 许一 <xuconghui_03@qq.com>
+
+可以自由使用、修改、再分发，但**衍生作品必须以同样的许可证开源，并保留作者署名**。
+换句话说：拿这份代码改成自己的东西可以，但改完也得开源、也得写清楚是从这里来的。

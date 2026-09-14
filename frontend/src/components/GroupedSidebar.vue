@@ -50,8 +50,47 @@
       </div>
     </nav>
 
-    <!-- 底部：设置 + 状态点 -->
-    <div class="px-3 py-4 border-t border-c-line space-y-1 shrink-0">
+    <!-- 底部：开源入口 + 设置 + 作者水印 -->
+    <div class="px-3 py-4 border-t border-c-line space-y-2 shrink-0">
+
+      <!-- 开源入口：GitHub / Gitee / 更新日志。
+           放侧边栏而不是首页页脚 —— 这是"关于这个项目"的信息，任何时候都该够得着，
+           不该只在首页出现。三个挤在 200px 里，所以用等宽小胶囊而不是大按钮。 -->
+      <div class="flex items-center gap-1.5 px-0.5">
+        <a :href="AUTHOR.github" target="_blank" rel="noopener" title="GitHub 仓库"
+          class="flex-1 h-7 rounded-lg border border-c-line flex items-center justify-center gap-1
+            text-[11px] text-c-muted leading-none transition-colors duration-300 ease-in-out
+            hover:text-c-bark hover:bg-c-barkSoft hover:border-transparent">
+          <svg class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M12 .3a12 12 0 00-3.8 23.4c.6.1.8-.3.8-.6v-2c-3.3.7-4-1.6-4-1.6-.6-1.4-1.4-1.8-1.4-1.8-1-.7.1-.7.1-.7 1.2 0 1.9 1.2 1.9 1.2 1 1.8 2.8 1.3 3.5 1 0-.8.4-1.3.7-1.6-2.7-.3-5.5-1.3-5.5-6 0-1.2.5-2.3 1.2-3.1-.1-.4-.5-1.7.1-3.5 0 0 1-.3 3.3 1.2a11.5 11.5 0 016 0c2.3-1.5 3.3-1.2 3.3-1.2.7 1.8.3 3.1.1 3.5.8.8 1.2 1.9 1.2 3.1 0 4.7-2.8 5.7-5.5 6 .4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6A12 12 0 0012 .3"/>
+          </svg>
+          <span>GitHub</span>
+        </a>
+
+        <a :href="AUTHOR.gitee" target="_blank" rel="noopener" title="Gitee 仓库"
+          class="flex-1 h-7 rounded-lg border border-c-line flex items-center justify-center gap-1
+            text-[11px] text-c-muted leading-none transition-colors duration-300 ease-in-out
+            hover:text-c-bark hover:bg-c-barkSoft hover:border-transparent">
+          <svg class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.9a3.4 3.4 0 00-.9-2.6c3.1-.4 6.4-1.5 6.4-7A5.4 5.4 0 0020 4.8 5.1 5.1 0 0019.9 1S18.7.7 16 2.5a13.4 13.4 0 00-7 0C6.3.7 5.1 1 5.1 1A5.1 5.1 0 005 4.8a5.4 5.4 0 00-1.5 3.7c0 5.4 3.3 6.6 6.4 7A3.4 3.4 0 009 18.1V22"/>
+          </svg>
+          <span>Gitee</span>
+        </a>
+
+        <RouterLink to="/changelog" @click="emit('navigate')" title="更新日志"
+          class="flex-1 h-7 rounded-lg border border-c-line flex items-center justify-center gap-1
+            text-[11px] text-c-muted leading-none transition-colors duration-300 ease-in-out
+            hover:text-c-bark hover:bg-c-barkSoft hover:border-transparent"
+          :class="route.path.startsWith('/changelog') ? 'bg-c-barkSoft text-c-bark border-transparent' : ''">
+          <svg class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+            <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>
+          </svg>
+          <span>日志</span>
+        </RouterLink>
+      </div>
+
       <RouterLink to="/settings"
         @click="emit('navigate')"
         class="flex items-center gap-3 px-3.5 py-2.5 rounded-full text-sm
@@ -66,6 +105,12 @@
         <span class="flex-1">设置</span>
         <span class="w-2 h-2 rounded-full shrink-0" :style="{ background: dot.color }" :title="dot.title" />
       </RouterLink>
+
+      <!-- 作者水印：小、但一直在。title 里给全量信息（邮箱 + 两个仓库）。 -->
+      <div class="px-3.5 pt-0.5 text-[10px] leading-4 text-c-muted truncate cursor-default"
+        :title="AUTHOR_LINE">
+        {{ AUTHOR_SHORT }}
+      </div>
     </div>
 
   </div>
@@ -74,6 +119,7 @@
 <script setup>
 import { computed } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
+import { AUTHOR, AUTHOR_LINE, AUTHOR_SHORT } from '../data/author'
 
 const props = defineProps({
   nav: { type: Array, required: true },     // 含 group 字段的导航数组

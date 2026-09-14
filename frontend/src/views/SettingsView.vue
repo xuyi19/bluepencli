@@ -188,6 +188,27 @@
         <div>作答、笔记、错题全部存在本机，后端不保存这些内容</div>
         <div>批改费用由你自己的 API 账户承担，单次约几分钱</div>
       </div>
+
+      <!-- 作者水印：这段是"东西是谁做的、从哪来的"的正式出口。
+           发出去的包里就靠它 + 控制台横幅 + 源码注释头追溯来源。 -->
+      <div class="mt-4 pt-4 border-t border-c-line">
+        <div class="text-[11px] text-c-muted tracking-widest mb-2">作者</div>
+        <div class="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
+          <span class="text-c-body font-medium">{{ AUTHOR.name }}</span>
+          <a :href="`mailto:${AUTHOR.email}`" class="text-c-muted hover:text-c-bark transition-colors">
+            {{ AUTHOR.email }}
+          </a>
+          <a :href="AUTHOR.github" target="_blank" rel="noopener"
+            class="text-c-muted hover:text-c-bark transition-colors">GitHub</a>
+          <a :href="AUTHOR.gitee" target="_blank" rel="noopener"
+            class="text-c-muted hover:text-c-bark transition-colors">Gitee</a>
+          <a :href="AUTHOR.openSource" target="_blank" rel="noopener"
+            class="text-c-muted hover:text-c-bark transition-colors">开源地址</a>
+          <span class="text-c-muted tnum">{{ AUTHOR.license }}</span>
+          <button @click="onCopyStamp"
+            class="text-c-muted hover:text-c-bark transition-colors">复制联系方式</button>
+        </div>
+      </div>
     </section>
   </div>
 </template>
@@ -205,6 +226,8 @@ import {
 } from '../api/backend'
 import { exportAll, importAll, clear, STORES } from '../store/db'
 import { CURRENT_VERSION } from '../data/changelog'
+import { AUTHOR } from '../data/author'
+import { copyAuthorLine } from '../utils/watermark'
 
 // 服务商预设：点了自动填 Base URL 与模型名，省得用户去查文档
 const PRESETS = [
@@ -235,6 +258,13 @@ const serverKey = ref(null) // 服务端托管的 LLM 配置（不含 Key 本身
 const ready = computed(() => !!serverKey.value || !!cfg.api_key)
 
 const appVersion = computed(() => backendMeta.value?.version || CURRENT_VERSION)
+
+/** 反馈问题时把作者联系方式一并复制走 */
+async function onCopyStamp() {
+  const ok = await copyAuthorLine()
+  if (ok) toast.success('已复制作者联系方式')
+  else toast.warning('浏览器不允许自动复制，请手动记录')
+}
 
 const readyHint = computed(() => {
   if (serverKey.value) {

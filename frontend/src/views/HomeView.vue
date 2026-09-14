@@ -19,6 +19,9 @@
             <span class="text-xs text-c-muted tnum">{{ todayLabel }}</span>
             <span class="text-xs px-1.5 py-0.5 rounded"
               style="background: #e8ecdf; color: #3d5a7a">{{ todayQ.type }}</span>
+            <span v-if="todayQ.kind" class="text-xs px-1.5 py-0.5 rounded"
+              :style="todayQ.kind === '真题' ? 'background:#f7eddc;color:#9c6b2f' : 'background:#f2ebe2;color:#78716c'">
+              {{ todayQ.kind }}</span>
             <span v-if="doneToday" class="text-xs" style="color: #4f7d5e">✓ 今天已经练过一次</span>
           </div>
           <h2 class="font-serif text-lg md:text-xl text-c-ink leading-8">{{ todayQ.title }}</h2>
@@ -27,8 +30,7 @@
             <span class="tnum">满分 {{ todayQ.maxScore }}</span>
             <span v-if="todayQ.wordLimit" class="tnum">≤ {{ todayQ.wordLimit }} 字</span>
             <span v-if="todayQ.difficulty">{{ DIFFICULTY_LABEL[todayQ.difficulty] }}</span>
-          </div>
-        </div>
+          </div>        </div>
         <RouterLink :to="`/practice?questionId=${todayQ.id}`"
           class="shrink-0 px-6 py-3 rounded-full text-sm font-medium text-c-cream
             bg-c-bark transition-colors duration-300">
@@ -83,7 +85,9 @@
       </div>
     </section>
 
-    <!-- 仓库与更新日志：放在设置/配置区块之上，是页面末段的收尾信息 -->
+    <!-- 作者与开源：GitHub / Gitee / 更新日志三个入口已经**常驻到左侧边栏底部**
+         （那里任何页面都够得着，首页页脚只有一个页面能看到）。
+         这里只留"谁做的、怎么联系、什么许可"——页面末段该有的收尾信息。 -->
     <section data-testid="repo-links" class="rounded-2xl p-5 md:p-6 neu-sm mb-4">
       <div class="flex flex-wrap items-center justify-between gap-x-6 gap-y-4">
         <div class="min-w-0">
@@ -92,39 +96,27 @@
             <span class="text-c-muted font-normal tnum">v{{ CURRENT_VERSION }}</span>
           </div>
           <p class="text-xs text-c-muted mt-1.5 leading-5">
-            {{ APP_SLOGAN }}。源码与版本历史都在仓库里，欢迎提 issue
+            {{ APP_SLOGAN }}。作者 <span class="text-c-body">{{ AUTHOR.name }}</span>
+            <span class="mx-1.5 opacity-50">·</span>
+            <a :href="`mailto:${AUTHOR.email}`" class="hover:text-c-bark transition-colors">{{ AUTHOR.email }}</a>
           </p>
         </div>
 
-        <div class="flex flex-wrap items-center gap-2">
-          <a :href="REPO.github" target="_blank" rel="noopener" title="GitHub 仓库"
-            class="inline-flex items-center gap-2 px-3.5 py-2 rounded-full text-xs font-medium
+        <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <a :href="AUTHOR.openSource" target="_blank" rel="noopener" title="开源地址"
+            class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs
               text-c-body neu-sm hover:text-c-bark transition-colors duration-300">
-            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-              <path d="M12 .3a12 12 0 00-3.8 23.4c.6.1.8-.3.8-.6v-2c-3.3.7-4-1.6-4-1.6-.6-1.4-1.4-1.8-1.4-1.8-1-.7.1-.7.1-.7 1.2 0 1.9 1.2 1.9 1.2 1 1.8 2.8 1.3 3.5 1 0-.8.4-1.3.7-1.6-2.7-.3-5.5-1.3-5.5-6 0-1.2.5-2.3 1.2-3.1-.1-.4-.5-1.7.1-3.5 0 0 1-.3 3.3 1.2a11.5 11.5 0 016 0c2.3-1.5 3.3-1.2 3.3-1.2.7 1.8.3 3.1.1 3.5.8.8 1.2 1.9 1.2 3.1 0 4.7-2.8 5.7-5.5 6 .4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6A12 12 0 0012 .3"/>
-            </svg>
-            GitHub
-          </a>
-
-          <a :href="REPO.gitee" target="_blank" rel="noopener" title="Gitee 仓库"
-            class="inline-flex items-center gap-2 px-3.5 py-2 rounded-full text-xs font-medium
-              text-c-body neu-sm hover:text-c-bark transition-colors duration-300">
-            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-              stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.9a3.4 3.4 0 00-.9-2.6c3.1-.4 6.4-1.5 6.4-7A5.4 5.4 0 0020 4.8 5.1 5.1 0 0019.9 1S18.7.7 16 2.5a13.4 13.4 0 00-7 0C6.3.7 5.1 1 5.1 1A5.1 5.1 0 005 4.8a5.4 5.4 0 00-1.5 3.7c0 5.4 3.3 6.6 6.4 7A3.4 3.4 0 009 18.1V22"/>
-            </svg>
-            Gitee
-          </a>
-
-          <RouterLink to="/changelog" title="更新日志"
-            class="inline-flex items-center gap-2 px-3.5 py-2 rounded-full text-xs font-medium
-              text-c-body neu-sm hover:text-c-bark transition-colors duration-300">
-            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor"
               stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
-              <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>
+              <path d="M10 13a5 5 0 007 0l3-3a5 5 0 00-7-7l-1 1M14 11a5 5 0 00-7 0l-3 3a5 5 0 007 7l1-1"/>
             </svg>
-            更新日志
-          </RouterLink>
+            开源地址
+          </a>
+          <span class="text-xs text-c-muted tnum">{{ AUTHOR.license }}</span>
+          <button @click="onCopyStamp"
+            class="text-xs text-c-muted hover:text-c-bark transition-colors duration-300">
+            复制联系方式
+          </button>
         </div>
       </div>
     </section>
@@ -148,11 +140,15 @@ import { RouterLink } from 'vue-router'
 import ScoreRing from '../components/ScoreRing.vue'
 import { listAllRecords, fmtDateTime } from '../utils/record'
 import { getAll, STORES } from '../store/db'
-import { BUILTIN_QUESTIONS, DIFFICULTY_LABEL, withPrefix } from '../data/builtin-questions'
+import { DIFFICULTY_LABEL } from '../data/builtin-questions'
+import { BUILTIN_POOL, REAL_EXAMS, SIM_QUESTIONS } from '../data/questions'
 import { pickDaily, practicedToday } from '../data/daily'
-import { APP_NAME, APP_SLOGAN, REPO } from '../data/site'
+import { APP_NAME, APP_SLOGAN } from '../data/site'
+import { AUTHOR } from '../data/author'
 import { CURRENT_VERSION } from '../data/changelog'
 import { useReadiness } from '../utils/readiness'
+import { toast } from '../utils/toast'
+import { copyAuthorLine } from '../utils/watermark'
 
 const records = ref([])
 const mine = ref([])
@@ -161,12 +157,19 @@ const doneToday = ref(false)
 
 const { ready: hasKey, probeReadiness } = useReadiness()
 
-const pool = computed(() => [...mine.value, ...BUILTIN_QUESTIONS.map(withPrefix)])
+const pool = computed(() => [...mine.value, ...BUILTIN_POOL])
 
 const todayLabel = computed(() => {
   const d = new Date()
   return `${d.getMonth() + 1} 月 ${d.getDate()} 日`
 })
+
+/** 反馈问题时把作者联系方式一并复制走，省得对方还要回来找 */
+async function onCopyStamp() {
+  const ok = await copyAuthorLine()
+  if (ok) toast.success('已复制作者联系方式')
+  else toast.warning('浏览器不允许自动复制，请手动记录')
+}
 
 const ACTIONS = [
   {
@@ -178,7 +181,7 @@ const ACTIONS = [
   {
     path: '/questions',
     title: '题库',
-    desc: '15 道内置题目，覆盖五种题型，每题都有完整材料与参考答案',
+    desc: `${REAL_EXAMS.length} 套国考真题＋${SIM_QUESTIONS.length} 道仿真题，每题都有完整材料与参考答案`,
     icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19.5A2.5 2.5 0 016.5 17H20M4 19.5A2.5 2.5 0 016.5 22H20V2H6.5A2.5 2.5 0 004 4.5z"/></svg>',
   },
   {
@@ -210,7 +213,8 @@ const stats = computed(() => {
 
 onMounted(async () => {
   probeReadiness()
-  mine.value = (await getAll(STORES.questions)).map((q) => ({ ...q, kind: '自建' }))
+  // kind 只在缺失时补「自建」，不覆盖导入题库包带的「私有」（同 PracticeView）
+  mine.value = (await getAll(STORES.questions)).map((q) => ({ kind: '自建', ...q }))
   todayQ.value = pickDaily(pool.value)
   records.value = await listAllRecords()
   doneToday.value = practicedToday(records.value)

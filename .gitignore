@@ -9,6 +9,22 @@ __pycache__/
 # 构建产物（可随时重建）
 frontend/dist/
 frontend/dist-single/
+frontend/dist-single-local/
+
+# 私有真题：2022 年起的国考卷（2026-09 分层决定）。
+# 这部分是私有资产，由作者定向分发、使用者自行导入，**不进版本库也不进分发产物**。
+# 本机由 .tools/exams/to_frontend.py 生成；别人 clone 后不存在，构建自动走
+# frontend/src/data/real-exams-private-stub/ 的空实现。
+frontend/src/data/real-exams-private/
+
+# 私有题库包（.bpq）：导出即产出于此，同样不进版本库
+release/私有题库/
+
+# 真题流水线的中间产物：out/ 是完整的材料与参考答案（含 2022 起私有卷），
+# manual/ 是私有卷的人工补录。两者都由 PDF 重跑生成，不进版本库。
+# 只发布流水线脚本本身（extract.py / to_frontend.py / export_bpq.py …）。
+.tools/exams/out/
+.tools/exams/manual/
 
 # 桌面版打包产物（用 backend/build_desktop.py 一键重建）
 backend/build/
