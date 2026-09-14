@@ -2,6 +2,8 @@
 
 > 输入一篇作答 → 五位申论名师各按自己的方法论独立阅卷 → 分歧自动复核 → 圆桌合议出一份综合批改
 
+![Version](https://img.shields.io/badge/version-0.8.1-8B9D77?style=flat-square)
+![License](https://img.shields.io/badge/license-AGPL--3.0-5C4033?style=flat-square)
 ![Vue](https://img.shields.io/badge/Vue-3.5-4FC08D?style=flat-square&logo=vuedotjs)
 ![Vite](https://img.shields.io/badge/Vite-8-646CFF?style=flat-square&logo=vite)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.141-009688?style=flat-square&logo=fastapi)
@@ -15,6 +17,7 @@
 - [项目简介](#项目简介)
 - [核心特性](#核心特性)
 - [五位阅卷老师](#五位阅卷老师)
+- [评分内核](#评分内核)
 - [技术栈](#技术栈)
 - [系统架构](#系统架构)
 - [设计风格](#设计风格)
@@ -27,6 +30,7 @@
 - [常见问题](#常见问题)
 - [上线部署](#上线部署)
 - [作者与开源](#作者与开源)
+- [微信与社区](#微信与社区)
 - [免责声明](#免责声明)
 
 ---
@@ -60,6 +64,9 @@
 **加权合议**
 按老师的评审侧重分配权重（客观采分派权重最高），融合各方结论，剔除片面评价与极端分数。
 
+**分数不是黑盒：采分点锚点 + 客观校验**
+每道题可预置一份**采分点标准**（分值、材料原文依据、判据关键词），批改时同时注入五位老师——老师有了共同锚点，分数才可比、可复算，而不是各凭感觉。金额之外还有一层**纯代码的硬规则校验**（字数、标点格式、结构分条、重复与照抄），不交给模型"感觉"：字数差了多少、有没有整段抄材料，这类板上钉钉的结论由规则给出。练习页因此多两块面板——「客观校验」列出问题与改法，「采分点对照」给出覆盖率与逐点命中情况。**没有录标准的题照旧能批改**，只是少了这层锚点。
+
 **先答题，再批改；每位老师一种颜色**
 答题页是沉浸式单栏，答完了才进入批改。结果页把各老师的逐句批注按**各自颜色**标在作答原文上——同一句被多位老师标中时，下划线按人数分段着色，悬停可看全部意见；每位老师另给一段「如果只改一处先改哪里」的修改建议。
 
@@ -84,7 +91,10 @@
 作答、笔记、错题存在浏览器 IndexedDB，批改记录归档到本机 `docs/`。后端只记录任务级指标（模式、分数、耗时、token），不做用户体系、不需要注册登录。
 
 **更新日志与仓库入口**
-首页顶部放 GitHub / Gitee 仓库入口与当前版本号，「更新日志」页按版本列出每轮改动（新增 / 优化 / 变更 / 修复 / 删除分色标注）。仓库地址与日志数据统一在 `frontend/src/data/site.js`，改地址只改一处。
+GitHub / Gitee / 更新日志三个入口常驻在**左侧边栏底部**（原先只在首页页脚，别的页面够不着），侧边栏最下方另有一行作者署名。首页页脚是「作者与开源」信息块。「更新日志」页按版本列出每轮改动（新增 / 优化 / 变更 / 修复 / 删除分色标注）。仓库地址与日志数据统一在 `frontend/src/data/site.js`，改地址只改一处。
+
+**容易找到作者：微信入口铺在需要的地方**
+侧边栏底部、首页作者区、设置页「关于」、题库页「怎么获取私有题库」，四处都有加微信 / 进交流群的入口。前两处开统一弹层（ESC 可关），后两处直接摊开二维码——那两个位置用户本来就是在找联系方式，不必多点一次。**群二维码到点自动降级**成「已过期，加微信拉你进群」，不展示一张扫了没用的图。
 
 ---
 
@@ -100,6 +110,40 @@
 
 > 五位老师的讲义原文存放在 `frontend/src/data/teachers/*.md`，会在「老师」页按需懒加载展示。
 > 讲义本身带有使用约定（以 AI 身份回答、不冒名、引述方法时加前缀），程序在组装 Prompt 时如实执行。
+
+---
+
+## 评分内核
+
+AI 批改最容易失去可信度的地方是：**换个模型分数就变了，谁也说不清为什么**。
+这里的做法是把「评分」拆成五层，**能确定性算出来的就绝不交给模型**：
+
+| 层 | 由谁负责 | 产出 | 状态 |
+|---|---|---|---|
+| ① 题目标准层 | 人工 / 预解析，**固定复用** | 采分点（分值 · 材料原文依据 · 判据关键词） | 已完成 |
+| ② 模型阅卷层 | 五位老师各自独立 | 分数 + 逐句批注 + 修改建议 | 已完成 |
+| ③ 纯代码校验层 | `utils/grading/rules.js`，零依赖 | 字数 / 格式 / 结构 / 重复照抄的客观结论 | 已完成 |
+| ④ 合议层 | 分歧检测 → 辩论 → 加权合议 | 综合分数与结论 | 已完成 |
+| ⑤ 训练层 | 待建 | 依据历史记录给出针对性练习 | 未开始 |
+
+**① 采分点标准层**（`agents/grading/standard.js` + `standardResolver.js`）
+给题目预先备一份采分点标准，批改时注入每位老师的提示词。老师有了**共同锚点**，评分才可比、可复算。
+标准可以批量预解析（`.tools/standards/gen_standards.mjs`，`--mock` 无 Key 也能跑通链路），
+也可以人工精校——`data/standards/public.js` 里收了一道人工精校的样板，作为格式参照与质量基线。
+**有标准更好，没有标准照旧裸判**，不会因为一道题没录标准就罢工。
+
+**③ 纯代码校验层**（`utils/grading/rules.js`）
+字数、标点格式、结构分条、重复与照抄四类校验，纯代码、可复算。客观扣分默认**封顶为满分的 20%**，
+且**只作旁证、不直接改写 AI 分数**——规则负责指出"板上钉钉"的问题，改不改由合议层判断。
+它的结论还会作为「客观事实」注入辩论与合议的输入，避免「字数明显不足」这类问题在合议里无人提及。
+
+**数据分层**：公开卷与仿真题的标准在 `data/standards/`（进仓库）；
+私有卷的标准在 `data/standards-private/`（**已 gitignore**，走 `@private-standards` 别名）——
+**写出采分点等于泄题**，必须和私有卷正文一起隔离。
+
+**校准方式**：评分逻辑不靠"读代码觉得对"，而是靠两端夹住——
+`backend/tests/` 的接口冒烟 + `.tools/test-rules.mjs`（24 组断言）、`.tools/test-standards.mjs`（17 组断言）
+两组纯代码单测，以及 `.tools/probe-standard-panel.mjs` 的面板渲染验证。
 
 ---
 
@@ -240,7 +284,7 @@ python run.py                 # 等价于 uvicorn app.main:app --reload --port 8
 ### 跑测试
 
 ```bash
-cd backend && .venv/Scripts/python.exe -m pytest    # 10 passed
+cd backend && .venv/Scripts/python.exe -m pytest    # 19 passed
 ```
 
 也可以直接在仓库根跑 `python -m pytest`——`pytest.ini` 放在仓库根就是为了让**任何目录下跑结果都一致**。
@@ -308,7 +352,7 @@ bluepencil/
 │   ├── src/
 │   │   ├── main.js                 # 挂载 Vue + Router
 │   │   ├── App.vue                 # 左侧分组侧边栏 + 通道状态指示
-│   │   ├── router/index.js         # 8 条 hash 路由
+│   │   ├── router/index.js         # 9 条 hash 路由
 │   │   ├── style.css               # Tailwind 指令 + 自然有机风 token 与工具类
 │   │   ├── api/
 │   │   │   ├── llm.js              # 双通道入口：自动选后端或直连
@@ -316,6 +360,9 @@ bluepencil/
 │   │   ├── agents/
 │   │   │   ├── teachers.js         # 五位老师的角色定义与专属批改指令
 │   │   │   ├── skills.js           # Prompt 组装（含深度模式、辩论、合议、批注契约）
+│   │   │   ├── grading/
+│   │   │   │   ├── standard.js     # 采分点标准层：结构定义与格式化注入
+│   │   │   │   └── standardResolver.js # 按题目 id 解析该题标准（有则用，无则裸判）
 │   │   │   └── orchestrator.js     # 圆桌调度：并行阅卷 → 分歧检测 → 辩论 → 合议
 │   │   ├── prompts.js              # 追问与范文生成的 Prompt
 │   │   ├── bpq/
@@ -328,8 +375,13 @@ bluepencil/
 │   │   │   ├── real-exams/             # 公开真题（2010–2021，自动生成，进仓库）
 │   │   │   ├── real-exams-private/     # 私有真题（2022 起，自动生成，**已 gitignore**）
 │   │   │   ├── real-exams-private-stub/ # 私有卷空实现：别人 clone 后构建走它
+│   │   │   ├── standards/              # 公开卷 / 仿真题的采分点标准（进仓库）
+│   │   │   │   ├── public.js           #   人工精校的样板（数字乡村建设）
+│   │   │   │   └── generated.js        #   gen_standards.mjs 批量预解析的产物
+│   │   │   ├── standards-private-stub/ # 私有卷标准的空实现（走 @private-standards 别名）
 │   │   │   ├── daily.js                # 每日一练选题：按本地日期散列，确定性出题
 │   │   │   ├── site.js                 # 仓库地址与产品名（转发 author.js）
+│   │   │   ├── wechat.js               # 微信二维码与群码有效期（唯一来源，图片走 import）
 │   │   │   ├── changelog.js            # 解析仓库根 CHANGELOG.md，供首页与日志页使用
 │   │   │   └── teachers/*.md           # 五位老师讲义原文（?raw 懒加载）
 │   │   ├── views/                  # 首页/老师/文章库/题库/练习批改/复盘/统计/设置/更新日志
@@ -338,11 +390,16 @@ bluepencil/
 │   │   │   ├── GridPaper.vue       # 方格作答纸：每行 25 字，格宽随容器实测
 │   │   │   ├── ScoreRing.vue       # 分数环
 │   │   │   ├── ToastHost.vue       # 轻量提示 / 确认框（替代 Arco）
+│   │   │   ├── WeChatPanel.vue     # 微信二维码展示（个人码 + 群码，群码到期自动降级）
+│   │   │   ├── WeChatHost.vue      # 全局引流弹层（挂在 App.vue，支持 ESC 关闭）
 │   │   │   └── AnnotatedAnswer.vue # 按老师颜色给作答原文划批注
 │   │   ├── store/db.js             # IndexedDB 封装
 │   │   └── utils/
 │   │       ├── record.js           # 记录规范化：本地 ∪ 归档，统一成一种形态
 │   │       ├── readiness.js        # 批改就绪判定：本机 Key ∪ 服务端托管 Key
+│   │       ├── grading/rules.js    # 硬规则引擎：字数 / 格式 / 结构 / 重复照抄（纯代码可复算）
+│   │       ├── wechatPanel.js      # 引流弹层的命令式开合（各入口统一调用）
+│   │       ├── watermark.js        # 控制台作者横幅
 │   │       ├── toast.js            # 命令式提示 / 确认（替代 Arco Message/Modal）
 │   │       ├── parse.js            # 批改结果解析（三层兜底）
 │   │       └── import.js           # 文章导入导出
@@ -350,26 +407,39 @@ bluepencil/
 │   │   ├── import-articles.mjs         # 从已抓取数据批量生成内置文章库
 │   │   ├── export-articles-to-docs.mjs # 把内置文章库镜像成 Markdown，便于查阅和维护
 │   │   └── publish-single.mjs          # 发布单文件版到 release/：文件名带版本号
-│   └── vite.config.js              # 双产物构建 + /api 代理（8100）+ strictPort
+│   └── vite.config.js              # 双产物构建 + versionStamp（注入版本 meta）+ 别名分层 + /api 代理（8100）
 │
 ├── docs/
 │   ├── articles/                   # 内置文章库的可读 Markdown 镜像（由脚本生成）
 │   ├── practice/                   # 练习记录归档（每篇一对 .md + .json，自动生成）
 │   ├── 上线部署分析.md              # 上线可行性、成本测算、部署清单
-│   └── 开发记录.md                  # 关键决策与踩坑记录
+│   ├── 开发记录.md                  # 关键决策与踩坑记录
+│   └── 真题数据说明.md              # 33 套真题的来源、分层与字段说明
 ├── .tools/                         # 开发验证脚本（不参与构建）
 │   ├── mock-llm.mjs                # 假 LLM：无 Key 也能端到端跑批改
 │   ├── e2e-grade.mjs               # 走完「答题→批改→归档」并核对结果
+│   ├── test-rules.mjs              # 硬规则引擎单测（24 组断言）
+│   ├── test-standards.mjs          # 采分点标准层单测（17 组断言）
+│   ├── test-desktop-reuse.py       # 桌面版实例复用：同版本复用 / 异版本另起端口
+│   ├── check_release_private.py    # 产物体检：递归数 exam chunk、查有无私有卷、功能指纹
+│   ├── verify-bpq.mjs              # .bpq 题库包发包前自检（与前端同一份算法）
 │   ├── probe-practice.mjs          # 练习页断言：自动载题 + 题库带入字段不丢 + 换题
 │   ├── probe-gridpaper.mjs         # 方格纸断言：25 字必须正好一行
 │   ├── probe-site-links.mjs        # 首页入口与日志页断言：位置正确 + 与 CHANGELOG.md 一致
+│   ├── probe-wechat.mjs            # 微信引流断言（支持 BP_BASE 指向桌面版产物）
+│   ├── probe-standard-panel.mjs    # 客观校验 / 采分点对照两块面板的渲染验证
 │   ├── cdp-probe.mjs               # CDP 探针：真实等待 + 读页面文本
 │   ├── batch-shots.mjs             # 全路由截图 + 渲染校验
 │   ├── shot-full.mjs               # 整页截图（viewport 之外的题目/材料/格纸）
-│   └── shot-annotations.mjs        # 放大看色标批注区
+│   ├── shot-annotations.mjs        # 放大看色标批注区
+│   ├── exams/                      # 真题流水线（PDF → 分题 → 结构化 → 校验 → 前端数据）+ export_bpq.py
+│   ├── standards/gen_standards.mjs # 采分点批量预解析（--mock 无 Key 也能跑）
+│   ├── add_watermark.py            # 给核心源文件打作者注释头（幂等）
+│   └── push-all.mjs                # 一键推 GitHub + Gitee
 ├── release/                        # 本机归档区（不进版本库）
 │   ├── 蓝笔申论-*-vX.Y.Z.*         #   最新一版产物（只放最新，避免解压到旧包）
 │   ├── 历史版本/                    #   往期产物（只增不删，回溯用）
+│   ├── 私有题库/                    #   导出的 .bpq 题库包（含私有卷，绝不分发）
 │   └── 版本说明.md                  #   分发台账（哪个包能发给别人），也不进库
 ├── CHANGELOG.md                    # 更新日志（唯一数据源：网页日志页与打包版本号都读它）
 ├── pytest.ini                      # pytest 配置（放仓库根，保证任意目录下跑结果一致）
@@ -504,6 +574,16 @@ node .tools/shot-full.mjs practice full-practice
 
 # 7) 首页仓库入口 / 更新日志页断言（含窄屏横向溢出检查）
 node .tools/probe-site-links.mjs
+
+# 8) 评分内核纯代码单测（不碰网络；改规则或采分点标准后先跑这两条）
+node .tools/test-rules.mjs            # 硬规则引擎：24 组断言
+node .tools/test-standards.mjs        # 采分点标准层：17 组断言
+
+# 9) 微信引流入口断言（BP_BASE=... 可指向解压后的桌面版产物）
+node .tools/probe-wechat.mjs
+
+# 10) 发包前产物体检：递归数 exam chunk、查有无私有卷、看功能指纹
+backend/.venv/Scripts/python.exe .tools/check_release_private.py
 ```
 
 | 脚本 | 用途 |
@@ -517,6 +597,17 @@ node .tools/probe-site-links.mjs
 | `batch-shots.mjs` | 逐条路由截图并检查标志性文案 |
 | `shot-full.mjs` | 整页截图（`captureBeyondViewport`）。viewport 截图看不到题目、材料、方格纸，因为它们都在折叠线以下 |
 | `shot-annotations.mjs` | 滚到色标批注区放大截图，并统计「几位老师标了同一句」 |
+| `test-rules.mjs` | 硬规则引擎的纯代码单测：字数 / 标点格式 / 结构分条 / 重复照抄四类，24 组断言，毫秒级跑完 |
+| `test-standards.mjs` | 采分点标准层单测：解析、标准缺失时的回退、按**练习页题目 id** 命中，17 组断言 |
+| `probe-wechat.mjs` | 微信引流入口断言：四处入口的位置与开合、群码过期后的降级文案；`BP_BASE` 可指向解压后的桌面版产物 |
+| `test-desktop-reuse.py` | 桌面版实例复用：同版本复用、版本不同另起端口且不把用户带去旧界面 |
+| `check_release_private.py` | 破开每个归档产物的 chunk 清单，报「exam chunk 数 / 是否含私有卷 / 功能指纹」，**发之前跑一遍** |
+
+> **为什么评分内核要有纯代码单测？**
+> 批改链路依赖模型，很难一次跑一次断言；但**评分里能确定性计算的部分（字数、格式、覆盖率加权）不该依赖模型**。
+> 把它们抽成 `utils/grading/rules.js` 这样的纯函数后，就能像普通代码一样写断言——
+> 改规则时先跑 `test-rules.mjs`，比以前"再批一次看看分数对不对"可靠得多。
+> 同理，`check_release_private.py` 让**文件自己回答"这包里有私有卷吗"**，不靠记忆。
 
 > **为什么不用 `chrome --headless --screenshot --virtual-time-budget`？**
 > 它会把虚拟时间冻住，依赖 `IndexedDB` 或网络回调的异步流程可能永远不 resolve——页面停在「正在读取记录…」，
@@ -531,6 +622,24 @@ node .tools/probe-site-links.mjs
 ---
 
 ## 常见问题
+
+<details>
+<summary>桌面版升级后，双击新 exe，打开的却是旧界面</summary>
+
+两个原因，软件里都已处理：
+
+1. **旧版本还开着。** 桌面版默认在 `127.0.0.1:8765` 起服务。如果那个端口上已经跑着一个旧版
+   BluePencil，新 exe 会认定「已经在运行」、把浏览器指过去、自己退出——现象与「解压错了包」一模一样。
+   现在**只复用版本相同的实例**；版本不同就另起端口，并在黑窗口里打印
+   「端口 8765 上运行着旧版本 vX，当前是 vY，新版本已改用 …:8766」。
+2. **浏览器缓存了入口页。** 每次升级都跑在同一个地址，早期响应不带 `Cache-Control`，
+   浏览器就把入口 HTML 留住了。现在入口 HTML 一律 `no-cache, must-revalidate`（靠 ETag 拿 304），
+   带内容哈希的 js/css/图片长缓存。
+
+**怎么确认自己在跑哪一版**：看解压目录里的 `版本信息.txt`，或页面里的 `app-version` meta。
+不要用文件名猜——文件名可以被随手改。护栏在 `.tools/test-desktop-reuse.py`。
+
+</details>
 
 <details>
 <summary>启动后端报 <code>[WinError 10013]</code> 或 <code>[WinError 10048]</code></summary>
@@ -663,6 +772,27 @@ npm run build:single        # 公开·单文件版      → dist-single/   （�
 npm run build:local         # 本机·网站版（含私有卷）
 npm run build:single:local  # 本机·单文件版（含私有卷）
 ```
+
+---
+
+## 微信与社区
+
+私有真题（2022 年起）**只通过作者定向分发**，所以软件里铺了几个"找得到人"的入口：
+
+| 位置 | 形态 | 为什么放这 |
+|---|---|---|
+| 侧边栏底部 | 「加微信 / 交流群」→ 开弹层 | 任何页面都够得着 |
+| 首页作者区 | 按钮 → 开弹层 | 看完介绍正好想找人 |
+| 设置页「关于」 | 直接摊开二维码 | 已经翻到设置页了，不必再点一次 |
+| 题库页「怎么获取私有题库」 | 直接摊开二维码 | 用户此刻的诉求就是"我要题" |
+
+两个约定值得留意：
+
+- **群二维码到点自动降级**。群码 7 天一轮，`data/wechat.js` 里记着有效期，过期后前端自动换成
+  「群二维码已过期，加微信拉你进群」——**不展示一张扫了没用的图**。个人微信码长期有效，是主入口。
+- **二维码图片走 `import` 引入，不放 `public/`**。单文件版是双击打开的本地 HTML，没有服务器托管
+  `/wechat/*.jpg`，放 `public` 会**裂图且不报错**；走 `import` 后网站版出独立资源、单文件版自动
+  base64 内联，两条通道都不掉图。二维码与有效期只有一处来源：[`frontend/src/data/wechat.js`](frontend/src/data/wechat.js)。
 
 ---
 
