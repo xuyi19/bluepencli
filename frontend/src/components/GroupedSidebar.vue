@@ -53,6 +53,21 @@
     <!-- 底部：开源入口 + 设置 + 作者水印 -->
     <div class="px-3 py-4 border-t border-c-line space-y-2 shrink-0">
 
+      <!-- 微信入口：单占一行。四个胶囊并排的话每个只剩 ~45px，
+           "GitHub" 都塞不下，所以它自己一行、用整行按钮。
+           图标带微信绿是刻意的——这个绿是识别色（像老师色标），不参与主题换肤。 -->
+      <button @click="openWeChat()" title="加作者微信 / 进交流群"
+        class="w-full h-7 rounded-lg border border-c-line flex items-center justify-center gap-1.5
+          text-[11px] text-c-muted leading-none transition-colors duration-300 ease-in-out
+          hover:text-c-bark hover:bg-c-barkSoft hover:border-transparent">
+        <svg class="w-3.5 h-3.5 shrink-0" style="color: #07c160" viewBox="0 0 24 24"
+          fill="currentColor" aria-hidden="true">
+          <path d="M9.1 3C5.2 3 2 5.7 2 9c0 1.9 1 3.6 2.7 4.7l-.7 2.2 2.5-1.3c.6.2 1.3.3 2 .3h.5c-.1-.4-.2-.9-.2-1.4 0-3 2.9-5.4 6.5-5.4h.5C15.1 5.4 12.4 3 9.1 3zM6.7 7.6a.9.9 0 110-1.8.9.9 0 010 1.8zm4.8 0a.9.9 0 110-1.8.9.9 0 010 1.8z"/>
+          <path d="M22 13.5c0-2.7-2.7-4.9-6-4.9s-6 2.2-6 4.9 2.7 4.9 6 4.9c.7 0 1.4-.1 2-.3l2.1 1.1-.6-1.8c1.5-.9 2.5-2.3 2.5-3.9zm-8-1.2a.8.8 0 110-1.6.8.8 0 010 1.6zm4 0a.8.8 0 110-1.6.8.8 0 010 1.6z"/>
+        </svg>
+        <span>加微信 / 交流群</span>
+      </button>
+
       <!-- 开源入口：GitHub / Gitee / 更新日志。
            放侧边栏而不是首页页脚 —— 这是"关于这个项目"的信息，任何时候都该够得着，
            不该只在首页出现。三个挤在 200px 里，所以用等宽小胶囊而不是大按钮。 -->
@@ -120,6 +135,7 @@
 import { computed } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { AUTHOR, AUTHOR_LINE, AUTHOR_SHORT } from '../data/author'
+import { openWeChat } from '../utils/wechatPanel'
 
 const props = defineProps({
   nav: { type: Array, required: true },     // 含 group 字段的导航数组

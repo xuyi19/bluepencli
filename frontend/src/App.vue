@@ -41,6 +41,11 @@
 
     <!-- 全局提示 / 确认框（替代 Arco Message + Modal） -->
     <ToastHost />
+
+    <!-- 微信引流弹层：侧边栏底部的「加微信」胶囊打开它。
+         做成全局宿主而不是塞进某个页面，是因为入口不止一处，
+         而且它得盖在任何页面之上。 -->
+    <WeChatHost />
   </div>
 </template>
 
@@ -52,6 +57,7 @@ import { useReadiness } from './utils/readiness'
 import { CURRENT_VERSION } from './data/changelog'
 import GroupedSidebar from './components/GroupedSidebar.vue'
 import ToastHost from './components/ToastHost.vue'
+import WeChatHost from './components/WeChatHost.vue'
 
 // 导航数据：分组由 group 字段标定，避免再写一份冗余数组
 const NAV = [

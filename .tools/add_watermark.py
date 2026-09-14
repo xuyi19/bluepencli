@@ -47,6 +47,10 @@ TARGETS = [
     'frontend/src/data/questions.js',
     'frontend/src/store/db.js',
     'frontend/src/utils/watermark.js',
+    'frontend/src/data/wechat.js',
+    'frontend/src/utils/wechatPanel.js',
+    'frontend/src/components/WeChatPanel.vue',
+    'frontend/src/components/WeChatHost.vue',
     'backend/app/main.py',
     'backend/app/core/config.py',
     'backend/build_desktop.py',
@@ -58,6 +62,7 @@ TARGETS = [
     '.tools/exams/to_frontend.py',
     '.tools/exams/export_bpq.py',
     '.tools/standards/gen_standards.mjs',
+    '.tools/check_release_private.py',
 ]
 
 RULE = '─' * 62
