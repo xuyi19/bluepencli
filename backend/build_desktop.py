@@ -243,30 +243,39 @@ def _clear_target() -> None:
     """把上一次的发布目录让开。
 
     本机有"按轮次累计"的批量删除保护，一轮里删多了会被拦下**并中断整个进程**。
-    所以这里**不做任何删除**，只改名挪开——改名不触发保护，一定成功。
-    遗留的 `.old-*` 统一放到最后清理（见 main 的收尾顺序）。
+    所以这里**不做任何删除**，只改名挪开——改名不触发保护。
+
+    改名失败时**先重试几次再放弃**：占用常常是一过性的（杀毒软件扫描新解压的
+    exe、Windows 索引服务、刚关闭的进程还没释放句柄），等一两秒就能过去，
+    为这个把整轮打包（几十秒）作废不值当。
     """
     if not TARGET_DIR.exists():
         return
     trash = RELEASE / f".old-{time.strftime('%Y%m%d-%H%M%S')}"
     print(f"旧发布包改名挪开 → {trash.name}")
-    try:
-        TARGET_DIR.rename(trash)
-    except PermissionError as e:
-        # 最常见的原因：上一次的 exe 还在跑，它的工作目录锁住了这个文件夹
-        raise SystemExit(
-            f"❌ 无法挪开旧发布目录（{e.__class__.__name__}）。\n"
-            "   多半是「蓝笔申论.exe」还在运行，占着这个目录。\n"
-            "   请先关掉它（或结束占用该目录的进程）后重试。"
-        ) from e
+    last_err: Exception | None = None
+    for attempt in range(3):
+        try:
+            TARGET_DIR.rename(trash)
+            return
+        except PermissionError as e:
+            last_err = e
+            if attempt < 2:
+                print("  目录被占用，1 秒后重试…")
+                time.sleep(1)
+    raise SystemExit(
+        f"❌ 无法挪开旧发布目录（{last_err.__class__.__name__}）：{TARGET_DIR}\n"
+        "   最常见的原因是「蓝笔申论.exe」还在运行，占着这个目录。\n"
+        "   请关掉它后重试；若确认没在跑，等几秒再试一次（杀软扫描会短暂占用）。"
+    ) from last_err
 
 
 def _version_note() -> str:
     """产物自证版本。
 
-    为什么必须写这个文件：release/ 里会同时躺着多个历史版本的包（只增不删），
-    文件名只差一处版本号，解压上一版就会看到旧界面 —— 而"这到底是哪一版"
-    本来不该靠翻文件名猜。这份文件让**包自己回答**，解压第一眼就能看到。
+    为什么必须写这个文件：release/ 里会归档多个历史版本的包，文件名只差一处
+    版本号；而"解压了旧包"与"程序打开了旧实例"两种情况的**表象完全一样**
+    （都是旧界面）。这份文件让**包自己回答**是哪一版，解压第一眼就能看到。
     """
     packed_at = time.strftime("%Y-%m-%d %H:%M")
     return f"""蓝笔申论 BluePencil · 版本信息
@@ -289,10 +298,12 @@ Gitee     ：https://gitee.com/xuyi_19/bluepencil
   · 本文件所在目录名也带版本号（{PKG_PREFIX}-{VERSION}）
 
 【如果你看到的是旧界面】
-  · 先确认没有解压错包（比对本文件的版本号）
-  · 若是从旧版升级：关掉程序，把旧文件夹整个删掉，再解压新包重新运行。
-    不要只把新 exe 覆盖进旧文件夹 —— _internal 文件夹才是程序本体，
-    新旧混放会出现界面与后端版本不一致。
+  · 先比对本文件的版本号，确认没有解压错包。
+  · 旧版本的窗口还开着吗？新版本不会复用旧实例，会自己改用另一个端口
+    （启动时黑色窗口里会写明），所以不会把你带到旧界面；
+    但两个版本同时开着容易混淆，建议关掉旧的那一个。
+  · ⚠️ 只把新 exe 覆盖进旧文件夹是不行的 —— _internal 文件夹才是程序本体，
+    必须整个文件夹一起换，否则界面与后端会版本不一致。
   · 浏览器有缓存时，按 Ctrl+F5 强制刷新一次。
 """
 
