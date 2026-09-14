@@ -1,12 +1,49 @@
 <template>
   <div class="w-full max-w-6xl">
 
+    <!-- 标题 + 仓库入口：日志/仓库不放侧边栏，避免导航被工具链接冲淡 -->
     <section class="mb-8">
-      <h1 class="font-serif text-2xl font-semibold text-c-ink">蓝笔申论</h1>
-      <p class="text-sm text-c-muted mt-2 leading-6">
-        每日一练 → 五位老师按申论标准批改 → 记录归档到本机 docs，随时复盘<br />
-        所有数据存在本机，只有批改那一刻才联网
-      </p>
+      <div class="flex flex-wrap items-start justify-between gap-x-6 gap-y-4">
+        <div class="min-w-0">
+          <h1 class="font-serif text-2xl font-semibold text-c-ink">蓝笔申论</h1>
+          <p class="text-sm text-c-muted mt-2 leading-6">
+            每日一练 → 五位老师按申论标准批改 → 记录归档到本机 docs，随时复盘<br />
+            所有数据存在本机，只有批改那一刻才联网
+          </p>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2 shrink-0">
+          <a :href="REPO.github" target="_blank" rel="noopener" title="GitHub 仓库"
+            class="inline-flex items-center gap-2 px-3.5 py-2 rounded-full text-xs font-medium
+              text-c-body neu-sm hover:text-c-bark transition-colors duration-300">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="M12 .3a12 12 0 00-3.8 23.4c.6.1.8-.3.8-.6v-2c-3.3.7-4-1.6-4-1.6-.6-1.4-1.4-1.8-1.4-1.8-1-.7.1-.7.1-.7 1.2 0 1.9 1.2 1.9 1.2 1 1.8 2.8 1.3 3.5 1 0-.8.4-1.3.7-1.6-2.7-.3-5.5-1.3-5.5-6 0-1.2.5-2.3 1.2-3.1-.1-.4-.5-1.7.1-3.5 0 0 1-.3 3.3 1.2a11.5 11.5 0 016 0c2.3-1.5 3.3-1.2 3.3-1.2.7 1.8.3 3.1.1 3.5.8.8 1.2 1.9 1.2 3.1 0 4.7-2.8 5.7-5.5 6 .4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6A12 12 0 0012 .3"/>
+            </svg>
+            GitHub
+          </a>
+
+          <a :href="REPO.gitee" target="_blank" rel="noopener" title="Gitee 仓库"
+            class="inline-flex items-center gap-2 px-3.5 py-2 rounded-full text-xs font-medium
+              text-c-body neu-sm hover:text-c-bark transition-colors duration-300">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.9a3.4 3.4 0 00-.9-2.6c3.1-.4 6.4-1.5 6.4-7A5.4 5.4 0 0020 4.8 5.1 5.1 0 0019.9 1S18.7.7 16 2.5a13.4 13.4 0 00-7 0C6.3.7 5.1 1 5.1 1A5.1 5.1 0 005 4.8a5.4 5.4 0 00-1.5 3.7c0 5.4 3.3 6.6 6.4 7A3.4 3.4 0 009 18.1V22"/>
+            </svg>
+            Gitee
+          </a>
+
+          <RouterLink to="/changelog" title="更新日志"
+            class="inline-flex items-center gap-2 px-3.5 py-2 rounded-full text-xs font-medium
+              text-c-body neu-sm hover:text-c-bark transition-colors duration-300">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+              <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>
+            </svg>
+            更新日志
+            <span class="text-c-muted tnum">{{ currentVersion }}</span>
+          </RouterLink>
+        </div>
+      </div>
     </section>
 
     <!-- 今日一练：首页最显眼的位置，进来就能开始 -->
@@ -104,6 +141,7 @@ import { listAllRecords, fmtDateTime } from '../utils/record'
 import { getAll, STORES } from '../store/db'
 import { BUILTIN_QUESTIONS, DIFFICULTY_LABEL, withPrefix } from '../data/builtin-questions'
 import { pickDaily, practicedToday } from '../data/daily'
+import { CHANGELOG, REPO } from '../data/site'
 import { useReadiness } from '../utils/readiness'
 
 const records = ref([])
@@ -112,6 +150,9 @@ const todayQ = ref(null)
 const doneToday = ref(false)
 
 const { ready: hasKey, probeReadiness } = useReadiness()
+
+// 更新日志里最新的一版就是当前版本，避免再去问一次后端
+const currentVersion = CHANGELOG[0]?.version || ''
 
 const pool = computed(() => [...mine.value, ...BUILTIN_QUESTIONS.map(withPrefix)])
 

@@ -13,5 +13,6 @@ export default createRouter({
     { path: '/records', name: 'records', component: () => import('../views/RecordsView.vue') },
     { path: '/stats', name: 'stats', component: () => import('../views/StatsView.vue') },
     { path: '/settings', name: 'settings', component: () => import('../views/SettingsView.vue') },
+    { path: '/changelog', name: 'changelog', component: () => import('../views/ChangelogView.vue') },
   ],
 })
