@@ -35,6 +35,11 @@ TARGETS = [
     'frontend/src/agents/orchestrator.js',
     'frontend/src/agents/teachers.js',
     'frontend/src/agents/skills.js',
+    'frontend/src/agents/grading/standard.js',
+    'frontend/src/agents/grading/standardResolver.js',
+    'frontend/src/utils/grading/rules.js',
+    'frontend/src/data/standards/index.js',
+    'frontend/src/data/standards/public.js',
     'frontend/src/api/llm.js',
     'frontend/src/api/backend.js',
     'frontend/src/bpq/importer.js',
@@ -52,6 +57,7 @@ TARGETS = [
     '.tools/exams/report_doc.py',
     '.tools/exams/to_frontend.py',
     '.tools/exams/export_bpq.py',
+    '.tools/standards/gen_standards.mjs',
 ]
 
 RULE = '─' * 62

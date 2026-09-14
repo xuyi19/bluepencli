@@ -384,6 +384,83 @@
         </div>
       </section>
 
+      <!-- 客观校验（硬规则）：纯代码算出的板上钉钉的事实，与模型无关 -->
+      <section v-if="report.hardRules" class="rounded-2xl p-5 neu mb-6">
+        <div class="flex items-center justify-between mb-3">
+          <span class="text-sm font-medium text-c-body">客观校验</span>
+          <span class="text-xs text-c-muted tnum">
+            程序计算 · 字数 {{ report.hardRules.stats.chars
+            }}{{ report.hardRules.stats.wordLimit ? ` / ${report.hardRules.stats.wordLimit}` : '' }}
+            · 段落 {{ report.hardRules.stats.paragraphs }}
+          </span>
+        </div>
+
+        <div v-if="!meaningfulRules.length" class="text-xs text-c-muted leading-6">
+          未发现客观问题：字数、标点、分段、重复与照抄检查均通过。
+        </div>
+
+        <div v-else class="space-y-2.5">
+          <div v-for="f in meaningfulRules" :key="f.id" class="rounded-xl p-3 neu-inset">
+            <div class="flex items-center gap-2 mb-1.5">
+              <span class="text-[11px] px-1.5 py-0.5 rounded shrink-0"
+                :style="{ background: ruleLevelStyle(f.level).bg, color: ruleLevelStyle(f.level).fg }">
+                {{ ruleLevelLabel(f.level) }}
+              </span>
+              <span class="text-xs text-c-muted">{{ f.category }}</span>
+              <span class="text-sm text-c-ink font-medium">{{ f.title }}</span>
+              <span v-if="f.deduction" class="text-xs ml-auto tnum shrink-0" style="color: #9c4a42">
+                −{{ f.deduction }} 分
+              </span>
+            </div>
+            <div class="text-xs text-c-body leading-6">{{ f.detail }}</div>
+            <div v-if="f.evidence?.length" class="text-[11px] text-c-muted mt-1.5 leading-5">
+              证据：{{ f.evidence.join('｜') }}
+            </div>
+            <div v-if="f.suggest" class="text-xs mt-1.5 leading-6" style="color: #4f7d5e">
+              改法：{{ f.suggest }}
+            </div>
+          </div>
+          <div v-if="report.hardRules.capped" class="text-[11px] text-c-muted pt-1 leading-5">
+            合计客观扣分 {{ report.hardRules.rawDeduction }} 分，已封顶为 {{ report.hardRules.objectiveDeduction }} 分
+            （满分 20%）。本项只作旁证，最终分数以合议为准。
+          </div>
+        </div>
+      </section>
+
+      <!-- 采分点对照：标准逐点 × 程序粗判 -->
+      <section v-if="report.standard" class="rounded-2xl p-5 neu mb-6">
+        <div class="flex items-center justify-between mb-3">
+          <span class="text-sm font-medium text-c-body">采分点对照</span>
+          <span class="text-xs text-c-muted tnum">
+            覆盖率 {{ report.standard.coverage }}%（{{ report.standard.earned }} / {{ report.standard.total }} 分，程序粗判）
+          </span>
+        </div>
+        <div class="h-1.5 rounded-full mb-4" style="background: #eae2d8">
+          <div class="h-1.5 rounded-full" style="background: #8b9d77"
+            :style="{ width: report.standard.coverage + '%' }"></div>
+        </div>
+        <div class="space-y-2.5">
+          <div v-for="p in report.standard.rows" :key="p.id" class="flex gap-2.5 items-start">
+            <span class="text-[11px] mt-0.5 px-1.5 py-0.5 rounded shrink-0" :style="pointStatusStyle(p.status)">
+              {{ pointStatusLabel(p.status) }}
+            </span>
+            <div class="min-w-0 flex-1">
+              <div class="text-xs text-c-body leading-6">{{ p.label }}</div>
+              <div v-if="p.matchedKeywords?.length" class="text-[11px] text-c-muted mt-0.5 leading-5">
+                命中：{{ p.matchedKeywords.join('、') }}
+              </div>
+              <div v-if="p.status === 'miss' && p.evidence?.length" class="text-[11px] text-c-muted mt-0.5 leading-5">
+                材料依据：{{ p.evidence.slice(0, 2).join('｜') }}
+              </div>
+            </div>
+            <span class="text-xs tnum shrink-0 text-c-muted">{{ p.earned }} / {{ p.weight }}</span>
+          </div>
+        </div>
+        <div class="text-[11px] text-c-muted mt-3 leading-5">
+          说明：这是程序按关键词粗判的覆盖率，只作参照；正式得分以老师判断与合议结论为准。
+        </div>
+      </section>
+
       <!-- 老师色标批注：这一屏的主角 -->
       <section class="rounded-2xl p-6 neu mb-6">
         <div class="flex items-center justify-between mb-4">
@@ -810,6 +887,31 @@ function teacherAvatar(id) {
   return TEACHERS[id]?.avatar || '?'
 }
 
+// ── 客观校验 / 采分点对照 的展示辅助 ──
+// 只滤掉「字数刚好达标」这类纯报平安的条目，其余（含 0 分扣的提示）都展示，
+// 因为"结尾缺标点""未首行缩进"这类小问题恰恰是提分最快的地方。
+const meaningfulRules = computed(() =>
+  (report.value?.hardRules?.findings || []).filter((f) => f.id !== 'word-fit')
+)
+
+function ruleLevelStyle(level) {
+  if (level === 'fatal') return { bg: '#f7e9e4', fg: '#9c4a42' }
+  if (level === 'major') return { bg: '#f7f0e2', fg: '#9c6b2f' }
+  return { bg: '#eef1e8', fg: '#6b7a52' }
+}
+function ruleLevelLabel(level) {
+  return { fatal: '严重', major: '需注意', minor: '提示' }[level] || '提示'
+}
+
+function pointStatusStyle(status) {
+  if (status === 'hit') return { background: '#e6efe6', color: '#4f7d5e' }
+  if (status === 'partial') return { background: '#f7f0e2', color: '#9c6b2f' }
+  return { background: '#f7e9e4', color: '#9c4a42' }
+}
+function pointStatusLabel(status) {
+  return { hit: '命中', partial: '部分', miss: '缺失' }[status] || '—'
+}
+
 function toggle(id) {
   const i = selected.value.indexOf(id)
   selected.value = i === -1 ? [...selected.value, id] : selected.value.filter((x) => x !== id)
@@ -925,7 +1027,8 @@ async function start() {
 
   try {
     const result = await runGrading({
-      paper: { ...form },
+      // questionId 用于取该题的采分点标准；questionType 供硬规则判断"该不该分条"
+      paper: { ...form, questionId: loadedId.value, questionType: loadedMeta.type },
       teacherIds: [...selected.value],
       deep: deep.value,
       signal: controller.signal,

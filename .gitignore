@@ -17,6 +17,11 @@ frontend/dist-single-local/
 # frontend/src/data/real-exams-private-stub/ 的空实现。
 frontend/src/data/real-exams-private/
 
+# 私有卷的**采分点标准**：写出采分点等于泄题，与私有卷正文同等对待。
+# 本机由 .tools/standards/gen_standards.mjs 产出；别人 clone 后不存在，
+# 构建自动走 frontend/src/data/standards-private-stub/ 的空实现。
+frontend/src/data/standards-private/
+
 # 私有题库包（.bpq）：导出即产出于此，同样不进版本库
 release/私有题库/
 
@@ -25,6 +30,9 @@ release/私有题库/
 # 只发布流水线脚本本身（extract.py / to_frontend.py / export_bpq.py …）。
 .tools/exams/out/
 .tools/exams/manual/
+
+# 采分点生成工具的中间产物（含私有卷标准，重跑即复现）
+.tools/standards/out/
 
 # 桌面版打包产物（用 backend/build_desktop.py 一键重建）
 backend/build/
