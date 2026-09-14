@@ -7,7 +7,7 @@ const PORT = 9336
 const OUT = 'E:/code/bluepencil/.shots'
 
 const ROUTES = [
-  ['', 'home', ['蓝笔申论', '累计练习']],
+  ['', 'home', ['蓝笔申论', '累计练习', '更新日志']],
   ['teachers', 'teachers', ['老师']],
   ['questions', 'questions', ['题库']],
   ['articles', 'articles', ['文章库']],
@@ -15,6 +15,7 @@ const ROUTES = [
   ['records', 'records', ['复盘']],
   ['stats', 'stats', ['统计']],
   ['settings', 'settings', ['API']],
+  ['changelog', 'changelog', ['更新日志', 'GitHub', 'Gitee']],
 ]
 
 const { spawn } = await import('node:child_process')

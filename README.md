@@ -82,6 +82,9 @@
 **本地优先，无账号体系**
 作答、笔记、错题存在浏览器 IndexedDB，批改记录归档到本机 `docs/`。后端只记录任务级指标（模式、分数、耗时、token），不做用户体系、不需要注册登录。
 
+**更新日志与仓库入口**
+首页顶部放 GitHub / Gitee 仓库入口与当前版本号，「更新日志」页按版本列出每轮改动（新增 / 优化 / 变更 / 修复 / 删除分色标注）。仓库地址与日志数据统一在 `frontend/src/data/site.js`，改地址只改一处。
+
 ---
 
 ## 五位阅卷老师
@@ -318,8 +321,9 @@ bluepencil/
 │   │   │   ├── builtin-articles.json   # 内置 31 篇时评
 │   │   │   ├── builtin-questions.js    # 内置 15 道题（含完整材料与参考答案，标注为仿真）
 │   │   │   ├── daily.js                # 每日一练选题：按本地日期散列，确定性出题
+│   │   │   ├── site.js                 # 仓库地址 + 更新日志（首页入口与日志页的唯一数据源）
 │   │   │   └── teachers/*.md           # 五位老师讲义原文（?raw 懒加载）
-│   │   ├── views/                  # 首页/老师/文章库/题库/练习批改/复盘/统计/设置
+│   │   ├── views/                  # 首页/老师/文章库/题库/练习批改/复盘/统计/设置/更新日志
 │   │   ├── components/
 │   │   │   ├── GroupedSidebar.vue  # 分组侧边栏（移动端折叠为抽屉）
 │   │   │   ├── GridPaper.vue       # 方格作答纸：每行 25 字，格宽随容器实测
@@ -472,6 +476,9 @@ node .tools/probe-gridpaper.mjs
 
 # 6) 整页截图，看折叠线以下的内容（题目 / 材料 / 方格纸）
 node .tools/shot-full.mjs practice full-practice
+
+# 7) 首页仓库入口 / 更新日志页断言（含窄屏横向溢出检查）
+node .tools/probe-site-links.mjs
 ```
 
 | 脚本 | 用途 |
@@ -480,6 +487,7 @@ node .tools/shot-full.mjs practice full-practice
 | `e2e-grade.mjs` | CDP 驱动：注入配置 → 填表 → 点「开始批改」→ 真实等待 → 核对结果页元素。用 Vue 的原生 setter 触发 `input`，`v-model` 才会更新 |
 | `probe-practice.mjs` | 练习页断言：进页面自动载入题目、从题库带入时 `requirement/maxScore/wordLimit` 不丢、换一题清空旧作答 |
 | `probe-gridpaper.mjs` | 方格纸断言：24/25/26/50/51 字分别应占 1/1/2/2/3 行 |
+| `probe-site-links.mjs` | 首页三个入口的 `href` 是否指向真实 remote、500px 窄屏是否横向溢出、更新日志页是否渲染全部版本、有无 console 报错（自动滤掉 dev server 的 HMR 噪声） |
 | `cdp-probe.mjs` | 真实等待 N 秒后读 `document.body.innerText` |
 | `batch-shots.mjs` | 逐条路由截图并检查标志性文案 |
 | `shot-full.mjs` | 整页截图（`captureBeyondViewport`）。viewport 截图看不到题目、材料、方格纸，因为它们都在折叠线以下 |

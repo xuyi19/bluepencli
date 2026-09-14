@@ -59,7 +59,7 @@ const NAV = [
 
 const backendUp = ref(false)
 const drawerOpen = ref(false)
-const version = ref('0.2.0')
+const version = ref('0.3.0')
 
 // 批改能否直接用：本机填了 Key，或服务端托管了 Key（桌面版/部署版）
 const { ready, probeReadiness } = useReadiness()
@@ -67,7 +67,7 @@ const { ready, probeReadiness } = useReadiness()
 onMounted(async () => {
   backendUp.value = await probeBackend()
   await probeReadiness()
-  version.value = backendInfo()?.version || '0.2.0'
+  version.value = backendInfo()?.version || '0.3.0'
 })
 
 // 一个圆点表达三种状态，避免堆太多指示器
