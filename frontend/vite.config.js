@@ -7,11 +7,49 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { viteSingleFile } from 'vite-plugin-singlefile'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
+
+/** 版本号唯一来源：仓库根 CHANGELOG.md 最上面一版（与两个发布脚本同一条规则）。 */
+function readVersion() {
+  const text = readFileSync(resolve(HERE, '..', 'CHANGELOG.md'), 'utf8')
+  const m = text.match(/^##\s*(v\d+\.\d+\.\d+)\s*·\s*(\d{4}-\d{2}-\d{2})/m)
+  if (!m) throw new Error('CHANGELOG.md 顶部读不到版本号 —— 产物将无法自证版本，已中止构建')
+  return { tag: m[1], version: m[1].replace(/^v/, ''), date: m[2] }
+}
+
+/**
+ * 把版本号与构建时间写进 index.html 的 meta。
+ *
+ * 为什么值得单独一个插件：拿到一个包（尤其是别人转发来的）时，
+ * 「这是哪一版」必须能从**文件本身**读出来。只靠文件名会出事 ——
+ * 文件名可以随手改名，而 release/ 里同时躺着好几个历史版本时，
+ * 光看名字根本分不清哪个是最新（真发生过）。
+ */
+function versionStamp() {
+  const { version, tag, date } = readVersion()
+  // 用本地时间而不是 toISOString()（那是 UTC，会少 8 小时，看着像打包时间不对）
+  const d = new Date()
+  const p = (n) => String(n).padStart(2, '0')
+  const builtAt = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
+  return {
+    name: 'bp-version-stamp',
+    transformIndexHtml(html) {
+      return {
+        html,
+        tags: [
+          { tag: 'meta', attrs: { name: 'app-version', content: version }, injectTo: 'head' },
+          { tag: 'meta', attrs: { name: 'app-version-tag', content: tag }, injectTo: 'head' },
+          { tag: 'meta', attrs: { name: 'app-release-date', content: date }, injectTo: 'head' },
+          { tag: 'meta', attrs: { name: 'app-build-time', content: builtAt }, injectTo: 'head' },
+        ],
+      }
+    },
+  }
+}
 
 // 私有真题目录：2022 年起的国考卷。**不进版本库**，只在本机存在。
 const PRIVATE_DIR = resolve(HERE, 'src/data/real-exams-private')
@@ -48,7 +86,7 @@ export default defineConfig(({ mode }) => {
     : resolve(PRIVATE_STD_STUB, 'index.js')
 
   return {
-    plugins: [vue(), ...(single ? [viteSingleFile()] : [])],
+    plugins: [vue(), ...(single ? [viteSingleFile()] : []), versionStamp()],
     resolve: {
       alias: {
         // 私有卷的唯一入口。data/questions.js 只认这个别名，

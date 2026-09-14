@@ -68,10 +68,31 @@ app.include_router(stats.router, prefix="/api/v1")
 app.include_router(settings_api.router, prefix="/api/v1")
 
 
+class WebStaticFiles(StaticFiles):
+    """托管前端构建产物，顺带把缓存策略写对。
+
+    为什么要管缓存：桌面版每次升级都跑在**同一个地址**（127.0.0.1:8765）。
+    入口 HTML 若被浏览器缓存住，双击新版 exe 打开的仍是**旧界面** ——
+    用户看到的现象是「你这个包是旧版的」，而实际上新文件已经就位了。
+    真踩过，所以在服务端直接定死，不指望浏览器自己判断。
+    """
+
+    async def get_response(self, *args, **kwargs):
+        resp = await super().get_response(*args, **kwargs)
+        ctype = resp.headers.get("content-type", "")
+        if "text/html" in ctype:
+            # 入口文件每次回源校验。靠 ETag/304 拿消息，不额外费流量。
+            resp.headers["Cache-Control"] = "no-cache, must-revalidate"
+        else:
+            # 其余资源文件名都带内容哈希，内容一变名字就变，可放心长缓存
+            resp.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        return resp
+
+
 if WEB_DIR is not None:
     # 桌面版：同一个进程既提供 API 也提供界面，无跨域、无需另开前端服务。
     # 前端用 hash 路由，所有页面都在 `/` 下，因此纯静态托管即可，不需要 SPA 回退。
-    app.mount("/", StaticFiles(directory=str(WEB_DIR), html=True), name="web")
+    app.mount("/", WebStaticFiles(directory=str(WEB_DIR), html=True), name="web")
     logger.info(f"已挂载前端界面：{WEB_DIR}")
 else:
     # 未构建前端时（例如只跑后端做开发），根路径给出提示而不是 404

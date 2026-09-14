@@ -22,9 +22,6 @@ frontend/src/data/real-exams-private/
 # 构建自动走 frontend/src/data/standards-private-stub/ 的空实现。
 frontend/src/data/standards-private/
 
-# 私有题库包（.bpq）：导出即产出于此，同样不进版本库
-release/私有题库/
-
 # 真题流水线的中间产物：out/ 是完整的材料与参考答案（含 2022 起私有卷），
 # manual/ 是私有卷的人工补录。两者都由 PDF 重跑生成，不进版本库。
 # 只发布流水线脚本本身（extract.py / to_frontend.py / export_bpq.py …）。
@@ -36,16 +33,15 @@ release/私有题库/
 
 # 桌面版打包产物（用 backend/build_desktop.py 一键重建）
 backend/build/
-# release/ 是**本机归档区**：历史版本产物一律保留、不互相覆盖，
-# 文件名带版本号（版本取自 CHANGELOG.md）。全部不进版本库。
-release/蓝笔申论-桌面版*/
-release/*.zip
-release/*.html
-release/.old-*/
 
-# release/版本说明.md —— 本机维护的分发台账（每个版本有什么功能、哪个能发给别人）。
-# 刻意**不上传**：里面写了哪些产物含私有卷，属于只给作者自己看的信息。
-release/*.md
+# release/ 是**本机归档区**，整个目录都不进版本库。
+# 里面装的是：分发包（zip / 单文件 HTML）、私有题库 .bpq、分发台账 版本说明.md。
+#
+# ⚠️ 这里必须用整目录规则 `release/` 而不是逐个列 `release/*.zip`：
+#    后者匹配不到**子目录**，历史版本归入 release/历史版本/ 之后会集体漏网
+#    （2026-09-14 真踩到：git add 差点把 96 MB 产物与私有题库目录一起提交）。
+#    目录结构以后还会变，整目录忽略才是稳的。
+release/
 
 # 本地验证用临时目录（无头浏览器截图 / 烟测产物）
 .smoke/
