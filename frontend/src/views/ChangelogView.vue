@@ -6,6 +6,9 @@
       <p class="text-sm text-c-muted mt-2 leading-6">
         {{ APP_NAME }} 的版本历史与每轮改动
       </p>
+      <p class="text-xs text-c-muted mt-1.5">
+        内容直接取自仓库根的 CHANGELOG.md，改文档即改此页
+      </p>
     </div>
 
     <!-- 时间轴：一条竖线 + 每版一个节点 -->
@@ -57,5 +60,6 @@
 
 <script setup>
 import { RouterLink } from 'vue-router'
-import { APP_NAME, CHANGELOG, REPO, tagStyle } from '../data/site'
+import { APP_NAME, REPO } from '../data/site'
+import { CHANGELOG, tagStyle } from '../data/changelog'
 </script>

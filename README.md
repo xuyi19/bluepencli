@@ -321,7 +321,8 @@ bluepencil/
 │   │   │   ├── builtin-articles.json   # 内置 31 篇时评
 │   │   │   ├── builtin-questions.js    # 内置 15 道题（含完整材料与参考答案，标注为仿真）
 │   │   │   ├── daily.js                # 每日一练选题：按本地日期散列，确定性出题
-│   │   │   ├── site.js                 # 仓库地址 + 更新日志（首页入口与日志页的唯一数据源）
+│   │   │   ├── site.js                 # 仓库地址与产品名
+│   │   │   ├── changelog.js            # 解析仓库根 CHANGELOG.md，供首页与日志页使用
 │   │   │   └── teachers/*.md           # 五位老师讲义原文（?raw 懒加载）
 │   │   ├── views/                  # 首页/老师/文章库/题库/练习批改/复盘/统计/设置/更新日志
 │   │   ├── components/
@@ -339,7 +340,8 @@ bluepencil/
 │   │       └── import.js           # 文章导入导出
 │   ├── scripts/
 │   │   ├── import-articles.mjs         # 从已抓取数据批量生成内置文章库
-│   │   └── export-articles-to-docs.mjs # 把内置文章库镜像成 Markdown，便于查阅和维护
+│   │   ├── export-articles-to-docs.mjs # 把内置文章库镜像成 Markdown，便于查阅和维护
+│   │   └── publish-single.mjs          # 发布单文件版到 release/：文件名带版本号 + 清掉旧版本
 │   └── vite.config.js              # 双产物构建 + /api 代理（8100）+ strictPort
 │
 ├── docs/
@@ -352,11 +354,13 @@ bluepencil/
 │   ├── e2e-grade.mjs               # 走完「答题→批改→归档」并核对结果
 │   ├── probe-practice.mjs          # 练习页断言：自动载题 + 题库带入字段不丢 + 换题
 │   ├── probe-gridpaper.mjs         # 方格纸断言：25 字必须正好一行
+│   ├── probe-site-links.mjs        # 首页入口与日志页断言：位置正确 + 与 CHANGELOG.md 一致
 │   ├── cdp-probe.mjs               # CDP 探针：真实等待 + 读页面文本
 │   ├── batch-shots.mjs             # 全路由截图 + 渲染校验
 │   ├── shot-full.mjs               # 整页截图（viewport 之外的题目/材料/格纸）
 │   └── shot-annotations.mjs        # 放大看色标批注区
-├── release/                        # 分发包（单文件版 HTML + 桌面版 zip，均由脚本生成）
+├── release/                        # 分发包（只保留最新一版，文件名带版本号）
+├── CHANGELOG.md                    # 更新日志（唯一数据源：网页日志页与打包版本号都读它）
 ├── pytest.ini                      # pytest 配置（放仓库根，保证任意目录下跑结果一致）
 ├── PLAN.md                         # 开发计划与现状、待办
 └── README.md
@@ -395,15 +399,22 @@ bluepencil/
 cd frontend
 npm run build          # → dist/         多文件，用于部署网站 / 打包桌面版
 npm run build:single   # → dist-single/  单个 HTML，双击即用
+npm run release:single # = build:single + 复制进 release/ 并带上版本号
 ```
 
 | 产物 | 体积 | 要不要装东西 | 要不要填 Key | 适用 |
 |---|---|---|---|---|
 | `frontend/dist/` | 3.3 MB | 需要服务器 | 可不填（服务端托管） | 上线网站 |
-| `蓝笔申论-单文件版.html` | 3.4 MB | 都不要 | **要填** | 浏览器直连，受 CORS 限制 |
-| `蓝笔申论-桌面版.zip` | 23 MB（解压 45 MB） | 都不要 | 可不填（服务端托管） | **发给别人，双击即用** |
+| `蓝笔申论-单文件版-vX.Y.Z.html` | 1.9 MB | 都不要 | **要填** | 浏览器直连，受 CORS 限制 |
+| `蓝笔申论-桌面版-vX.Y.Z.zip` | 23 MB（解压 45 MB） | 都不要 | 可不填（服务端托管） | **发给别人，双击即用** |
 
 > 单文件版把所有 JS/CSS/数据内联进一个 `.html`，31 篇文章与五份讲义都在里面，所以体积看起来不小——但它是**一个自包含的文件**，不依赖任何外部资源。没有后端时自动走浏览器直连，需要在设置页填自己的 Key，且接口必须允许跨域。
+
+**发布约定：产物名带版本号，`release/` 只保留最新一版。**
+
+- 版本号统一取自仓库根 `CHANGELOG.md` 最上面那一版；两个发布脚本（`frontend/scripts/publish-single.mjs`、`backend/build_desktop.py`）都按这条规则读，**读不到会直接报错停下**，不会静默打出一个版本号不对的包
+- 每次发布顺手清掉同类旧版本（含早期不带版本号的命名），历史版本不堆积
+- 改动记录写在同一个 `CHANGELOG.md` 里 —— 网页「更新日志」页直接读它，改文档即改页面
 
 ---
 
@@ -417,7 +428,7 @@ cd backend
 # .venv/bin/python build_desktop.py           # macOS / Linux（产物需在对应系统上构建）
 ```
 
-产出 `release/蓝笔申论-桌面版.zip`（约 23 MB），对方解压后双击 `蓝笔申论.exe`：程序自己起本地服务、自动打开浏览器、关掉黑窗口即退出。
+产出 `release/蓝笔申论-桌面版-vX.Y.Z.zip`（约 23 MB；同名解压目录也在 release/ 下，方便本机直接试跑），对方解压后双击 `蓝笔申论.exe`：程序自己起本地服务、自动打开浏览器、关掉黑窗口即退出。
 
 解压目录里还有一份 `使用说明.txt` 和 `config.example.json`，可以直接连同 zip 一起发给对方。
 

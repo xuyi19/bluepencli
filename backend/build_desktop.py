@@ -3,9 +3,11 @@
 用法（在 backend/ 目录下）：
     .venv/Scripts/python.exe build_desktop.py
 
-产出：
-    release/蓝笔申论-桌面版/        可直接运行或压缩转发的目录
-    release/蓝笔申论-桌面版.zip     发给别人即可
+产出（文件名一律带版本号，版本取自仓库根 CHANGELOG.md 最上面一版）：
+    release/蓝笔申论-桌面版-vX.Y.Z/       可直接运行或压缩转发的目录
+    release/蓝笔申论-桌面版-vX.Y.Z.zip    发给别人即可
+
+release/ 只保留最新一版：重打包时自动清掉旧版本副本。
 
 三个设计决定：
 
@@ -18,6 +20,7 @@
 """
 
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -26,16 +29,38 @@ import time
 import zipfile
 from pathlib import Path
 
-from release_utils import safe_rmtree
+from release_utils import purge_dir, safe_rmtree
 
 BACKEND = Path(__file__).resolve().parent
 ROOT = BACKEND.parent
 WEB_DIST = ROOT / "frontend" / "dist"
 ICON = BACKEND / "assets" / "icon.ico"
 RELEASE = ROOT / "release"
-TARGET_DIR = RELEASE / "蓝笔申论-桌面版"
-ZIP_PATH = RELEASE / "蓝笔申论-桌面版.zip"
+CHANGELOG = ROOT / "CHANGELOG.md"
 APP_NAME = "BluePencil"
+PKG_PREFIX = "蓝笔申论-桌面版"
+
+
+def _read_version() -> str:
+    """取仓库根 CHANGELOG.md 最上面那一版的版本号（唯一真源）。
+
+    解析不到就直接停下——宁可报错，也不要静默打出一个版本号不对的包。
+    """
+    if not CHANGELOG.is_file():
+        raise SystemExit(f"❌ 找不到更新日志：{CHANGELOG}")
+    for line in CHANGELOG.read_text(encoding="utf-8").splitlines():
+        m = re.match(r"^##\s+(v[\d.]+)", line)
+        if m:
+            return m.group(1)
+    raise SystemExit(
+        "❌ CHANGELOG.md 里找不到 `## vX.Y.Z · 日期 · 标题` 开头的版本行，\n"
+        "   改完格式后请同步更新 build_desktop.py 与 publish-single.mjs"
+    )
+
+
+VERSION = _read_version()
+TARGET_DIR = RELEASE / f"{PKG_PREFIX}-{VERSION}"
+ZIP_PATH = RELEASE / f"{PKG_PREFIX}-{VERSION}.zip"
 
 # uvicorn 依赖动态导入，PyInstaller 静态分析看不到这些实现类
 HIDDEN_IMPORTS = [
@@ -171,8 +196,32 @@ def _sweep_leftovers() -> None:
     删不掉就留着——绝不能因为清理失败而中断打包。
     """
     for old in RELEASE.glob(".old-*"):
-        if old.is_dir():
-            safe_rmtree(old)
+        if old.is_dir() and not purge_dir(old):
+            print(f"（{old.name} 没清掉，多半被占用了，忽略）")
+
+
+def _purge_old_versions() -> None:
+    """清掉 release/ 里本产品的旧版本副本。
+
+    约定：**release/ 只保留最新一版**，不堆历史包。匹配 `蓝笔申论-桌面版*`，
+    因此带版本号的旧目录/旧 zip、以及早期不带版本号的命名都会被清掉。
+    删不掉就留着——绝不能因为清理失败而中断打包。
+    """
+    keep = {TARGET_DIR.resolve(), ZIP_PATH.resolve()}
+    for path in sorted(RELEASE.glob(f"{PKG_PREFIX}*")):
+        if path.resolve() in keep:
+            continue
+        try:
+            # 目录用 purge_dir：旧发布目录动辄几千个文件，逐文件删会被本机的
+            # 批量删除保护拦下（见 release_utils 的说明）
+            if path.is_dir():
+                ok = purge_dir(path)
+            else:
+                path.unlink()
+                ok = True
+            print(f"{'清掉' if ok else '没清掉（占用中，忽略）'}旧版本：{path.name}")
+        except OSError as e:
+            print(f"（旧版本 {path.name} 没清掉，忽略：{e.__class__.__name__}）")
 
 
 def _clear_target() -> None:
@@ -238,7 +287,7 @@ def main() -> int:
     stage = Path(tempfile.gettempdir()) / "bluepencil-build" / stamp
 
     print("=" * 62)
-    print(f"  打包 {APP_NAME}  →  {TARGET_DIR}")
+    print(f"  打包 {APP_NAME} {VERSION}  →  {TARGET_DIR}")
     print(f"  前端产物：{WEB_DIST}")
     print(f"  构建临时目录：{stage}")
     print("=" * 62)
@@ -258,8 +307,9 @@ def main() -> int:
 
     # 清理一律放在最后：本机的删除保护可能中断进程，
     # 但此时交付物已经生成并落盘，中断也不影响结果。
-    safe_rmtree(stage)
+    purge_dir(stage)
     _sweep_leftovers()
+    _purge_old_versions()
     return 0
 
 

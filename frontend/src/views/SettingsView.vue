@@ -204,6 +204,7 @@ import {
   setBackendUrl,
 } from '../api/backend'
 import { exportAll, importAll, clear, STORES } from '../store/db'
+import { CURRENT_VERSION } from '../data/changelog'
 
 // 服务商预设：点了自动填 Base URL 与模型名，省得用户去查文档
 const PRESETS = [
@@ -233,7 +234,7 @@ const serverKey = ref(null) // 服务端托管的 LLM 配置（不含 Key 本身
 /** 能不能直接开批改：要么服务端托管了 Key，要么自己填了 */
 const ready = computed(() => !!serverKey.value || !!cfg.api_key)
 
-const appVersion = computed(() => backendMeta.value?.version || '0.3.0')
+const appVersion = computed(() => backendMeta.value?.version || CURRENT_VERSION)
 
 const readyHint = computed(() => {
   if (serverKey.value) {

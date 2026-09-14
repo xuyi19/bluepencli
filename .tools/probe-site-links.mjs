@@ -1,10 +1,12 @@
 // 首页仓库入口 / 更新日志页的断言探针。
 //
-// 检查四件事：
-//   1. 首页顶部三个入口都存在，且 href 指向本仓库的真实 remote
-//   2. 窄屏（500px）下首页不产生横向溢出（新增的那排 pill 会换行，不能撑破布局）
-//   3. 更新日志页渲染出全部版本，且每个版本都有条目
-//   4. 两个页面都没有 console 报错
+// 检查五件事：
+//   1. 首页有 GitHub / Gitee / 更新日志三个入口，且 href 指向本仓库的真实 remote
+//   2. 这三个入口自成一块，且排在首页「设置/配置」提示之上（data-testid 定位）
+//   3. 窄屏（500px）下首页不产生横向溢出（那排 pill 要换行，不能撑破布局）
+//   4. 更新日志页渲染出的版本与仓库根 CHANGELOG.md 完全对应（不写死数量，
+//      否则每加一版就要来改这里）
+//   5. 两个页面都没有 console 报错
 //
 // 用法：node .tools/probe-site-links.mjs [base]
 
@@ -12,7 +14,15 @@ const BASE = process.argv[2] || 'http://127.0.0.1:5273'
 const PORT = 9500 + Math.floor(Math.random() * 300)
 
 const { spawn } = await import('node:child_process')
-const { existsSync } = await import('node:fs')
+const { existsSync, readFileSync } = await import('node:fs')
+const { dirname, resolve } = await import('node:path')
+const { fileURLToPath } = await import('node:url')
+
+// 更新日志的期望值直接读文档，页面若与文档不一致就是回归
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
+const DOC_VERSIONS = [
+  ...readFileSync(resolve(ROOT, 'CHANGELOG.md'), 'utf8').matchAll(/^##\s+(v[\d.]+)/gm),
+].map((m) => m[1])
 
 const CHROME = [
   'C:/Program Files/Google/Chrome/Application/chrome.exe',
@@ -96,44 +106,69 @@ const links = await evaluate(`JSON.stringify(
 const hrefs = JSON.parse(links || '[]')
 check('首页有 github 入口', hrefs.some((h) => h.includes('github.com/xuyi19/bluepencli')), hrefs.join(' , '))
 check('首页有 gitee 入口', hrefs.some((h) => h.includes('gitee.com/xuyi_19/bluepencil')))
+check('首页有更新日志入口', await evaluate(`!!document.querySelector('a[href$="#/changelog"]')`) === true)
 
-const logLink = await evaluate(`!!document.querySelector('a[href$="#/changelog"]')`)
-check('首页有更新日志入口', logLink === true)
+// ---------- 2. 入口区块的位置 ----------
+// 需求：仓库与日志自成一块，放在「设置/配置」提示之上
+const orderRaw = await evaluate(`(() => {
+  const repo = document.querySelector('[data-testid="repo-links"]')
+  const setup = document.querySelector('[data-testid="setup-hint"]')
+  const top = (el) => Math.round(el.getBoundingClientRect().top + window.scrollY)
+  return JSON.stringify({
+    repo: !!repo,
+    setup: !!setup,
+    repoTop: repo ? top(repo) : null,
+    setupTop: setup ? top(setup) : null,
+  })
+})()`)
+const od = JSON.parse(orderRaw)
+check('首页有独立的仓库/日志区块', od.repo === true)
+check('入口区块在配置提示之上',
+  od.repo === true && od.setup === true && od.repoTop < od.setupTop,
+  `repo=${od.repoTop} setup=${od.setupTop}`)
 
-// ---------- 2. 窄屏不溢出 ----------
+// ---------- 3. 窄屏不溢出 ----------
 await send('Emulation.setDeviceMetricsOverride', {
   width: 500, height: 900, deviceScaleFactor: 1, mobile: true,
 })
 await sleep(800)
 const overflow = await evaluate(`(() => {
   const de = document.documentElement
-  const pills = [...document.querySelectorAll('a')].find((a) => (a.textContent || '').includes('更新日志'))
+  const pill = [...document.querySelectorAll('a')].find((a) => (a.textContent || '').includes('更新日志'))
+  const r = pill ? pill.getBoundingClientRect() : null
   return JSON.stringify({
     scrollW: de.scrollWidth,
     clientW: de.clientWidth,
-    pillRight: pills ? Math.round(pills.getBoundingClientRect().right) : -1,
+    pillRight: r ? Math.round(r.right) : -1,
+    pillTop: r ? Math.round(r.top + window.scrollY) : -1,
   })
 })()`)
 const ov = JSON.parse(overflow)
 check('窄屏无横向溢出', ov.scrollW <= ov.clientW + 1, `scrollW=${ov.scrollW} clientW=${ov.clientW}`)
-check('更新日志 pill 在视口内', ov.pillRight > 0 && ov.pillRight <= ov.clientW + 1, `right=${ov.pillRight}`)
+check('更新日志入口在视口内', ov.pillRight > 0 && ov.pillRight <= ov.clientW + 1, `right=${ov.pillRight}`)
 await send('Emulation.clearDeviceMetricsOverride')
 
-// ---------- 3. 更新日志页 ----------
+// ---------- 4. 更新日志页 ----------
 await send('Page.navigate', { url: `${BASE}/#/changelog` })
 await sleep(2500)
 
-const expected = await evaluate(`JSON.stringify({
+const raw = await evaluate(`JSON.stringify({
   versions: [...document.querySelectorAll('h2')].map((h) => h.innerText.trim()),
   sections: document.querySelectorAll('section').length,
-  items: document.querySelectorAll('section .neu > div').length,
+  perVersion: [...document.querySelectorAll('section')].map((s) => s.querySelectorAll('.neu > div').length),
 })`)
-const cl = JSON.parse(expected || '{}')
-check('更新日志渲染出 3 个版本', (cl.versions || []).length === 3, JSON.stringify(cl.versions))
-check('每版都有条目', (cl.items || 0) >= 20, `items=${cl.items}`)
+const cl = JSON.parse(raw || '{}')
+check('版本数与 CHANGELOG.md 一致',
+  (cl.versions || []).length === DOC_VERSIONS.length,
+  `页面 ${(cl.versions || []).length} 个 / 文档 ${DOC_VERSIONS.length} 个`)
+check('版本号顺序与文档一致',
+  JSON.stringify(cl.versions) === JSON.stringify(DOC_VERSIONS),
+  JSON.stringify(cl.versions))
+check('每版都有条目', (cl.perVersion || []).every((n) => n > 0), JSON.stringify(cl.perVersion))
 check('更新日志页有仓库入口', await evaluate(`document.body.innerText.includes('Gitee 仓库')`) === true)
+check('页面标注了数据来源', await evaluate(`document.body.innerText.includes('CHANGELOG.md')`) === true)
 
-// ---------- 4. 无 console 报错 ----------
+// ---------- 5. 无 console 报错 ----------
 // dev server 的 HMR websocket 在无头环境里连不上，会刷出「[vite] failed to connect to
 // websocket」和随之而来的 unhandled rejection —— 那是开发服务器的噪声，不是应用错误。
 const NOISE = /\[vite\]|websocket|Uncaught \(in promise\)/i
