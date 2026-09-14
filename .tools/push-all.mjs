@@ -27,6 +27,11 @@ function git(args, { quiet = false } = {}) {
   return out.trim()
 }
 
+/** 取一趟可能失败的命令（例如远端跟踪分支还不存在），失败返回 null */
+function tryGit(args) {
+  try { return git(args, { quiet: true }) } catch { return null }
+}
+
 function run(args) {
   const out = execFileSync('git', args, { encoding: 'utf8', stdio: 'inherit' })
   return out
@@ -48,9 +53,11 @@ if (message) {
   }
 }
 
-const ahead = git(['log', '--oneline', `origin/${branch}..${branch}`])
-  || git(['log', '--oneline', `${REMOTES[0]}/${branch}..${branch}`])
-console.log(`\n待推送提交：\n${ahead || '（无）'}`)
+// 远端跟踪分支可能还没建立（第一次推），所以按 remote 顺序挨个试
+const ahead = REMOTES
+  .map((r) => tryGit(['log', '--oneline', `${r}/${branch}..${branch}`]))
+  .find((v) => v !== null)
+console.log(`\n待推送提交：\n${ahead || '（远端跟踪分支未建立，本次推送会一并创建）'}`)
 
 if (dry) {
   console.log('\n--dry：没有真的推送')
@@ -59,10 +66,7 @@ if (dry) {
 
 let failed = 0
 for (const r of REMOTES) {
-  const has = (() => {
-    try { git(['remote', 'get-url', r], { quiet: true }); return true } catch { return false }
-  })()
-  if (!has) {
+  if (!tryGit(['remote', 'get-url', r])) {
     console.log(`  ⚠ 没有配置 remote「${r}」，跳过`)
     continue
   }
