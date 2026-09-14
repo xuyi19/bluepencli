@@ -7,9 +7,11 @@
 //   构建成功 ≠ 图能显示。这里逐处检查 img.complete && naturalWidth > 0，
 //   只有真的解码出像素才算过。
 //
-// 前置：dev server 跑在 5273。
+// 前置：dev server 跑在 5273；也可用 BP_BASE 指向别的地址，
+// 例如解压后的桌面版 `BP_BASE=http://127.0.0.1:8765 node .tools/probe-wechat.mjs`
+// —— 同一份断言既能验源码，也能验打包产物。
 
-const BASE = 'http://127.0.0.1:5273'
+const BASE = process.env.BP_BASE || 'http://127.0.0.1:5273'
 const PORT = 9680 + Math.floor(Math.random() * 200)
 
 const { spawn } = await import('node:child_process')

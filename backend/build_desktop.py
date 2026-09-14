@@ -209,17 +209,30 @@ def _sweep_leftovers() -> None:
 def _archive_report() -> None:
     """清点 release/ 里已归档的历史版本（**不删**）。
 
-    约定（2026-09-14 起）：**release/ 保留每一个版本的产物，只增不删**。
-    理由是回溯"某个版本当时是什么样"时，历史包本身就是证据——
+    约定（2026-09-14 起）：
+      · `release/` 根 = **最新一版**的产物（随手拿到的一定是新的，不会解压错）
+      · `release/历史版本/` = 往期所有产物（回溯用）
+
+    这里**递归统计而不是只扫根目录**：历史版本归入子目录后，只扫根目录会显示
+    "暂无历史版本产物"，看着像历史包丢了 —— 同一个"布局变了、扫描没跟上"的坑，
+    在 publish-single.mjs 与 check_release_private.py 里各踩过一次。
+
+    保留而不是删除的理由：回溯"某个版本当时是什么样"时，历史包本身就是证据，
     重新构建出来的其实不是"当时那一版"（依赖版本、题库数据都可能已经变了）。
-    本轮的产物由 _clear_target 改名让位后再写入，不会误伤旧版本。
     """
     keep = {TARGET_DIR.resolve(), ZIP_PATH.resolve()}
-    others = sorted(
-        p.name for p in RELEASE.glob(f"{PKG_PREFIX}*") if p.resolve() not in keep
-    )
+    others = []
+    for p in sorted(RELEASE.rglob(f"{PKG_PREFIX}*")):
+        if any(part.startswith(".old-") for part in p.parts):
+            continue
+        if p.is_file() and p.suffix != ".zip":
+            continue
+        if p.resolve() in keep:
+            continue
+        others.append(str(p.relative_to(RELEASE)))
+
     if others:
-        print(f"release/ 里已归档 {len(others)} 个历史版本产物（保留不删）：")
+        print(f"release/ 已归档 {len(others)} 个历史版本产物（保留不删）：")
         for name in others:
             print(f"  · {name}")
     else:
@@ -248,6 +261,42 @@ def _clear_target() -> None:
         ) from e
 
 
+def _version_note() -> str:
+    """产物自证版本。
+
+    为什么必须写这个文件：release/ 里会同时躺着多个历史版本的包（只增不删），
+    文件名只差一处版本号，解压上一版就会看到旧界面 —— 而"这到底是哪一版"
+    本来不该靠翻文件名猜。这份文件让**包自己回答**，解压第一眼就能看到。
+    """
+    packed_at = time.strftime("%Y-%m-%d %H:%M")
+    return f"""蓝笔申论 BluePencil · 版本信息
+================================================================
+
+版本      ：{VERSION}
+打包时间  ：{packed_at}
+题库范围  ：2010–2021 国考真题（24 套）+ 15 道自编仿真题
+            （2022 年起的真题为私有，不在本包内，需作者定向分发）
+分发许可  ：✅ 可以发给任何人（本包不含任何私有真题）
+
+作者      ：许一 <xuconghui_03@qq.com>
+GitHub    ：https://github.com/xuyi19/bluepencli
+Gitee     ：https://gitee.com/xuyi_19/bluepencil
+开源许可  ：AGPL-3.0
+
+【怎么确认自己打开的是这一版】
+  · 双击 exe 后，黑色窗口里会打印一行启动版本号
+  · 打开界面 → 左上角「设置」→ 底部「关于」处显示当前版本
+  · 本文件所在目录名也带版本号（{PKG_PREFIX}-{VERSION}）
+
+【如果你看到的是旧界面】
+  · 先确认没有解压错包（比对本文件的版本号）
+  · 若是从旧版升级：关掉程序，把旧文件夹整个删掉，再解压新包重新运行。
+    不要只把新 exe 覆盖进旧文件夹 —— _internal 文件夹才是程序本体，
+    新旧混放会出现界面与后端版本不一致。
+  · 浏览器有缓存时，按 Ctrl+F5 强制刷新一次。
+"""
+
+
 def _assemble(built: Path) -> None:
     """整理成可分发目录：改名、附说明、清掉打包机的数据。"""
     _clear_target()
@@ -258,7 +307,9 @@ def _assemble(built: Path) -> None:
     # PyInstaller 靠 exe 所在目录找 _internal，与文件名无关（已实测）。
     (TARGET_DIR / f"{APP_NAME}.exe").rename(TARGET_DIR / "蓝笔申论.exe")
 
-    _write_text(TARGET_DIR / "使用说明.txt", README)
+    # 使用说明第一行就带上版本号 —— 解压后第一眼看到的就是"这是哪一版"
+    _write_text(TARGET_DIR / "使用说明.txt", README.replace("（免安装）", f"（免安装 · {VERSION}）", 1))
+    _write_text(TARGET_DIR / "版本信息.txt", _version_note())
     _write_text(TARGET_DIR / "config.example.json", CONFIG_EXAMPLE)
 
     # 打包机上跑出来的库不该跟着发出去
