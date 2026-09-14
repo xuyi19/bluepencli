@@ -103,6 +103,19 @@
         </div>
 
         <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <!-- 微信入口：二维码在弹层里。首页不摊大图 —— 这页是"开始做事"的地方，
+               联系方式够得着就行，别抢主视觉。 -->
+          <button @click="openWeChat()"
+            class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs
+              text-c-body neu-sm hover:text-c-bark transition-colors duration-300">
+            <svg class="w-3.5 h-3.5 shrink-0" style="color: #07c160" viewBox="0 0 24 24"
+              fill="currentColor" aria-hidden="true">
+              <path d="M9.1 3C5.2 3 2 5.7 2 9c0 1.9 1 3.6 2.7 4.7l-.7 2.2 2.5-1.3c.6.2 1.3.3 2 .3h.5c-.1-.4-.2-.9-.2-1.4 0-3 2.9-5.4 6.5-5.4h.5C15.1 5.4 12.4 3 9.1 3zM6.7 7.6a.9.9 0 110-1.8.9.9 0 010 1.8zm4.8 0a.9.9 0 110-1.8.9.9 0 010 1.8z"/>
+              <path d="M22 13.5c0-2.7-2.7-4.9-6-4.9s-6 2.2-6 4.9 2.7 4.9 6 4.9c.7 0 1.4-.1 2-.3l2.1 1.1-.6-1.8c1.5-.9 2.5-2.3 2.5-3.9zm-8-1.2a.8.8 0 110-1.6.8.8 0 010 1.6zm4 0a.8.8 0 110-1.6.8.8 0 010 1.6z"/>
+            </svg>
+            加微信 / 交流群
+          </button>
+
           <a :href="AUTHOR.openSource" target="_blank" rel="noopener" title="开源地址"
             class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs
               text-c-body neu-sm hover:text-c-bark transition-colors duration-300">
@@ -149,6 +162,7 @@ import { CURRENT_VERSION } from '../data/changelog'
 import { useReadiness } from '../utils/readiness'
 import { toast } from '../utils/toast'
 import { copyAuthorLine } from '../utils/watermark'
+import { openWeChat } from '../utils/wechatPanel'
 
 const records = ref([])
 const mine = ref([])

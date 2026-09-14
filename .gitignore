@@ -6,10 +6,10 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 
-# 构建产物（可随时重建）
-frontend/dist/
-frontend/dist-single/
-frontend/dist-single-local/
+# 构建产物（可随时重建）。
+# 用 `dist*/` 而不是逐个列：本机清理目录会撞上批量删除保护，构建前常靠
+# "改名挪开"（dist → dist.old-<时间戳>）绕开，用通配才能把这些残留一起挡在库外。
+frontend/dist*/
 
 # 私有真题：2022 年起的国考卷（2026-09 分层决定）。
 # 这部分是私有资产，由作者定向分发、使用者自行导入，**不进版本库也不进分发产物**。
@@ -36,11 +36,16 @@ release/私有题库/
 
 # 桌面版打包产物（用 backend/build_desktop.py 一键重建）
 backend/build/
-# release/ 只保留最新一版产物，文件名带版本号（版本取自 CHANGELOG.md）
+# release/ 是**本机归档区**：历史版本产物一律保留、不互相覆盖，
+# 文件名带版本号（版本取自 CHANGELOG.md）。全部不进版本库。
 release/蓝笔申论-桌面版*/
 release/*.zip
 release/*.html
 release/.old-*/
+
+# release/版本说明.md —— 本机维护的分发台账（每个版本有什么功能、哪个能发给别人）。
+# 刻意**不上传**：里面写了哪些产物含私有卷，属于只给作者自己看的信息。
+release/*.md
 
 # 本地验证用临时目录（无头浏览器截图 / 烟测产物）
 .smoke/

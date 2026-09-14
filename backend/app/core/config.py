@@ -90,7 +90,7 @@ class Settings(BaseSettings):
     )
 
     APP_NAME: str = "蓝笔申论 BluePencil"
-    APP_VERSION: str = "0.7.0"
+    APP_VERSION: str = "0.8.0"
     DEBUG: bool = True
 
     # SQLite：默认落在可写数据目录下的 data/bluepencil.db，零外部服务依赖

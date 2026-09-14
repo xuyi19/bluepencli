@@ -57,20 +57,35 @@ mkdirSync(RELEASE, { recursive: true })
 copyFileSync(SRC, outPath)
 console.log(`✓ 已发布 ${outName}  (${(statSync(outPath).size / 1024).toFixed(0)} KB)`)
 
-// 清掉同类旧版本：旧的不带版本号的命名，以及版本号不是当前的。
+// 归档约定（2026-09-14 起）：release/ **保留每一个版本的产物，只增不删**。
+// 理由：回溯"某个版本当时是什么样"时，历史包本身就是证据，不该逼着人重新构建。
+// 同名文件（同一版本重打包）直接覆盖——版本号相同意味着内容应当一致。
+//
+// 唯一要清的：早期不带版本号的旧命名。它们没有版本信息，留着只制造混淆，
+// 而且与带版本号的产物互为前缀，很容易被误认成同一版。
 // 注意"本地全量"版与公开版名字互为前缀，必须互不误删：
 // 公开版跑的时候跳过带 `-本地全量` 的（那是自己本机的自用产物）。
 let removed = 0
 for (const name of readdirSync(RELEASE)) {
   if (!name.startsWith(PREFIX) || name === outName) continue
   if (!LOCAL && name.includes('本地全量')) continue
+  // 带版本号的：归档保留，不动
+  if (/v\d+\.\d+\.\d+/.test(name)) continue
   try {
     unlinkSync(join(RELEASE, name))
-    console.log(`  清掉旧版本：${name}`)
+    console.log(`  清掉无版本号的旧命名：${name}`)
     removed++
   } catch (e) {
     // 文件被占用（比如正开着预览）不该算发布失败
     console.log(`  （${name} 没清掉，忽略：${e.code || e.message}）`)
   }
 }
-console.log(removed ? '✓ release 里只保留最新一版' : '✓ release 无需清理')
+const kept = readdirSync(RELEASE).filter((n) => n.startsWith(PREFIX) && /v\d+\.\d+\.\d+/.test(n)).length
+console.log(removed ? `✓ 已清掉无版本号的旧命名（归档保留 ${kept} 个版本）`
+  : `✓ 历史版本归档在 release/（共 ${kept} 个单文件版）`)
+
+// 发完立刻把"这个包能不能给别人"讲清楚 —— 分层之后这是最容易出错的一步：
+// 产物看起来都一样，区别只在构建时有没有把私有卷打进去。
+console.log(LOCAL
+  ? '⛔ 本地全量版：内含 2022 年起私有卷正文，**只能自己用，不要发给任何人**。'
+  : '✅ 公开版：只含 2010–2021 卷，**可以直接发给别人**。')

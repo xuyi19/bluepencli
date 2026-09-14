@@ -13,7 +13,7 @@
     release/蓝笔申论-桌面版-vX.Y.Z/       可直接运行或压缩转发的目录
     release/蓝笔申论-桌面版-vX.Y.Z.zip    发给别人即可
 
-release/ 只保留最新一版：重打包时自动清掉旧版本副本。
+release/ 保留每一个版本的产物（只增不删），历史包用于回溯；同名版本重打会覆盖。
 
 三个设计决定：
 
@@ -206,28 +206,24 @@ def _sweep_leftovers() -> None:
             print(f"（{old.name} 没清掉，多半被占用了，忽略）")
 
 
-def _purge_old_versions() -> None:
-    """清掉 release/ 里本产品的旧版本副本。
+def _archive_report() -> None:
+    """清点 release/ 里已归档的历史版本（**不删**）。
 
-    约定：**release/ 只保留最新一版**，不堆历史包。匹配 `蓝笔申论-桌面版*`，
-    因此带版本号的旧目录/旧 zip、以及早期不带版本号的命名都会被清掉。
-    删不掉就留着——绝不能因为清理失败而中断打包。
+    约定（2026-09-14 起）：**release/ 保留每一个版本的产物，只增不删**。
+    理由是回溯"某个版本当时是什么样"时，历史包本身就是证据——
+    重新构建出来的其实不是"当时那一版"（依赖版本、题库数据都可能已经变了）。
+    本轮的产物由 _clear_target 改名让位后再写入，不会误伤旧版本。
     """
     keep = {TARGET_DIR.resolve(), ZIP_PATH.resolve()}
-    for path in sorted(RELEASE.glob(f"{PKG_PREFIX}*")):
-        if path.resolve() in keep:
-            continue
-        try:
-            # 目录用 purge_dir：旧发布目录动辄几千个文件，逐文件删会被本机的
-            # 批量删除保护拦下（见 release_utils 的说明）
-            if path.is_dir():
-                ok = purge_dir(path)
-            else:
-                path.unlink()
-                ok = True
-            print(f"{'清掉' if ok else '没清掉（占用中，忽略）'}旧版本：{path.name}")
-        except OSError as e:
-            print(f"（旧版本 {path.name} 没清掉，忽略：{e.__class__.__name__}）")
+    others = sorted(
+        p.name for p in RELEASE.glob(f"{PKG_PREFIX}*") if p.resolve() not in keep
+    )
+    if others:
+        print(f"release/ 里已归档 {len(others)} 个历史版本产物（保留不删）：")
+        for name in others:
+            print(f"  · {name}")
+    else:
+        print("release/ 暂无历史版本产物")
 
 
 def _clear_target() -> None:
@@ -310,12 +306,14 @@ def main() -> int:
     print(f"   压缩包：{ZIP_PATH}  ({zip_mb:.1f} MB)")
     print()
     print("   直接把这个压缩包发给别人，对方解压后双击「蓝笔申论.exe」即可。")
+    print("   ✅ 本包只含 2010–2021 公开卷，可直接发给任何人。")
+    print("      发之前想再确认一遍，跑 .tools/check_release_private.py")
 
     # 清理一律放在最后：本机的删除保护可能中断进程，
     # 但此时交付物已经生成并落盘，中断也不影响结果。
     purge_dir(stage)
     _sweep_leftovers()
-    _purge_old_versions()
+    _archive_report()
     return 0
 
 

@@ -209,6 +209,12 @@
             class="text-c-muted hover:text-c-bark transition-colors">复制联系方式</button>
         </div>
       </div>
+
+      <!-- 微信入口：设置页是"想找你"时最可能来的地方（用着有问题 / 想要私有题库），
+           所以这里直接摊开二维码，不藏在按钮后面。 -->
+      <div class="mt-4 pt-4 border-t border-c-line">
+        <WeChatPanel compact show-actions />
+      </div>
     </section>
   </div>
 </template>
@@ -228,6 +234,7 @@ import { exportAll, importAll, clear, STORES } from '../store/db'
 import { CURRENT_VERSION } from '../data/changelog'
 import { AUTHOR } from '../data/author'
 import { copyAuthorLine } from '../utils/watermark'
+import WeChatPanel from '../components/WeChatPanel.vue'
 
 // 服务商预设：点了自动填 Base URL 与模型名，省得用户去查文档
 const PRESETS = [

@@ -63,6 +63,13 @@
         <a :href="AUTHOR.github" target="_blank" rel="noopener" class="hover:text-c-bark">GitHub</a>
         <button @click="onCopyStamp" class="hover:text-c-bark">复制联系方式</button>
       </div>
+
+      <!-- 二维码放这儿比一行邮箱好使：目标用户就在手机上，扫一下比复制邮箱再写邮件快得多。
+           groupStub（群码过期）会自动降级成"加我拉你进群"，不需要额外处理。 -->
+      <div class="mt-4 pt-4 border-t border-c-line">
+        <WeChatPanel compact
+          desc="扫码加我微信（备注「蓝笔申论」），我把题库包直接发给你；用起来遇到问题也随时问我。" />
+      </div>
     </div>
 
     <!-- 筛选 -->
@@ -229,6 +236,7 @@ import { pickDaily } from '../data/daily'
 import { AUTHOR } from '../data/author'
 import { readPackFile, importPack } from '../bpq/importer'
 import { copyAuthorLine } from '../utils/watermark'
+import WeChatPanel from '../components/WeChatPanel.vue'
 
 const router = useRouter()
 
