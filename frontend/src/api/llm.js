@@ -1,3 +1,9 @@
+// ──────────────────────────────────────────────────────────────
+// 蓝笔申论 BluePencil · 作者 许一 <xuconghui_03@qq.com>
+// GitHub: https://github.com/xuyi19/bluepencli
+// Gitee : https://gitee.com/xuyi_19/bluepencil
+// 许可: AGPL-3.0 · 转发或修改请保留本署名
+// ──────────────────────────────────────────────────────────────
 import { apiBase, probeBackend, markBackendDown } from './backend'
 
 const CFG_KEY = 'llm_config'

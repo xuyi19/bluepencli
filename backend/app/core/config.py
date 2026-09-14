@@ -1,3 +1,9 @@
+# ──────────────────────────────────────────────────────────────
+# 蓝笔申论 BluePencil · 作者 许一 <xuconghui_03@qq.com>
+# GitHub: https://github.com/xuyi19/bluepencli
+# Gitee : https://gitee.com/xuyi_19/bluepencil
+# 许可: AGPL-3.0 · 转发或修改请保留本署名
+# ──────────────────────────────────────────────────────────────
 import json
 import os
 import sys
@@ -84,7 +90,7 @@ class Settings(BaseSettings):
     )
 
     APP_NAME: str = "蓝笔申论 BluePencil"
-    APP_VERSION: str = "0.4.0"
+    APP_VERSION: str = "0.6.0"
     DEBUG: bool = True
 
     # SQLite：默认落在可写数据目录下的 data/bluepencil.db，零外部服务依赖

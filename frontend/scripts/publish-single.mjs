@@ -7,7 +7,11 @@
 //   3. 发布后清掉 release/ 里同类的旧版本 —— release 只留最新一版，不堆历史副本。
 //
 // 用法（在 frontend/ 目录）：
-//   npm run release:single     # = build:single + 本脚本
+//   npm run release:single         # 公开版：dist-single/，不含 2022 起的私有卷
+//   npm run release:single:local   # 本机版：dist-single-local/，含私有卷，文件名带 -本地全量
+//
+// 公开版与本地版是**两套独立目录**，互不覆盖 —— 本地版只给自己用，
+// 发出去的永远是公开版。
 
 import {
   copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, unlinkSync,
@@ -19,9 +23,10 @@ const HERE = dirname(fileURLToPath(import.meta.url))
 const FRONTEND = resolve(HERE, '..')
 const ROOT = resolve(FRONTEND, '..')
 
-const SRC = join(FRONTEND, 'dist-single', 'index.html')
+const LOCAL = process.argv.includes('--local')
+const SRC = join(FRONTEND, LOCAL ? 'dist-single-local' : 'dist-single', 'index.html')
 const RELEASE = join(ROOT, 'release')
-const PREFIX = '蓝笔申论-单文件版'
+const PREFIX = LOCAL ? '蓝笔申论-单文件版-本地全量' : '蓝笔申论-单文件版'
 
 function fail(msg) {
   console.error(`\n✗ ${msg}\n`)
@@ -46,16 +51,19 @@ const outName = `${PREFIX}-${version}.html`
 const outPath = join(RELEASE, outName)
 
 if (!existsSync(SRC)) {
-  fail(`找不到单文件构建产物：${SRC}\n  先在 frontend/ 跑一次 npm run build:single`)
+  fail(`找不到单文件构建产物：${SRC}\n  先在 frontend/ 跑一次 ${LOCAL ? 'npm run build:single:local' : 'npm run build:single'}`)
 }
 mkdirSync(RELEASE, { recursive: true })
 copyFileSync(SRC, outPath)
 console.log(`✓ 已发布 ${outName}  (${(statSync(outPath).size / 1024).toFixed(0)} KB)`)
 
-// 清掉同类旧版本：旧的不带版本号的命名，以及版本号不是当前的
+// 清掉同类旧版本：旧的不带版本号的命名，以及版本号不是当前的。
+// 注意"本地全量"版与公开版名字互为前缀，必须互不误删：
+// 公开版跑的时候跳过带 `-本地全量` 的（那是自己本机的自用产物）。
 let removed = 0
 for (const name of readdirSync(RELEASE)) {
   if (!name.startsWith(PREFIX) || name === outName) continue
+  if (!LOCAL && name.includes('本地全量')) continue
   try {
     unlinkSync(join(RELEASE, name))
     console.log(`  清掉旧版本：${name}`)
