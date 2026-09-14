@@ -115,13 +115,17 @@ export async function loadTeacherDoc(teacherId) {
   return mod.default || ''
 }
 
-export async function buildTeacherSystemDeep(teacherId) {
+export async function buildTeacherSystemDeep(teacherId, { extra = '' } = {}) {
   const doc = await loadTeacherDoc(teacherId)
   // 去掉 frontmatter，减少无效 token
   const body = String(doc).replace(/^---[\s\S]*?---\s*/, '').trim()
   return buildTeacherSystem(teacherId, {
     deep: true,
-    extra: `\n【以下是该方法论的完整提炼稿，用于校准你的判断尺度。注意：其中包含面向考生讲课的表达，你在批改时应转化为对答案的判断，不要照抄讲课口吻。】\n${body}`,
+    // 采分点标准要放在方法论**之后**：先给判断尺度，再给该题的具体锚点，
+    // 顺序反了模型容易把方法论当补充说明而忽略。
+    extra: `\n【以下是该方法论的完整提炼稿，用于校准你的判断尺度。注意：其中包含面向考生讲课的表达，你在批改时应转化为对答案的判断，不要照抄讲课口吻。】\n${body}${
+      extra ? '\n\n' + extra : ''
+    }`,
   })
 }
 

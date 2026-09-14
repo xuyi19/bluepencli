@@ -25,6 +25,10 @@ import {
   FUSION_SCHEMA,
 } from './skills'
 import { parseJson } from '../utils/parse'
+// 第①层：题目标准层（采分点）——有则注入，无则裸判，绝不因此中断批改
+import { resolveStandard, buildStandardPrompt, buildStandardComparison } from './grading/standardResolver'
+// 第③层：校验层（硬规则）——纯代码算出来的客观事实
+import { runHardRules, formatRulesForPrompt } from '../utils/grading/rules'
 
 // 分歧阈值：最高分与最低分得分率差值超过此值即触发复核
 export const DISPUTE_THRESHOLD = 0.15
@@ -56,11 +60,11 @@ ${answer}`
 }
 
 /** 阶段1：单个老师独立阅卷 */
-async function gradeByTeacher(teacher, paper, { onProgress, signal, deep, taskId }) {
+async function gradeByTeacher(teacher, paper, { onProgress, signal, deep, taskId, extra = '' }) {
   onProgress?.({ type: 'teacher:start', teacherId: teacher.id })
   const system = deep
-    ? await buildTeacherSystemDeep(teacher.id)
-    : buildTeacherSystem(teacher.id)
+    ? await buildTeacherSystemDeep(teacher.id, { extra })
+    : buildTeacherSystem(teacher.id, { extra })
 
   const text = await chat({
     messages: [
@@ -121,7 +125,7 @@ export function detectDispute(results) {
 }
 
 /** 阶段3：圆桌辩论复核（仅在有分歧时执行） */
-async function debate(results, paper, { onProgress, signal, taskId }) {
+async function debate(results, paper, { onProgress, signal, taskId, facts = '' }) {
   onProgress?.({ type: 'stage', stage: 'debate' })
   const summaries = results
     .filter((r) => !r.error)
@@ -139,7 +143,9 @@ async function debate(results, paper, { onProgress, signal, taskId }) {
       { role: 'system', content: `${DEBATE_SYSTEM}\n\n${DEBATE_SCHEMA}` },
       {
         role: 'user',
-        content: `${paper}\n\n===== 各位老师的独立评分 =====\n${summaries}`,
+        content: `${paper}\n\n===== 各位老师的独立评分 =====\n${summaries}${
+          facts ? '\n\n' + facts : ''
+        }`,
       },
     ],
     stream: true,
@@ -152,7 +158,7 @@ async function debate(results, paper, { onProgress, signal, taskId }) {
 }
 
 /** 阶段4：观点融合（合议） */
-async function fuse(results, debateResult, paper, { onProgress, signal, taskId }) {
+async function fuse(results, debateResult, paper, { onProgress, signal, taskId, facts = '' }) {
   onProgress?.({ type: 'stage', stage: 'fusion' })
   const details = results
     .filter((r) => !r.error)
@@ -176,7 +182,12 @@ async function fuse(results, debateResult, paper, { onProgress, signal, taskId }
   const text = await chat({
     messages: [
       { role: 'system', content: `${FUSION_SYSTEM}\n\n${FUSION_SCHEMA}` },
-      { role: 'user', content: `${paper}\n\n===== 各老师独立批改 =====\n${details}${debateText}` },
+      {
+        role: 'user',
+        content: `${paper}\n\n===== 各老师独立批改 =====\n${details}${debateText}${
+          facts ? '\n\n' + facts : ''
+        }`,
+      },
     ],
     stream: true,
     signal,
@@ -232,10 +243,37 @@ export async function runGrading({ paper: paperInput, teacherIds, deep = false, 
 
   onProgress?.({ type: 'mode', mode, teacherIds, deep })
 
+  // ---------- 阶段0：客观校验（纯代码，先于模型） ----------
+  // 放在最前面有两个好处：① 结果与模型无关，可复算；② 万一模型全挂了，
+  // 至少还能告诉考生"字数超了 87 字""整段照抄材料"这种板上钉钉的事实。
+  const hardRules = runHardRules({
+    answer: paperInput.answer || '',
+    material: paperInput.material || '',
+    requirement: paperInput.requirement || '',
+    wordLimit: Number(paperInput.wordLimit) || 0,
+    maxScore: Number(paperInput.maxScore) || 0,
+    type: paperInput.questionType || '',
+  })
+  onProgress?.({ type: 'rules', hardRules })
+
+  // ---------- 阶段0.5：取该题的采分点标准（有则注入，无则为空串） ----------
+  const stdPrompt = buildStandardPrompt(paperInput.questionId, {
+    maxScore: Number(paperInput.maxScore) || 0,
+  })
+  const stdInfo = resolveStandard(paperInput.questionId)
+  onProgress?.({
+    type: 'standard',
+    hasStandard: !!stdInfo.standard,
+    pointCount: stdInfo.standard?.points?.length || 0,
+  })
+
+  // 硬规则的客观事实：给辩论与合议当旁证，避免"字数明显不够"却几位老师都不提
+  const facts = formatRulesForPrompt(hardRules)
+
   // ---------- 阶段1：并行独立阅卷 ----------
   onProgress?.({ type: 'stage', stage: 'grading' })
   const results = await Promise.all(
-    teachers.map((t) => gradeByTeacher(t, paper, { onProgress, signal, deep, taskId }))
+    teachers.map((t) => gradeByTeacher(t, paper, { onProgress, signal, deep, taskId, extra: stdPrompt }))
   )
 
   // ---------- 阶段2：分歧检测 ----------
@@ -256,6 +294,10 @@ export async function runGrading({ paper: paperInput, teacherIds, deep = false, 
     dispute,
     debate: null,
     fusion: null,
+    // 第③层产物：客观校验（字数/格式/结构/重复），纯代码可复算
+    hardRules,
+    // 第①层产物：采分点标准的逐点覆盖情况（无标准时为 null）
+    standard: buildStandardComparison(paperInput.questionId, paperInput.answer || ''),
     elapsed: 0,
     createdAt: startedAt,
   }
@@ -341,11 +383,11 @@ export async function runGrading({ paper: paperInput, teacherIds, deep = false, 
 
   // ---------- 三人及以上：圆桌合议 ----------
   const needDebate = dispute.disputed
-  const debateResult = needDebate ? await debate(results, paper, { onProgress, signal, taskId }) : null
+  const debateResult = needDebate ? await debate(results, paper, { onProgress, signal, taskId, facts }) : null
   output.debate = debateResult
   onProgress?.({ type: 'debate:done', debate: debateResult })
 
-  const fusion = await fuse(results, debateResult, paper, { onProgress, signal, taskId })
+  const fusion = await fuse(results, debateResult, paper, { onProgress, signal, taskId, facts })
   output.fusion = fusion
 
   const ws = weightedScore(results, teachers)

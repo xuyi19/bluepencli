@@ -18,6 +18,10 @@ const PRIVATE_DIR = resolve(HERE, 'src/data/real-exams-private')
 // 空实现：随仓库走，别人 clone 后靠它构建
 const PRIVATE_STUB = resolve(HERE, 'src/data/real-exams-private-stub')
 
+// 私有卷的**采分点标准**同样敏感（写出采分点等于泄题），走同一套分层机制。
+const PRIVATE_STD_DIR = resolve(HERE, 'src/data/standards-private')
+const PRIVATE_STD_STUB = resolve(HERE, 'src/data/standards-private-stub')
+
 // 四种构建产物，靠 --mode 区分（Windows 下 npm script 里没法直接写 `FOO=1 cmd`，
 // 所以用 mode 而不是环境变量，免得多装一个 cross-env）：
 //
@@ -39,6 +43,10 @@ export default defineConfig(({ mode }) => {
     ? resolve(PRIVATE_DIR, 'index.js')
     : resolve(PRIVATE_STUB, 'index.js')
 
+  const privateStdEntry = includePrivate && existsSync(PRIVATE_STD_DIR)
+    ? resolve(PRIVATE_STD_DIR, 'index.js')
+    : resolve(PRIVATE_STD_STUB, 'index.js')
+
   return {
     plugins: [vue(), ...(single ? [viteSingleFile()] : [])],
     resolve: {
@@ -46,6 +54,8 @@ export default defineConfig(({ mode }) => {
         // 私有卷的唯一入口。data/questions.js 只认这个别名，
         // 换目录 / 换空实现都在这一处完成，业务代码不用动。
         '@private-exams': privateEntry,
+        // 私有卷采分点标准，同样只认别名
+        '@private-standards': privateStdEntry,
       },
     },
     base: './',
