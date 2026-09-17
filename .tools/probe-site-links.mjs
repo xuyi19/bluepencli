@@ -1,12 +1,18 @@
 // 首页仓库入口 / 更新日志页的断言探针。
 //
-// 检查五件事：
-//   1. 首页有 GitHub / Gitee / 更新日志三个入口，且 href 指向本仓库的真实 remote
-//   2. 这三个入口自成一块，且排在首页「设置/配置」提示之上（data-testid 定位）
-//   3. 窄屏（500px）下首页不产生横向溢出（那排 pill 要换行，不能撑破布局）
+// 检查六件事：
+//   1. 首页能到达 GitHub / Gitee / 更新日志三个入口，且 href 指向本仓库的真实 remote
+//   2. 首页的仓库区块仍自成一块，且排在首页「设置/配置」提示之上（data-testid 定位）
+//   3. 窄屏（500px）下不产生横向溢出；日志入口在**抽屉**里够得着
+//      —— v0.6.0 起入口挪到了侧边栏底部，窄屏时它就是抽屉。别再回首页找那个胶囊：
+//      原来那条断言就是这么写的，从 v0.6.0 起一直在报假失败，而这条探针要起
+//      dev server 才跑，于是一路过了六个版本。
 //   4. 更新日志页渲染出的版本与仓库根 CHANGELOG.md 完全对应（不写死数量，
 //      否则每加一版就要来改这里）
-//   5. 两个页面都没有 console 报错
+//   5. 日志页的条目**真的可读**：markdown 记号变成了元素、折行的后半句在、缩进子条目在。
+//      v0.12.1 之前这三条全不成立，而页面能正常打开 —— 所以只有 1~4 项的话，
+//      页面读到一半断句都算"通过"。
+//   6. 两个页面都没有 console 报错
 //
 // 用法：node .tools/probe-site-links.mjs [base]
 
@@ -127,25 +133,51 @@ check('入口区块在配置提示之上',
   od.repo === true && od.setup === true && od.repoTop < od.setupTop,
   `repo=${od.repoTop} setup=${od.setupTop}`)
 
-// ---------- 3. 窄屏不溢出 ----------
+// ---------- 3. 窄屏：不溢出，且日志入口真的够得着 ----------
 await send('Emulation.setDeviceMetricsOverride', {
   width: 500, height: 900, deviceScaleFactor: 1, mobile: true,
 })
 await sleep(800)
 const overflow = await evaluate(`(() => {
   const de = document.documentElement
-  const pill = [...document.querySelectorAll('a')].find((a) => (a.textContent || '').includes('更新日志'))
-  const r = pill ? pill.getBoundingClientRect() : null
   return JSON.stringify({
     scrollW: de.scrollWidth,
     clientW: de.clientWidth,
-    pillRight: r ? Math.round(r.right) : -1,
-    pillTop: r ? Math.round(r.top + window.scrollY) : -1,
+    hasBurger: !!document.querySelector('button[aria-label="打开导航"]'),
   })
 })()`)
 const ov = JSON.parse(overflow)
 check('窄屏无横向溢出', ov.scrollW <= ov.clientW + 1, `scrollW=${ov.scrollW} clientW=${ov.clientW}`)
-check('更新日志入口在视口内', ov.pillRight > 0 && ov.pillRight <= ov.clientW + 1, `right=${ov.pillRight}`)
+check('窄屏有抽屉入口（汉堡按钮）', ov.hasBurger === true)
+
+// 打开抽屉再量：窄屏下侧边栏是抽屉，不打开的话那个入口根本不在视口里
+await evaluate(`(() => {
+  document.querySelector('button[aria-label="打开导航"]')?.click()
+  return true
+})()`)
+await sleep(600)
+const drawer = await evaluate(`(() => {
+  // 同一时刻 DOM 里有两个「日志」入口：桌面侧边栏那个（窄屏是 display:none）和抽屉里的。
+  // 只量真正渲染出来的那个 —— 直接 .find() 会拿到前面那个隐藏的，rect 全是 0，
+  // 于是断言看着像"入口跑出视口了"，其实是量错了元素。
+  const all = [...document.querySelectorAll('a')]
+    .filter((x) => (x.getAttribute('href') || '').endsWith('#/changelog'))
+  const vis = all
+    .map((a) => a.getBoundingClientRect())
+    .filter((r) => r.width > 0 && r.height > 0)
+  return JSON.stringify({
+    total: all.length,
+    visible: vis.length,
+    rects: vis.map((r) => ({ right: Math.round(r.right), bottom: Math.round(r.bottom) })),
+    vw: window.innerWidth,
+    vh: window.innerHeight,
+  })
+})()`)
+const dr = JSON.parse(drawer)
+check('抽屉里的更新日志入口够得着（在视口内）',
+  dr.visible >= 1 && dr.rects.every((r) =>
+    r.right > 0 && r.right <= dr.vw + 1 && r.bottom > 0 && r.bottom <= dr.vh + 1),
+  JSON.stringify(dr))
 await send('Emulation.clearDeviceMetricsOverride')
 
 // ---------- 4. 更新日志页 ----------
@@ -156,6 +188,11 @@ const raw = await evaluate(`JSON.stringify({
   versions: [...document.querySelectorAll('h2')].map((h) => h.innerText.trim()),
   sections: document.querySelectorAll('section').length,
   perVersion: [...document.querySelectorAll('section')].map((s) => s.querySelectorAll('.neu > div').length),
+  literalMarkup: document.body.innerText.includes('**错误类型表**'),
+  codes: document.querySelectorAll('code').length,
+  bolds: document.querySelectorAll('strong').length,
+  joinedTail: document.body.innerText.includes('整句照抄'),
+  nestedItem: document.body.innerText.includes('口令批次'),
 })`)
 const cl = JSON.parse(raw || '{}')
 check('版本数与 CHANGELOG.md 一致',
@@ -167,6 +204,16 @@ check('版本号顺序与文档一致',
 check('每版都有条目', (cl.perVersion || []).every((n) => n > 0), JSON.stringify(cl.perVersion))
 check('更新日志页有仓库入口', await evaluate(`document.body.innerText.includes('Gitee 仓库')`) === true)
 check('页面标注了数据来源', await evaluate(`document.body.innerText.includes('CHANGELOG.md')`) === true)
+
+// 可读性：这四条是 v0.12.1 补的。之前页面"能打开、版本数也对"，但内容读不了。
+check('条目没有把 markdown 记号当文字显示出来',
+  cl.literalMarkup === false, '原样显示的会正是 `**错误类型表**` 这一串')
+check('加粗与代码渲染成了元素（不是纯文本）',
+  cl.codes > 0 && cl.bolds > 0, `code=${cl.codes} strong=${cl.bolds}`)
+check('折行的后半句在（原来的截断回归）',
+  cl.joinedTail === true)
+check('缩进子条目在（原来整条被吞）',
+  cl.nestedItem === true)
 
 // ---------- 5. 无 console 报错 ----------
 // dev server 的 HMR websocket 在无头环境里连不上，会刷出「[vite] failed to connect to

@@ -2,7 +2,7 @@
 
 > 输入一篇作答 → 五位申论名师各按自己的方法论独立阅卷 → 分歧自动复核 → 圆桌合议出一份综合批改
 
-![Version](https://img.shields.io/badge/version-0.12.0-8B9D77?style=flat-square)
+![Version](https://img.shields.io/badge/version-0.12.1-8B9D77?style=flat-square)
 ![License](https://img.shields.io/badge/license-AGPL--3.0-5C4033?style=flat-square)
 ![Vue](https://img.shields.io/badge/Vue-3.5-4FC08D?style=flat-square&logo=vuedotjs)
 ![Vite](https://img.shields.io/badge/Vite-8-646CFF?style=flat-square&logo=vite)
@@ -391,7 +391,8 @@ bluepencil/
 │   │   │   ├── daily.js                # 每日一练选题：按本地日期散列，确定性出题
 │   │   │   ├── site.js                 # 仓库地址与产品名（转发 author.js）
 │   │   │   ├── wechat.js               # 微信二维码与群码有效期（唯一来源，图片走 import）
-│   │   │   ├── changelog.js            # 解析仓库根 CHANGELOG.md，供首页与日志页使用
+│   │   │   ├── changelog.js            # 读入仓库根 CHANGELOG.md（只做 ?raw 引入与转发）
+│   │   │   ├── changelog-parse.js      #   CHANGELOG 解析器（纯函数，单测直接 import 这一份）
 │   │   │   └── teachers/*.md           # 五位老师讲义原文（?raw 懒加载）
 │   │   ├── views/                  # 首页/老师/文章库/题库/练习批改/复盘/统计/设置/更新日志
 │   │   ├── components/
@@ -439,9 +440,11 @@ bluepencil/
 │   ├── probe-pack-drop.mjs         # 拖拽导入（真 Chrome 12 项：提示层 / 计数 / 真触发导入）
 │   ├── test-issue.mjs              # 发放工具（24 项：换批换口令 / 水印各异 / 台账哈希）
 │   ├── test-review-card.mjs        # 错误类型归一化 + 复盘卡（38 项，含 5 组反例专测）
+│   ├── test-changelog.mjs          # 更新日志解析（23 项：条目不能丢/句子不能断/记号不能漏）
 │   ├── probe-practice.mjs          # 练习页断言：自动载题 + 题库带入字段不丢 + 换题
 │   ├── probe-gridpaper.mjs         # 方格纸断言：25 字必须正好一行
-│   ├── probe-site-links.mjs        # 首页入口与日志页断言：位置正确 + 与 CHANGELOG.md 一致
+│   ├── probe-site-links.mjs        # 首页入口与日志页断言：位置正确 + 与 CHANGELOG.md 一致 + 条目可读
+│   ├── probe-changelog.mjs         # 日志页诊断：真浏览器打开任意地址（含单文件版 file://）看渲染与报错
 │   ├── probe-wechat.mjs            # 微信引流断言（支持 BP_BASE 指向桌面版产物）
 │   ├── probe-standard-panel.mjs    # 客观校验 / 采分点对照两块面板的渲染验证
 │   ├── cdp-probe.mjs               # CDP 探针：真实等待 + 读页面文本
@@ -644,6 +647,7 @@ node .tools/probe-bpq-browser.mjs    # 跨运行时：Node 加密 → 浏览器�
 node .tools/probe-pack-drop.mjs      # 拖拽导入：12 项（真 Chrome，合成原生拖拽事件）
 node .tools/test-issue.mjs           # 发放工具：24 项（临时目录跑，不碰真台账）
 node .tools/test-review-card.mjs      # 错误类型归一化 + 复盘卡：38 项（纯代码，无需 Key）
+node .tools/test-changelog.mjs        # 更新日志解析：23 项（纯代码，改完 CHANGELOG.md 必跑）
 ```
 
 | 脚本 | 用途 |
@@ -652,7 +656,7 @@ node .tools/test-review-card.mjs      # 错误类型归一化 + 复盘卡：38 �
 | `e2e-grade.mjs` | CDP 驱动：注入配置 → 填表 → 点「开始批改」→ 真实等待 → 核对结果页元素。用 Vue 的原生 setter 触发 `input`，`v-model` 才会更新 |
 | `probe-practice.mjs` | 练习页断言：进页面自动载入题目、从题库带入时 `requirement/maxScore/wordLimit` 不丢、换一题清空旧作答 |
 | `probe-gridpaper.mjs` | 方格纸断言：24/25/26/50/51 字分别应占 1/1/2/2/3 行 |
-| `probe-site-links.mjs` | 首页三个入口的 `href` 是否指向真实 remote、500px 窄屏是否横向溢出、更新日志页是否渲染全部版本、有无 console 报错（自动滤掉 dev server 的 HMR 噪声） |
+| `probe-site-links.mjs` | 首页三个入口的 `href` 是否指向真实 remote、500px 窄屏是否横向溢出**且抽屉里的日志入口够得着**、更新日志页是否渲染全部版本**且条目可读**（记号变成元素、折行后半句在、子条目在）、有无 console 报错（自动滤掉 dev server 的 HMR 噪声） |
 | `cdp-probe.mjs` | 真实等待 N 秒后读 `document.body.innerText` |
 | `batch-shots.mjs` | 逐条路由截图并检查标志性文案 |
 | `shot-full.mjs` | 整页截图（`captureBeyondViewport`）。viewport 截图看不到题目、材料、方格纸，因为它们都在折叠线以下 |
@@ -667,6 +671,8 @@ node .tools/test-review-card.mjs      # 错误类型归一化 + 复盘卡：38 �
 | `probe-pack-drop.mjs` | 拖拽导入。合成原生 `DragEvent` 在真 Chrome 里走一遍：提示层显隐、**划过子元素不闪**（`dragenter` 会随鼠标划过每个子元素反复触发，用布尔值必然闪）、纯文本拖拽不误触发、松手 `.bpq` 真的走完导入链路、不支持的类型无副作用 |
 | `test-issue.mjs` | 发放工具的**约束**（不是"代码能跑"）：换批必须换口令（显式复用会被拒）、同批次同口令但水印各异、台账 sha256 与磁盘文件一致、包被改后 `--verify-ledger` 报错。全程临时目录，不碰真台账 |
 | `test-review-card.mjs` | 错误类型归一化与复盘卡。重点是**口径**：同一个毛病不管模型怎么写都要落进同一格（37 例，含 `展开不足`／`形式不应题` 这类顺序陷阱的反例专测）、复合 id 写法、共识排序、单人模式不许谎称"多位老师都提到"、`其他` 不上榜 |
+| `probe-changelog.mjs` | 日志页的**诊断**（不是断言）：真浏览器打开任意地址 —— 包括**单文件版的 `file://`**，那是唯一能验"双击打开的本地 HTML"这条通道的办法 —— 打印版本节点数、条目行数、正文与控制台报错，用来回答「是数据没了还是渲染炸了」 |
+| `test-changelog.mjs` | 更新日志页的**内容完整性**。起因很具体：页面能正常打开、版本数也对，但 63/104 条把 markdown 记号当文字显示、折行的后半句整段丢、缩进子条目一条不渲染 —— **「能打开」不等于「能读」**。所以这里不看渲染了几个版本，看条目有没有丢、句子有没有被切在半路、记号有没有漏出去，并直接钉住「整句照抄」这类折行处的词。解析器从 `frontend/src/data/changelog-parse.js` import，测的就是页面在跑的那份代码 |
 | `e2e-grade.mjs` | 假 LLM 跑完整批改链路（答题 → 批改 → 色标批注 → 复盘卡 → 归档）。断言里包含复盘卡：三位老师的自由文本批注真的聚成了两类并命中共识标记 |
 | `check_release_private.py` | 破开每个归档产物的 chunk 清单，报「exam chunk 数 / 是否含私有卷 / 功能指纹」，**发之前跑一遍** |
 
