@@ -14,7 +14,7 @@ const ROUTES = [
   ['questions', 'questions', ['题库']],
   ['articles', 'articles', ['文章库']],
   ['practice', 'practice', ['练习批改', '谁来批改']],
-  ['records', 'records', ['复盘']],
+  ['records', 'records', ['历史批改']],
   ['stats', 'stats', ['统计']],
   ['settings', 'settings', ['API']],
   ['changelog', 'changelog', ['更新日志', 'GitHub', 'Gitee']],

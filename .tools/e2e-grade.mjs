@@ -172,6 +172,19 @@ const checks = await evaluate(`
   const t = document.body.innerText
   const q = (s) => t.includes(s)
   const marked = document.querySelectorAll('[style*="border-bottom"]').length
+
+  // 复盘卡：单独取出来验，别混在整页文本里（"改："这种字样别处也有）
+  const sec = [...document.querySelectorAll('section')].find(
+    (s) => s.querySelector('span')?.textContent?.trim() === '复盘卡')
+  const card = sec ? {
+    文本: sec.innerText,
+    上榜条数: sec.querySelectorAll('span.w-5').length,
+    有共识标记: sec.innerText.includes('位老师都提到'),
+    有自检清单: sec.innerText.includes('下次动笔前，先按这'),
+    有原文引用: sec.innerText.includes('—'),
+    有改法: sec.innerText.includes('改：'),
+  } : null
+
   return {
     进入结果页: q('批改结果'),
     总分: q('33') || q('/ 40'),
@@ -181,10 +194,20 @@ const checks = await evaluate(`
     色标段落数: marked,
     已归档到docs: q('docs/practice'),
     只存本机: q('未写入 docs'),
+    复盘卡: card,
   }
 })()
 `)
 console.log(JSON.stringify(checks, null, 2))
+
+// 6) 复盘卡断言：三师各自都标了「采分词缺失」与「空泛表态」，
+//    归一化后应各自聚成一类并命中「多位老师都提到」——这正是 V3 聚合要证明的事。
+const rc = checks.复盘卡
+const rcOk = !!rc
+  && rc.上榜条数 >= 1 && rc.上榜条数 <= 3
+  && rc.有共识标记 && rc.有自检清单 && rc.有改法
+console.log(rcOk ? '✓ 复盘卡：真实批改链路上渲染正确' : '✗ 复盘卡渲染有问题')
+if (rc) console.log('   上榜条数=' + rc.上榜条数 + ' 共识=' + rc.有共识标记 + ' 清单=' + rc.有自检清单)
 
 // 6) 截图：整页存档 + 第一屏特写（缩小图看不清细节）
 const shotRes = await send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true })

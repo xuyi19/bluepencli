@@ -2,7 +2,7 @@
 
 > 输入一篇作答 → 五位申论名师各按自己的方法论独立阅卷 → 分歧自动复核 → 圆桌合议出一份综合批改
 
-![Version](https://img.shields.io/badge/version-0.11.0-8B9D77?style=flat-square)
+![Version](https://img.shields.io/badge/version-0.12.0-8B9D77?style=flat-square)
 ![License](https://img.shields.io/badge/license-AGPL--3.0-5C4033?style=flat-square)
 ![Vue](https://img.shields.io/badge/Vue-3.5-4FC08D?style=flat-square&logo=vuedotjs)
 ![Vite](https://img.shields.io/badge/Vite-8-646CFF?style=flat-square&logo=vite)
@@ -372,11 +372,14 @@ bluepencil/
 │   │   │   ├── crypto.js           # v2 的加解密与签名（作者侧脚本 import 同一份）
 │   │   │   └── pubkey.js           # 验签公钥，由 bpq-keygen.mjs 写入（公钥本就该公开）
 │   │   ├── utils/
-│   │   │   └── fileDrop.js         # 整页拖拽接收文件（.bpq 拖进窗口就能导入）
+│   │   │   ├── fileDrop.js         # 整页拖拽接收文件（.bpq 拖进窗口就能导入）
+│   │   │   └── grading/
+│   │   │       └── reviewCard.js   # 复盘卡 + 短板统计（共识优先排序，纯代码可复算）
 │   │   ├── data/
 │   │   │   ├── author.js               # **作者信息唯一来源**（署名 / 邮箱 / 仓库 / 许可）
 │   │   │   ├── builtin-articles.json   # 内置 31 篇时评
 │   │   │   ├── builtin-questions.js    # 内置 15 道题（含完整材料与参考答案，标注为仿真）
+│   │   │   ├── error-taxonomy.js       # **错误类型统一口径**（V3 聚合的地基）
 │   │   │   ├── questions.js            # 题库统一入口：仿真 + 公开真题 + 私有真题
 │   │   │   ├── real-exams/             # 公开真题（2010–2021，自动生成，进仓库）
 │   │   │   ├── real-exams-private/     # 私有真题（2022 起，自动生成，**已 gitignore**）
@@ -435,6 +438,7 @@ bluepencil/
 │   ├── probe-bpq-browser.mjs       # 跨运行时验证：Node 加密 → 真浏览器验签解密
 │   ├── probe-pack-drop.mjs         # 拖拽导入（真 Chrome 12 项：提示层 / 计数 / 真触发导入）
 │   ├── test-issue.mjs              # 发放工具（24 项：换批换口令 / 水印各异 / 台账哈希）
+│   ├── test-review-card.mjs        # 错误类型归一化 + 复盘卡（38 项，含 5 组反例专测）
 │   ├── probe-practice.mjs          # 练习页断言：自动载题 + 题库带入字段不丢 + 换题
 │   ├── probe-gridpaper.mjs         # 方格纸断言：25 字必须正好一行
 │   ├── probe-site-links.mjs        # 首页入口与日志页断言：位置正确 + 与 CHANGELOG.md 一致
@@ -639,6 +643,7 @@ node .tools/test-bpq-crypto.mjs      # 算法与失败分支：20 项
 node .tools/probe-bpq-browser.mjs    # 跨运行时：Node 加密 → 浏览器验签解密
 node .tools/probe-pack-drop.mjs      # 拖拽导入：12 项（真 Chrome，合成原生拖拽事件）
 node .tools/test-issue.mjs           # 发放工具：24 项（临时目录跑，不碰真台账）
+node .tools/test-review-card.mjs      # 错误类型归一化 + 复盘卡：38 项（纯代码，无需 Key）
 ```
 
 | 脚本 | 用途 |
@@ -661,6 +666,8 @@ node .tools/test-issue.mjs           # 发放工具：24 项（临时目录跑�
 | `probe-bpq-browser.mjs` | 作者用 Node 加出来的密，**真浏览器**能不能验签解开。跨运行时是最容易被忽略的失败面：标准一致但实现有差异，真出事时作者自测完全正常 |
 | `probe-pack-drop.mjs` | 拖拽导入。合成原生 `DragEvent` 在真 Chrome 里走一遍：提示层显隐、**划过子元素不闪**（`dragenter` 会随鼠标划过每个子元素反复触发，用布尔值必然闪）、纯文本拖拽不误触发、松手 `.bpq` 真的走完导入链路、不支持的类型无副作用 |
 | `test-issue.mjs` | 发放工具的**约束**（不是"代码能跑"）：换批必须换口令（显式复用会被拒）、同批次同口令但水印各异、台账 sha256 与磁盘文件一致、包被改后 `--verify-ledger` 报错。全程临时目录，不碰真台账 |
+| `test-review-card.mjs` | 错误类型归一化与复盘卡。重点是**口径**：同一个毛病不管模型怎么写都要落进同一格（37 例，含 `展开不足`／`形式不应题` 这类顺序陷阱的反例专测）、复合 id 写法、共识排序、单人模式不许谎称"多位老师都提到"、`其他` 不上榜 |
+| `e2e-grade.mjs` | 假 LLM 跑完整批改链路（答题 → 批改 → 色标批注 → 复盘卡 → 归档）。断言里包含复盘卡：三位老师的自由文本批注真的聚成了两类并命中共识标记 |
 | `check_release_private.py` | 破开每个归档产物的 chunk 清单，报「exam chunk 数 / 是否含私有卷 / 功能指纹」，**发之前跑一遍** |
 
 > **为什么评分内核要有纯代码单测？**

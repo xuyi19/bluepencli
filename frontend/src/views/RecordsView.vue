@@ -3,7 +3,7 @@
 
     <div class="flex flex-wrap items-end justify-between gap-4 mb-6">
       <div>
-        <h1 class="text-xl font-semibold text-c-ink">复盘</h1>
+        <h1 class="text-xl font-semibold text-c-ink">历史批改</h1>
         <p class="text-sm text-c-muted mt-1.5">
           共 {{ filtered.length }} 篇 ·
           <span class="text-c-muted">归档在 docs/practice/，也可在这里回看</span>
@@ -88,6 +88,9 @@
               </div>
             </div>
           </div>
+
+          <!-- 复盘卡：回看旧记录时先看这个，不用再翻一遍几十条意见 -->
+          <ReviewCard :record="detail" />
 
           <!-- 老师色标批注 -->
           <div v-if="detail.answer" class="rounded-2xl p-5 neu-inset mb-6">
@@ -260,6 +263,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import ScoreRing from '../components/ScoreRing.vue'
 import AnnotatedAnswer from '../components/AnnotatedAnswer.vue'
+import ReviewCard from '../components/ReviewCard.vue'
 import { TEACHERS, MODE_LABEL } from '../agents/teachers'
 import {
   listAllRecords,

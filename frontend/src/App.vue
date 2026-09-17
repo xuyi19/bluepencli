@@ -67,7 +67,9 @@ const NAV = [
   { group: '内容', path: '/questions', label: '题库' },
   { group: '内容', path: '/articles', label: '文章库' },
   { group: '实战', path: '/practice', label: '练习批改' },
-  { group: '复盘', path: '/records', label: '复盘' },
+  // 分组名与条目名不能同名：分组头也是"复盘"，条目再叫"复盘"，
+  // 侧边栏会出现两行一模一样的字，看着像重复项。
+  { group: '复盘', path: '/records', label: '历史批改' },
   { group: '复盘', path: '/stats', label: '统计' },
 ]
 

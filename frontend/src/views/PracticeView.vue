@@ -384,6 +384,9 @@
         </div>
       </section>
 
+      <!-- 复盘卡：考生看完分数最想知道"那我改哪儿"，所以放在分数下面第一个位置 -->
+      <ReviewCard :record="report" />
+
       <!-- 客观校验（硬规则）：纯代码算出的板上钉钉的事实，与模型无关 -->
       <section v-if="report.hardRules" class="rounded-2xl p-5 neu mb-6">
         <div class="flex items-center justify-between mb-3">
@@ -715,6 +718,7 @@ import { RouterLink, useRoute } from 'vue-router'
 import { toast } from '../utils/toast'
 import ScoreRing from '../components/ScoreRing.vue'
 import AnnotatedAnswer from '../components/AnnotatedAnswer.vue'
+import ReviewCard from '../components/ReviewCard.vue'
 import GridPaper from '../components/GridPaper.vue'
 import { chat } from '../api/llm'
 import { buildFollowupMessages, buildSampleMessages } from '../prompts'
