@@ -71,6 +71,10 @@ const NAV = [
   // 侧边栏会出现两行一模一样的字，看着像重复项。
   { group: '复盘', path: '/records', label: '历史批改' },
   { group: '复盘', path: '/stats', label: '统计' },
+  // 「更新日志」曾经只做侧边栏底部那排小胶囊（和 GitHub/Gitee 三等分，61×28px）。
+  // 那排胶囊间隙只有 6px，点偏一点就落进缝里，症状是"点了没反应"——
+  // 被当成"页面坏了"报过。日志是用户会主动去翻的入口，给它一个正常尺寸的条目。
+  { group: '关于', path: '/changelog', label: '更新日志' },
 ]
 
 const backendUp = ref(false)

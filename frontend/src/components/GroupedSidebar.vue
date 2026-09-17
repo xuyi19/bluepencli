@@ -68,9 +68,11 @@
         <span>加微信 / 交流群</span>
       </button>
 
-      <!-- 开源入口：GitHub / Gitee / 更新日志。
+      <!-- 开源入口：GitHub / Gitee。
            放侧边栏而不是首页页脚 —— 这是"关于这个项目"的信息，任何时候都该够得着，
-           不该只在首页出现。三个挤在 200px 里，所以用等宽小胶囊而不是大按钮。 -->
+           不该只在首页出现。两个挤在 200px 里，所以用等宽小胶囊而不是大按钮。
+           （「更新日志」曾在这里当第三个胶囊，61×28px、间隙只有 6px，
+           点偏一点就落进缝里，症状是"点了没反应"。已提升成上方导航里的正式条目。） -->
       <div class="flex items-center gap-1.5 px-0.5">
         <a :href="AUTHOR.github" target="_blank" rel="noopener" title="GitHub 仓库"
           class="flex-1 h-7 rounded-lg border border-c-line flex items-center justify-center gap-1
@@ -92,18 +94,6 @@
           </svg>
           <span>Gitee</span>
         </a>
-
-        <RouterLink to="/changelog" @click="emit('navigate')" title="更新日志"
-          class="flex-1 h-7 rounded-lg border border-c-line flex items-center justify-center gap-1
-            text-[11px] text-c-muted leading-none transition-colors duration-300 ease-in-out
-            hover:text-c-bark hover:bg-c-barkSoft hover:border-transparent"
-          :class="route.path.startsWith('/changelog') ? 'bg-c-barkSoft text-c-bark border-transparent' : ''">
-          <svg class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-            stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
-            <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>
-          </svg>
-          <span>日志</span>
-        </RouterLink>
       </div>
 
       <RouterLink to="/settings"
