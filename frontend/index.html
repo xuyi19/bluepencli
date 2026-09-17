@@ -22,5 +22,41 @@
   <body>
     <div id="app"></div>
     <script type="module" src="/src/main.js"></script>
+
+    <!--
+      版本自检：页面加载后问一次本地服务的版本号，不一致就自己刷新一次。
+
+      为什么需要它：桌面版每次启动都开同一个地址，浏览器很可能直接复用那个
+      早就打开的标签页 —— 页面里的代码可能还是好几版之前的，新功能点了没反应，
+      而"换新版"看起来毫无作用，因为那个页面根本收不到修复。
+      （实测遇到过 v0.8.1 留下的标签页。）
+
+      几条约束：
+        · 按**服务端版本号**记账，同一个版本只刷一次，不会停不下来；
+        · 只在拿得到 /api/v1/health 时判断 —— 单文件版是 file:// 打开的，
+          没有后端，fetch 直接失败并静默跳过；
+        · 用相对地址请求（没有前导斜杠），这样部署在子路径下也对。
+    -->
+    <script>
+      (function () {
+        var meta = document.querySelector('meta[name="app-version"]')
+        var mine = meta && meta.getAttribute('content')
+        if (!mine || location.protocol === 'file:') return
+        fetch('api/v1/health', { cache: 'no-store' })
+          .then(function (r) { return r.json() })
+          .then(function (d) {
+            var theirs = d && d.version
+            if (!theirs || theirs === mine) return
+            var KEY = 'bp:version-reloaded'
+            try {
+              if (sessionStorage.getItem(KEY) === theirs) return
+              sessionStorage.setItem(KEY, theirs)
+            } catch (e) { /* 隐私模式：存不下就只刷这一次 */ }
+            console.info('[蓝笔] 页面是 v' + mine + '，服务已是 v' + theirs + '，正在刷新…')
+            location.reload()
+          })
+          .catch(function () { /* 没有后端（单文件版 / 浏览器直连）就跳过 */ })
+      })()
+    </script>
   </body>
 </html>

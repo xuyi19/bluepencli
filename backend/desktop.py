@@ -90,11 +90,17 @@ def _running_version(port: int, timeout: float = 1.0) -> str | None:
         return None
 
 
-def _open_browser_when_ready(port: int, delay: float = 0.0) -> None:
-    """等端口真正可连上再开浏览器，避免打开时白屏。"""
+def _open_browser_when_ready(port: int, version: str = "", delay: float = 0.0) -> None:
+    """等端口真正可连上再开浏览器，避免打开时白屏。
+
+    地址带上版本号（`/?v=0.13.2`）是刻意的：如果每次都开同一个地址，
+    浏览器很可能**直接复用那个早就打开的标签页** —— 页面里的代码还是好几版之前的，
+    新功能点了没反应，而"换新版"看起来毫无作用，因为那个页面根本收不到修复。
+    URL 不同，浏览器就必须重新加载文档，拿到的一定是当前这一版的界面。
+    """
     if delay:
         time.sleep(delay)
-    url = f"http://127.0.0.1:{port}/"
+    url = f"http://127.0.0.1:{port}/" + (f"?v={version}" if version else "")
     for _ in range(60):  # 最多等 30 秒
         if _already_running(port):
             break
@@ -117,13 +123,18 @@ def _shutdown_on_page_close(server: uvicorn.Server) -> None:
     server.should_exit = True
 
 
-def _banner(port: int) -> None:
+def _banner(port: int, version: str = "") -> None:
     line = "─" * 52
+    # 地址带上版本号：与真正打开的那个 URL 保持一致。
+    # 横幅里写着"手动复制上面的地址访问"——如果这里印的是不带版本号的地址，
+    # 用户粘进浏览器就可能落回那个早就打开的旧标签页，正是我们要避免的情形。
+    url = f"http://127.0.0.1:{port}/" + (f"?v={version}" if version else "")
     print()
     print(line)
     print("  蓝笔申论 BluePencil  ·  本地服务已启动")
     print(line)
-    print(f"  界面地址 : http://127.0.0.1:{port}/")
+    print(f"  版本     : v{version}" if version else "  版本     : —")
+    print(f"  界面地址 : {url}")
     print(f"  接口文档 : http://127.0.0.1:{port}/docs")
     print()
     print("  浏览器会自动打开；若没弹出，手动复制上面的地址访问。")
@@ -148,8 +159,8 @@ def main() -> None:
     # 版本不同就当作"旧窗口还开着"，另起一个端口，绝不把用户带去旧界面。
     running = _running_version(DEFAULT_PORT)
     if running is not None and running == current:
-        print(f"检测到已在运行的实例 v{running}，直接打开浏览器：http://127.0.0.1:{DEFAULT_PORT}/")
-        webbrowser.open(f"http://127.0.0.1:{DEFAULT_PORT}/")
+        print(f"检测到已在运行的实例 v{running}，直接打开浏览器：http://127.0.0.1:{DEFAULT_PORT}/?v={running}")
+        webbrowser.open(f"http://127.0.0.1:{DEFAULT_PORT}/?v={running}")
         return
 
     port = _pick_port()
@@ -170,10 +181,12 @@ def main() -> None:
         print("⚠️  未找到前端构建产物，界面将无法访问（API 仍可用）。")
         print("    请先在 frontend/ 执行 npm run build 后重新打包。")
 
-    _banner(port)
+    _banner(port, current)
 
     if "--no-browser" not in sys.argv:
-        threading.Thread(target=_open_browser_when_ready, args=(port,), daemon=True).start()
+        threading.Thread(
+            target=_open_browser_when_ready, args=(port, current), daemon=True
+        ).start()
 
     # 用显式的 Server 对象（而不是 uvicorn.run 的语法糖）：
     # 关页即退需要能拿到 server 句柄、把 should_exit 置真，才能优雅退出。

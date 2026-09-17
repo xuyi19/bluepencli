@@ -65,6 +65,21 @@ check('没有条目把 Markdown 记号原样显示出来',
   withMark.length === 0,
   withMark.length ? `${withMark.length} 条，例如 ${withMark[0].version}「${withMark[0].text.slice(0, 40)}」` : `${allItems.length} 条全干净`)
 
+// 占位符是解析器内部的东西，**绝不能**出现在页面上。
+// 它长这样：\u0000 + 序号 + \u0000 —— 正文里不会自然出现这个字符，
+// 一旦漏出去，用户看到的就是"该显示 createRouter 的地方变成一串乱码"。
+// ⚠️ 这一条是补出来的、也是被漏掉过一次的：v0.13.1 的条目里写了
+// 「**在 \`createRouter\` 之前**」，代码写在加粗**里面**，挖走代码后占位符落在了
+// bold 片段上，而还原那一步只处理纯文本片段 —— 上面那条记号检查只看 `**` 和反引号，
+// 对 NUL 完全无感，于是 17 版 133 条全绿、页面上却是一串乱码。
+// 教训：**「记号没原样显示」不等于「文字是对的」**。
+const leaked = allItems.filter((i) => (i.parts || []).some((p) => String(p.v).includes('\u0000')))
+check('占位符没有漏进页面（内部记号，露出来就是乱码）',
+  leaked.length === 0,
+  leaked.length
+    ? `${leaked.length} 条，例如 ${leaked[0].version}「${leaked[0].text.slice(0, 60)}」`
+    : `${allItems.length} 条全干净`)
+
 check('条目文本非空',
   allItems.every((i) => i.text.trim().length > 0))
 
@@ -132,6 +147,16 @@ const starInCode = parseInline('图片走 `public/`——**单文件版是双击
 check('代码片段里的 * 不干扰加粗匹配',
   starInCode.some((s) => s.t === 'bold' && s.v === '单文件版是双击打开的本地 HTML'),
   JSON.stringify(starInCode.map((s) => `${s.t}:${s.v.slice(0, 12)}`)))
+
+// 反例：代码写在**加粗里面**。挖走代码后占位符会落在 bold 片段上，
+// 还原时不能只认 text 片段 —— 否则它原样进 DOM。
+const boldCode = parseInline('**在 `createRouter` 之前**把地址改回那一条')
+check('加粗里的代码能正确还原（占位符不许漏）',
+  !plainText(boldCode).includes('\u0000') && plainText(boldCode) === '在 createRouter 之前把地址改回那一条',
+  JSON.stringify(boldCode.map((s) => `${s.t}:${s.v}`)))
+check('加粗里的代码切分正确（加粗外的文字仍是加粗）',
+  JSON.stringify(boldCode.map((s) => s.t)) === JSON.stringify(['bold', 'code', 'bold', 'text']),
+  JSON.stringify(boldCode.map((s) => s.t)))
 
 // 反例：中文之间不补空格
 const cjk = parseInline('中文')

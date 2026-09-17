@@ -68,19 +68,24 @@ export function parseInline(s) {
   }
   if (last < masked.length) segs.push({ t: 'text', v: masked.slice(last) })
 
-  // 还原占位符：一个片段里可能混着文字与代码，所以还要再切一次
+  // 还原占位符：**任何片段**里都可能混着代码，不只是纯文本。
+  // 「代码写在加粗里面」—— `**在 \`createRouter\` 之前**` —— 挖走代码后，
+  // 占位符落在 bold 片段上；早先这里只放行 text，于是它原样进了 DOM，
+  // 页面上显示成一串被 \u0000 包着的数字。
+  // 复原时保留片段原来的类型：加粗里的文字仍是加粗，只有代码段退成 code。
   return mergeText(segs.flatMap(expandCodes))
 
   function expandCodes(seg) {
-    if (seg.t !== 'text' || !seg.v.includes('\u0000')) return [seg]
+    const v = seg.v || ''
+    if (!v.includes('\u0000')) return [seg]
     const out = []
     let at = 0
-    for (const m of seg.v.matchAll(PLACEHOLDER_RE)) {
-      if (m.index > at) out.push({ t: 'text', v: seg.v.slice(at, m.index) })
+    for (const m of v.matchAll(PLACEHOLDER_RE)) {
+      if (m.index > at) out.push({ t: seg.t, v: v.slice(at, m.index) })
       out.push({ t: 'code', v: codes[Number(m[1])] })
       at = m.index + m[0].length
     }
-    if (at < seg.v.length) out.push({ t: 'text', v: seg.v.slice(at) })
+    if (at < v.length) out.push({ t: seg.t, v: v.slice(at) })
     return out
   }
 }

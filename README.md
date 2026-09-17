@@ -441,12 +441,14 @@ bluepencil/
 │   ├── probe-pack-drop.mjs         # 拖拽导入（真 Chrome 12 项：提示层 / 计数 / 真触发导入）
 │   ├── test-issue.mjs              # 发放工具（24 项：换批换口令 / 水印各异 / 台账哈希）
 │   ├── test-review-card.mjs        # 错误类型归一化 + 复盘卡（38 项，含 5 组反例专测）
-│   ├── test-changelog.mjs          # 更新日志解析（23 项：条目不能丢/句子不能断/记号不能漏）
+│   ├── test-changelog.mjs          # 更新日志解析（条目不能丢/句子不能断/记号不能漏/占位符不能露）
+│   ├── test-route-eager.mjs        # 路由必须静态导入：源码不许有懒加载、产物不许有页面分片
 │   ├── probe-practice.mjs          # 练习页断言：自动载题 + 题库带入字段不丢 + 换题
 │   ├── probe-gridpaper.mjs         # 方格纸断言：25 字必须正好一行
 │   ├── probe-site-links.mjs        # 首页入口与日志页断言：位置正确 + 与 CHANGELOG.md 一致 + 条目可读
 │   ├── probe-changelog.mjs         # 日志页诊断：真浏览器打开任意地址（含单文件版 file://）看渲染与报错
 │   ├── probe-nav-click.mjs         # 点击导航：真鼠标事件逐个点侧边栏入口，量实际尺寸并看 hash 变没变
+│   ├── probe-version-reload.mjs    # 版本自检：伪造服务端版本，验"只刷一次"且版本一致时不乱刷
 │   ├── probe-weakness.mjs          # 错题本：注入构造记录，验跨记录聚合（同类问题记到几份）
 │   ├── probe-wechat.mjs            # 微信引流断言（支持 BP_BASE 指向桌面版产物）
 │   ├── probe-standard-panel.mjs    # 客观校验 / 采分点对照两块面板的渲染验证
@@ -655,7 +657,8 @@ node .tools/probe-bpq-browser.mjs    # 跨运行时：Node 加密 → 浏览器�
 node .tools/probe-pack-drop.mjs      # 拖拽导入：12 项（真 Chrome，合成原生拖拽事件）
 node .tools/test-issue.mjs           # 发放工具：24 项（临时目录跑，不碰真台账）
 node .tools/test-review-card.mjs      # 错误类型归一化 + 复盘卡：38 项（纯代码，无需 Key）
-node .tools/test-changelog.mjs        # 更新日志解析：23 项（纯代码，改完 CHANGELOG.md 必跑）
+node .tools/test-changelog.mjs        # 更新日志解析（纯代码，改完 CHANGELOG.md 必跑）
+node .tools/test-route-eager.mjs      # 路由静态导入护栏（改路由 / 改 vite 分包配置后必跑）
 ```
 
 | 脚本 | 用途 |
@@ -683,6 +686,8 @@ node .tools/test-changelog.mjs        # 更新日志解析：23 项（纯代码�
 | `test-changelog.mjs` | 更新日志页的**内容完整性**。起因很具体：页面能正常打开、版本数也对，但 63/104 条把 markdown 记号当文字显示、折行的后半句整段丢、缩进子条目一条不渲染 —— **「能打开」不等于「能读」**。所以这里不看渲染了几个版本，看条目有没有丢、句子有没有被切在半路、记号有没有漏出去，并直接钉住「整句照抄」这类折行处的词。解析器从 `frontend/src/data/changelog-parse.js` import，测的就是页面在跑的那份代码 |
 | `probe-nav-click.mjs` | **能渲染 ≠ 点得到**。用真实 Chrome 的**鼠标事件**逐个点侧边栏入口（走坐标命中测试，而不是 `element.click()`），看 hash 变没变、目标页渲染没渲染，并量出每个链接的**实际尺寸**，小于 40×32 直接报出来。起因：`probe-changelog.mjs` 是**直接访问** `#/changelog` 的，把"用户从侧边栏点进来"整条路径跳过了 —— 于是「更新日志」入口只有 61×28px、和 GitHub/Gitee 挤在 6px 的间隙里，"点偏一点就没反应"这个缺陷一路漏到了用户手上。`element.click()` 会把事件直接派给元素、**绕过遮挡**，被盖住的入口照样"成功"，所以这里必须走坐标 |
 | `probe-weakness.mjs` | 错题本页的**跨记录聚合**：往 IndexedDB 注入 3 条构造记录（两条含同类问题、一条只含单发问题），验页面真的按「栽在几份记录里」排序、单发问题收进折叠区。为什么注入而不是手点：走 UI 批改一遍要真 Key、要几分钟，而注入能同时覆盖「只有 1 份时不许假装有结论」这个分支。注入的记录**必须带 `results`** —— 缺了它不会产生任何可归类的问题 |
+| `test-route-eager.mjs` | 路由必须是**静态导入**，产物里不许有页面分片。起因见 `probe-version-reload` 那条 —— 懒加载分片的文件名带内容 hash，升级即失效，老页面照着旧地址取就是 404、路由跳转被中止，用户看到的是「点了没反应」。改成静态导入后导航不产生任何网络请求。这个测试盯源码（不许出现 `() => import(`）、盯产物（不许有 `*View-*.js`）、盯主包（必须真把页面收进去了，否则"没有分片"可能只是构建没跑） |
+| `probe-version-reload.mjs` | 入口那段**版本自检**的护栏。桌面版每次启动都开同一个地址，浏览器会复用早就打开的标签页，页面里的代码可能是好几版之前的 —— 实测遇到的是 **v0.8.1** 留下的标签页，它连"自动刷新"的兜底都没有，所以后面每一版都修不到它。自检负责让页面发现落后并刷新，但**自动刷新写错就是无限闪烁，比原 bug 更糟**，所以这里必须实测两件事：伪造服务端版本 → 只刷一次然后停下；版本一致 → 一次都不刷 |
 | `e2e-grade.mjs` | 假 LLM 跑完整批改链路（答题 → 批改 → 色标批注 → 复盘卡 → 归档）。断言里包含复盘卡：三位老师的自由文本批注真的聚成了两类并命中共识标记 |
 | `check_release_private.py` | 破开每个归档产物的 chunk 清单，报「exam chunk 数 / 是否含私有卷 / 功能指纹」，**发之前跑一遍** |
 
