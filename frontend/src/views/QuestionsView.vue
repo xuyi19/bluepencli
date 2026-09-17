@@ -1,6 +1,18 @@
 <template>
   <div class="w-full">
 
+    <!-- 拖拽提示层：整页接收，落点在哪都能接住，所以提示也铺满整页 -->
+    <div v-if="dragging"
+      class="fixed inset-0 z-50 flex items-center justify-center pointer-events-none"
+      style="background: rgba(120, 96, 64, 0.14)">
+      <div class="neu rounded-2xl px-8 py-6 text-center">
+        <div class="text-base font-medium text-c-ink">松手即可导入题库包</div>
+        <div class="text-xs text-c-muted mt-2">
+          支持 .bpq（加密包会再问一次口令）
+        </div>
+      </div>
+    </div>
+
     <div class="flex flex-wrap items-end justify-between gap-4 mb-6">
       <div>
         <h1 class="text-xl font-semibold text-c-ink">题库</h1>
@@ -40,7 +52,8 @@
       </template>
       <template v-else>
         <br />{{ PUBLIC_MAX_YEAR + 1 }} 年起的国考卷为<strong>私有题库</strong>，不在软件本体里 ——
-        向作者索取题库包后，用右上角「导入题库包」加入即可。
+        向作者索取题库包后，把 <code>.bpq</code> 文件<strong>拖进本页任意位置</strong>，
+        或用右上角「导入题库包」选文件，加入即可。
         <button @click="showGetPack = !showGetPack"
           class="ml-1 underline decoration-dotted hover:text-c-bark">
           {{ showGetPack ? '收起' : '怎么获取？' }}
@@ -54,7 +67,8 @@
       <div class="font-medium mb-2">获取私有题库包（{{ PUBLIC_MAX_YEAR + 1 }} 年起国考真题）</div>
       <p class="text-c-muted">
         这些卷是人工校准过的私有资产，不随开源版分发。联系作者获取 <code>.bpq</code> 题库包，
-        在「导入题库包」里选文件即可入库 —— 材料与参考答案都在包里，导入完就能直接练。
+        把 <code>.bpq</code> 文件拖进本页任意位置（或用「导入题库包」选文件）即可入库 ——
+        材料与参考答案都在包里，导入完就能直接练。加密包会再问一次口令。
       </p>
       <div class="flex flex-wrap items-center gap-x-4 gap-y-2 mt-3">
         <span>作者 <span class="text-c-ink font-medium">{{ AUTHOR.name }}</span></span>
@@ -235,6 +249,7 @@ import {
 import { pickDaily } from '../data/daily'
 import { AUTHOR } from '../data/author'
 import { readPackFile, importPack, openSealedPack } from '../bpq/importer'
+import { useFileDrop } from '../utils/fileDrop'
 import { copyAuthorLine } from '../utils/watermark'
 import WeChatPanel from '../components/WeChatPanel.vue'
 
@@ -250,6 +265,13 @@ const sourceFilter = ref('')
 const showImport = ref(false)
 const showGetPack = ref(false)
 const packInput = ref(null)
+
+// 拖拽导入：把 .bpq 拖进窗口任意位置即可，跟点「导入题库包」选文件走同一段逻辑。
+// 只认题库包扩展名——拖别的东西进来不吭声，免得用户以为随便丢个文件就能入库。
+const { dragging } = useFileDrop({
+  onFile: handlePack,
+  accept: ['.bpq', '.json'],
+})
 const importing = ref(false)
 
 /** 私有卷套数：分发版恒为 0，据此决定"已导入"还是"引导获取" */
@@ -347,6 +369,15 @@ async function onPackFile(e) {
   const file = e.target.files?.[0]
   e.target.value = ''            // 清掉 value，同一个文件才能再次选择（重导/换包）
   if (!file) return
+  await handlePack(file)
+}
+
+/**
+ * 导入一个 .bpq 包。文件选择与拖拽两个入口都走这里 —— 两条路各写一遍，
+ * 迟早有一条忘了处理加密包的口令。
+ */
+async function handlePack(file) {
+  if (importing.value) return    // 拖拽可能连发，导入中再丢进来直接忽略
   importing.value = true
   try {
     let r = await readPackFile(file)

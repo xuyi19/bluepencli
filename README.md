@@ -2,7 +2,7 @@
 
 > 输入一篇作答 → 五位申论名师各按自己的方法论独立阅卷 → 分歧自动复核 → 圆桌合议出一份综合批改
 
-![Version](https://img.shields.io/badge/version-0.10.0-8B9D77?style=flat-square)
+![Version](https://img.shields.io/badge/version-0.11.0-8B9D77?style=flat-square)
 ![License](https://img.shields.io/badge/license-AGPL--3.0-5C4033?style=flat-square)
 ![Vue](https://img.shields.io/badge/Vue-3.5-4FC08D?style=flat-square&logo=vuedotjs)
 ![Vite](https://img.shields.io/badge/Vite-8-646CFF?style=flat-square&logo=vite)
@@ -371,6 +371,8 @@ bluepencil/
 │   │   │   ├── importer.js         # .bpq 题库包：解析 / 校验 / 解密验签 / 入库
 │   │   │   ├── crypto.js           # v2 的加解密与签名（作者侧脚本 import 同一份）
 │   │   │   └── pubkey.js           # 验签公钥，由 bpq-keygen.mjs 写入（公钥本就该公开）
+│   │   ├── utils/
+│   │   │   └── fileDrop.js         # 整页拖拽接收文件（.bpq 拖进窗口就能导入）
 │   │   ├── data/
 │   │   │   ├── author.js               # **作者信息唯一来源**（署名 / 邮箱 / 仓库 / 许可）
 │   │   │   ├── builtin-articles.json   # 内置 31 篇时评
@@ -431,6 +433,8 @@ bluepencil/
 │   ├── verify-bpq.mjs              # .bpq 发包前自检（明文包与加密包都支持）
 │   ├── test-bpq-crypto.mjs         # 题库包加解密 + 签名（20 项，含各类失败分支）
 │   ├── probe-bpq-browser.mjs       # 跨运行时验证：Node 加密 → 真浏览器验签解密
+│   ├── probe-pack-drop.mjs         # 拖拽导入（真 Chrome 12 项：提示层 / 计数 / 真触发导入）
+│   ├── test-issue.mjs              # 发放工具（24 项：换批换口令 / 水印各异 / 台账哈希）
 │   ├── probe-practice.mjs          # 练习页断言：自动载题 + 题库带入字段不丢 + 换题
 │   ├── probe-gridpaper.mjs         # 方格纸断言：25 字必须正好一行
 │   ├── probe-site-links.mjs        # 首页入口与日志页断言：位置正确 + 与 CHANGELOG.md 一致
@@ -445,14 +449,17 @@ bluepencil/
 │   │   ├── to_frontend.py          #   结构化数据 → 前端题库（按年份分层）
 │   │   ├── export_bpq.py           #   导出明文 .bpq 题库包（作者专用）
 │   │   ├── bpq-keygen.mjs          #   生成题库包签名密钥对（公钥自动写入前端）
-│   │   └── seal-bpq.mjs            #   明文包 → 加密 + 签名包（含自检回读）
+│   │   ├── seal-core.mjs           #   「明文包 → 加密包」的唯一实现（两个脚本共用）
+│   │   ├── seal-bpq.mjs            #   手工封一个包（含自检回读）
+│   │   └── issue.mjs               #   按口令批次发放 + 记发放台账（推荐走这个）
 │   ├── standards/gen_standards.mjs # 采分点批量预解析（--mock 无 Key 也能跑）
 │   ├── add_watermark.py            # 给核心源文件打作者注释头（幂等）
 │   └── push-all.mjs                # 一键推 GitHub + Gitee
 ├── release/                        # 本机归档区（不进版本库）
 │   ├── 蓝笔申论-*-vX.Y.Z.*         #   最新一版产物（只放最新，避免解压到旧包）
 │   ├── 历史版本/                    #   往期产物（只增不删，回溯用）
-│   ├── 私有题库/                    #   导出的 .bpq 题库包（含私有卷，绝不分发）
+│   ├── 私有题库/                    #   明文包 + 已发出的加密包（含私有卷，绝不分发）
+│   ├── 发放台账.{json,md}           #   发给谁 / 哪批口令 / 文件 sha256，也不进库
 │   └── 版本说明.md                  #   分发台账（哪个包能发给别人），也不进库
 ├── CHANGELOG.md                    # 更新日志（唯一数据源：网页日志页与打包版本号都读它）
 ├── pytest.ini                      # pytest 配置（放仓库根，保证任意目录下跑结果一致）
@@ -630,6 +637,8 @@ node .tools/probe-desktop-exit.mjs
 # 12) 题库包的加密与签名（不发外部请求）
 node .tools/test-bpq-crypto.mjs      # 算法与失败分支：20 项
 node .tools/probe-bpq-browser.mjs    # 跨运行时：Node 加密 → 浏览器验签解密
+node .tools/probe-pack-drop.mjs      # 拖拽导入：12 项（真 Chrome，合成原生拖拽事件）
+node .tools/test-issue.mjs           # 发放工具：24 项（临时目录跑，不碰真台账）
 ```
 
 | 脚本 | 用途 |
@@ -650,6 +659,8 @@ node .tools/probe-bpq-browser.mjs    # 跨运行时：Node 加密 → 浏览器�
 | `probe-desktop-exit.mjs` | 起一个真桌面版 + 真 headless 浏览器，用 CDP 走「打开 → 刷新 → 离开」三步：验页面会登记会话、**刷新不会误退**、离开后进程自行退出。后端单测验不了"关闭页面时 `sendBeacon` 到底发没发出去"，只能靠它 |
 | `test-bpq-crypto.mjs` | 题库包加解密与签名：口令错 / 密文被改 / **水印被改** / 换成他人公钥 / 他人私钥冒充 / v1 老包回归 / 作者命令行通路，20 项 |
 | `probe-bpq-browser.mjs` | 作者用 Node 加出来的密，**真浏览器**能不能验签解开。跨运行时是最容易被忽略的失败面：标准一致但实现有差异，真出事时作者自测完全正常 |
+| `probe-pack-drop.mjs` | 拖拽导入。合成原生 `DragEvent` 在真 Chrome 里走一遍：提示层显隐、**划过子元素不闪**（`dragenter` 会随鼠标划过每个子元素反复触发，用布尔值必然闪）、纯文本拖拽不误触发、松手 `.bpq` 真的走完导入链路、不支持的类型无副作用 |
+| `test-issue.mjs` | 发放工具的**约束**（不是"代码能跑"）：换批必须换口令（显式复用会被拒）、同批次同口令但水印各异、台账 sha256 与磁盘文件一致、包被改后 `--verify-ledger` 报错。全程临时目录，不碰真台账 |
 | `check_release_private.py` | 破开每个归档产物的 chunk 清单，报「exam chunk 数 / 是否含私有卷 / 功能指纹」，**发之前跑一遍** |
 
 > **为什么评分内核要有纯代码单测？**
@@ -812,7 +823,8 @@ SQLite 文件在 `backend/data/bluepencil.db`，启动时自动创建。如果�
 私有卷**不在本仓库，也不在任何一个分发包里**（源码见 `frontend/src/data/real-exams-private/`，
 已 gitignore；构建走 `frontend/src/data/real-exams-private-stub/` 的空实现）。
 拿不到私有卷时软件照常可用，只是题库里没有 2022 年起的卷 —— 需要向作者索取题库包，
-在「题库 → 导入题库包」里导入。每个包带使用者水印，**请勿二次转发**。
+把 `.bpq` 文件**拖进题库页任意位置**即可导入（或点右上角「导入题库包」选文件）。
+加密包会再问一次口令。每个包带使用者水印，**请勿二次转发**。
 
 #### 题库包是怎么保护的
 
@@ -845,12 +857,42 @@ node .tools/exams/bpq-keygen.mjs --force
 # 2) 导出明文包（含材料与答案，只能本机看）
 backend/.venv/Scripts/python.exe .tools/exams/export_bpq.py --user "张三/zhangsan@qq.com"
 
-# 3) 封装成加密+签名包（自带回读自检）
-node .tools/exams/seal-bpq.mjs --in "release/私有题库/…-明文.bpq" --passphrase "你的分发口令"
+# 3) 建一个「口令批次」—— 同一批人共用一个口令，换一批人换一个（口令随机生成）
+node .tools/exams/issue.mjs --new-batch "2026秋-1班" --note "第一批试发"
+#    记下打印出来的口令；以后要用就 --show-passphrase "2026秋-1班"
 
-# 4) 发出前复核（模拟用户那边打开一遍）
-node .tools/verify-bpq.mjs "release/私有题库/…-加密.bpq" --passphrase "你的分发口令"
+# 4) 发放：封装成加密+签名包，同时记进发放台账（自带回读自检）
+node .tools/exams/issue.mjs --user "张三/zhangsan@qq.com" --batch "2026秋-1班" \
+  --in "release/私有题库/…-明文.bpq"
+
+# 5) 发出前复核（模拟用户那边打开一遍）
+node .tools/verify-bpq.mjs "release/私有题库/…-加密.bpq" --passphrase "该批次的口令"
+
+# 事后核对：谁拿了什么、文件有没有被改过
+node .tools/exams/issue.mjs --list
+node .tools/exams/issue.mjs --verify-ledger
 ```
+
+> 只想手工封一个包（不走批次）时，`seal-bpq.mjs` 仍然可用；
+> 两者共用 `seal-core.mjs` 里同一份封装实现，不会出现"手工封的能开、批量发的开不了"。
+
+**口令批次与发放台账**是 v0.11.0 加的，解决的正是手工发放最容易出的两个问题：
+
+| 问题 | 后果 | 这里的做法 |
+|---|---|---|
+| 图省事一直用同一个口令 | 一人泄露，**全批人**的包都成了公开资源 | 新批次口令**随机生成**；显式复用别的批次的口令会被**直接拒绝**（`--allow-reuse` 才能放行） |
+| 只记"给了谁" | 事后有人外传，证明不了"流转的就是我发的那份" | 台账记**文件 sha256**，`--verify-ledger` 可重算核对；再配合包内水印追到具体的人 |
+
+关于口令的传递有一条铁律：**绝不跟包走同一条路**。包用微信发，口令当面说或另发一条消息。
+
+```bash
+node .tools/exams/issue.mjs --help          # 全部子命令
+node .tools/exams/issue.mjs --list          # 列出批次（不显示口令）
+node .tools/exams/issue.mjs --show-passphrase "2026秋-1班"
+node .tools/exams/issue.mjs --ledger        # 打印发放台账
+```
+
+> `batches.json`（存着口令原文）与 `release/` 都已 gitignore —— **口令进库等于把私有题库包公开**。
 
 > 加密与签名走的是 **WebCrypto**（Node 与浏览器同一套 API），所以后端**零新增依赖**；
 > 也绕开了"Python 的 ECDSA 默认输出 DER、而 WebCrypto 要 raw(r‖s)"这个必踩的坑 ——

@@ -33,6 +33,10 @@ frontend/src/data/standards-private/
 # 由 .tools/exams/bpq-keygen.mjs 生成。
 .tools/exams/keys/
 
+# 口令批次表：**存着分发口令原文**，进库等于把私有题库包公开。
+# 由 .tools/exams/issue.mjs --new-batch 生成。
+.tools/exams/batches.json
+
 # 采分点生成工具的中间产物（含私有卷标准，重跑即复现）
 .tools/standards/out/
 

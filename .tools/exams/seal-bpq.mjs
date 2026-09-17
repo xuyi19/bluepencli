@@ -28,21 +28,15 @@
 import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 
+import { signingText, verifyText } from '../../frontend/src/bpq/crypto.js'
 import {
-  SIG_ALGO,
-  decryptPayload,
-  keyIdOf,
-  encryptPayload,
-  signText,
-  signingText,
-  verifyText,
-} from '../../frontend/src/bpq/crypto.js'
-
-const ROOT = path.resolve(import.meta.dirname, '..', '..')
-const KEYS_DIR = path.join(import.meta.dirname, 'keys')
-const PRIVATE_FILE = path.join(KEYS_DIR, 'bpq-private.pkcs8.b64')
-const PUBKEY_FILE = path.join(ROOT, 'frontend', 'src', 'bpq', 'pubkey.js')
-const PRIVATE_DEST = path.join(ROOT, 'release', '私有题库')
+  PRIVATE_DEST,
+  PRIVATE_FILE,
+  ROOT,
+  readPubKeys,
+  sealPack,
+  selfCheck,
+} from './seal-core.mjs'
 
 const argv = process.argv.slice(2)
 const arg = (name) => {
@@ -54,13 +48,6 @@ const passphrase = arg('passphrase') || process.env.BPQ_PASSPHRASE || ''
 const checkFile = arg('check')
 // --key 只给测试用（拿临时密钥签名，不碰本机真私钥）
 const keyFile = arg('key') || PRIVATE_FILE
-
-function readPubKeys() {
-  if (!existsSync(PUBKEY_FILE)) return []
-  const src = readFileSync(PUBKEY_FILE, 'utf8')
-  const m = src.match(/BPQ_PUBLIC_KEYS\s*=\s*\[([\s\S]*?)\]/)
-  return m ? [...m[1].matchAll(/"([^"]+)"/g)].map((x) => x[1]) : []
-}
 
 /** 只校验：验签 + 解密，确认发出的包在用户那边能打开 */
 async function check(file) {
@@ -78,15 +65,13 @@ async function check(file) {
     console.log('· 没给 --passphrase，跳过解密验证')
     return 0
   }
-  try {
-    const inner = await decryptPayload(pack.crypto, passphrase)
-    const q = inner.exams.reduce((n, e) => n + e.questions.length, 0)
-    console.log(`✓ 解密成功：${inner.exams.length} 套 / ${q} 道题｜水印：${pack.userFingerprint}`)
+  const r = await selfCheck(pack, passphrase, keys)
+  if (r.reopened) {
+    console.log(`✓ 解密成功：${r.exams} 套 / ${r.questions} 道题｜水印：${pack.userFingerprint}`)
     return 0
-  } catch {
-    console.log('✗ 解密失败：口令不对，或者密文被改动过')
-    return 1
   }
+  console.log('✗ 解密失败：口令不对，或者密文被改动过')
+  return 1
 }
 
 function pickLatestPlain() {
@@ -123,33 +108,18 @@ async function seal() {
     return 1
   }
 
-  // 只加密正文：外层留明文，是为了让"这是哪一版、谁的包、多少题"能在解不开时也看得出来
-  const inner = { exams: plain.exams }
-  const cryptoSection = await encryptPayload(inner, passphrase)
-
   const privateKey = readFileSync(keyFile, 'utf8').trim()
   const pubKeys = readPubKeys()
   // --key 指向临时密钥时，公钥不在 pubkey.js 里，这时用 --pubkey 显式给一把
   const publicKeys = arg('pubkey') ? [arg('pubkey'), ...pubKeys] : pubKeys
-  const keyId = publicKeys.length ? await keyIdOf(publicKeys[0]) : '未配置'
 
-  const questionCount = plain.exams.reduce((n, e) => n + e.questions.length, 0)
-  const out = {
-    format: 'bluepencil-bpq',
-    magic: 'BPQ00002',
-    version: 2,
-    issuer: plain.issuer,
-    issuedAt: plain.issuedAt,
-    license: plain.license,
-    userFingerprint: plain.userFingerprint,
-    tier: plain.tier,
-    yearRange: plain.yearRange,
-    examCount: plain.exams.length,
-    questionCount,
-    crypto: cryptoSection,
+  let out
+  try {
+    out = await sealPack(plain, passphrase, privateKey, publicKeys)
+  } catch (err) {
+    console.error(String(err?.message || err))
+    return 1
   }
-  // 签名覆盖除 sig 之外的全部字段（含水印与密文）——改任何一个都验不过
-  out.sig = { algo: SIG_ALGO, keyId, value: await signText(signingText(out), privateKey) }
 
   const outFile = arg('out') || path.join(
     path.dirname(inFile),
@@ -158,21 +128,14 @@ async function seal() {
   writeFileSync(outFile, JSON.stringify(out, null, 1), 'utf8')
 
   // 自检一遍：发出去的包必须自己先能验能开
-  const verify = await verifyText(signingText(out), out.sig.value, publicKeys[0])
-  let reopened = false
-  try {
-    const back = await decryptPayload(out.crypto, passphrase)
-    reopened = back.exams.length === plain.exams.length
-  } catch {
-    reopened = false
-  }
+  const sc = await selfCheck(out, passphrase, publicKeys)
 
   console.log(`✓ 已封装加密包：${path.relative(ROOT, outFile)}`)
   console.log(`  卷 ${out.examCount} 套 / 题 ${out.questionCount} 道｜年份 ${out.yearRange.join('–')}`)
   console.log(`  使用者水印：${out.userFingerprint}`)
-  console.log(`  签名：${out.sig.algo}｜公钥指纹 ${keyId}｜自检 ${verify.ok ? '通过' : '❌ 不通过'}`)
-  console.log(`  回读解密：${reopened ? '通过' : '❌ 不通过'}`)
-  if (!verify.ok || !reopened) {
+  console.log(`  签名：${out.sig.algo}｜公钥指纹 ${sc.keyId}｜自检 ${sc.signature ? '通过' : '❌ 不通过'}`)
+  console.log(`  回读解密：${sc.reopened ? '通过' : '❌ 不通过'}`)
+  if (!sc.signature || !sc.reopened) {
     console.error('  ⚠ 自检没过，这份包不要发出去。')
     return 1
   }
