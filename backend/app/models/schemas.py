@@ -8,6 +8,9 @@ class HealthOut(BaseModel):
     app: str
     version: str
     db: str
+    # 告知前端「这是桌面版」：只有桌面版才启用「关掉页面就结束进程」，
+    # 网站版 / 单文件版看到 False 就不挂这套逻辑，免得把别人的服务关掉
+    desktop: bool = False
 
 
 # ---------------- LLM 网关 ----------------

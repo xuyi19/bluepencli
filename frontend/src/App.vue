@@ -54,6 +54,7 @@ import { computed, onMounted, ref } from 'vue'
 import { RouterView } from 'vue-router'
 import { backendInfo, probeBackend } from './api/backend'
 import { useReadiness } from './utils/readiness'
+import { attachDesktopSession } from './utils/desktopSession'
 import { CURRENT_VERSION } from './data/changelog'
 import GroupedSidebar from './components/GroupedSidebar.vue'
 import ToastHost from './components/ToastHost.vue'
@@ -79,6 +80,8 @@ const { ready, probeReadiness } = useReadiness()
 
 onMounted(async () => {
   backendUp.value = await probeBackend()
+  // 桌面版专属：注册本页会话，页面全关时后端自动退出。非桌面版这里空转。
+  attachDesktopSession(backendInfo())
   await probeReadiness()
   version.value = backendInfo()?.version || CURRENT_VERSION
 })

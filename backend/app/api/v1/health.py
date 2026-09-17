@@ -23,4 +23,5 @@ async def health(db: AsyncSession = Depends(get_db)):
         app=settings.APP_NAME,
         version=settings.APP_VERSION,
         db=db_status,
+        desktop=settings.DESKTOP_MODE,
     )

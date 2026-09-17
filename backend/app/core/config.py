@@ -90,7 +90,7 @@ class Settings(BaseSettings):
     )
 
     APP_NAME: str = "蓝笔申论 BluePencil"
-    APP_VERSION: str = "0.8.1"
+    APP_VERSION: str = "0.9.0"
     DEBUG: bool = True
 
     # SQLite：默认落在可写数据目录下的 data/bluepencil.db，零外部服务依赖
@@ -103,6 +103,11 @@ class Settings(BaseSettings):
 
     # 是否把练习批改结果归档成 markdown（docs/practice/），供后期复盘
     ENABLE_RECORD_ARCHIVE: bool = True
+
+    # 桌面版模式：`desktop.py` 启动时置为 True（环境变量 DESKTOP_MODE=1）。
+    # 打开后启用「浏览器页面全关了就结束进程」——这**只对本地单机形态成立**：
+    # 网站版绝不能开，否则某个访客关掉标签页就会把公网服务杀掉。
+    DESKTOP_MODE: bool = False
 
     # 服务端兜底 LLM 配置：前端未传时使用；留空则要求前端自带配置
     LLM_API_KEY: str = ""

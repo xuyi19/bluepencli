@@ -13,6 +13,7 @@ from loguru import logger
 
 from app.api.v1 import grading, health, llm
 from app.api.v1 import records as records_api
+from app.api.v1 import session as session_api
 from app.api.v1 import settings as settings_api
 from app.api.v1 import stats
 from app.core.config import DATA_DIR, RECORDS_DIR, WEB_DIR
@@ -66,6 +67,8 @@ app.include_router(grading.router, prefix="/api/v1")
 app.include_router(records_api.router, prefix="/api/v1")
 app.include_router(stats.router, prefix="/api/v1")
 app.include_router(settings_api.router, prefix="/api/v1")
+# 桌面版的「关页即退」靠这三个端点：页面注册 / 心跳 / 注销
+app.include_router(session_api.router, prefix="/api/v1")
 
 
 class WebStaticFiles(StaticFiles):

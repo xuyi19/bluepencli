@@ -327,16 +327,18 @@ bluepencil/
 │   │   │   ├── entities.py         # GradingTask / LLMCallLog
 │   │   │   └── schemas.py          # 出入参模型
 │   │   ├── api/v1/
-│   │   │   ├── health.py           # 健康检查（前端靠它判断通道）
+│   │   │   ├── health.py           # 健康检查（前端靠它判断通道；含 desktop 标志）
 │   │   │   ├── llm.py              # LLM 网关：单次 / 流式 / 批量并发
 │   │   │   ├── grading.py          # 批改任务记录与历史
 │   │   │   ├── records.py          # 练习记录归档（读写 docs/practice/）
 │   │   │   ├── stats.py            # 成本与用量统计
-│   │   │   └── settings.py         # 模型连通性测试 + 服务端托管配置查询
+│   │   │   ├── settings.py         # 模型连通性测试 + 服务端托管配置查询
+│   │   │   └── session.py          # 桌面版会话登记：hello / ping / bye / state
 │   │   ├── services/
 │   │   │   ├── llm_service.py      # httpx 调用、重试退避、并发限流
 │   │   │   ├── grading_service.py  # 落库与统计聚合
-│   │   │   └── record_service.py   # 记录渲染：结构化数据 → Markdown
+│   │   │   ├── record_service.py   # 记录渲染：结构化数据 → Markdown
+│   │   │   └── session_watch.py    # 桌面版看门狗：页面全关了就结束进程
 │   │   └── agents/llm.py           # LLM 配置解析、URL 拼接、请求体构造
 │   ├── assets/                     # icon.svg（图标源）+ icon.ico（make_icon.py 生成）
 │   ├── data/                       # SQLite 数据库（启动自动生成）
@@ -399,6 +401,7 @@ bluepencil/
 │   │       ├── readiness.js        # 批改就绪判定：本机 Key ∪ 服务端托管 Key
 │   │       ├── grading/rules.js    # 硬规则引擎：字数 / 格式 / 结构 / 重复照抄（纯代码可复算）
 │   │       ├── wechatPanel.js      # 引流弹层的命令式开合（各入口统一调用）
+│   │       ├── desktopSession.js   # 桌面版会话登记：关页即退，刷新不误杀
 │   │       ├── watermark.js        # 控制台作者横幅
 │   │       ├── toast.js            # 命令式提示 / 确认（替代 Arco Message/Modal）
 │   │       ├── parse.js            # 批改结果解析（三层兜底）
@@ -421,6 +424,7 @@ bluepencil/
 │   ├── test-rules.mjs              # 硬规则引擎单测（24 组断言）
 │   ├── test-standards.mjs          # 采分点标准层单测（17 组断言）
 │   ├── test-desktop-reuse.py       # 桌面版实例复用：同版本复用 / 异版本另起端口
+│   ├── probe-desktop-exit.mjs      # 真浏览器验「关页即退」：关页退、刷新不退（4 断言）
 │   ├── check_release_private.py    # 产物体检：递归数 exam chunk、查有无私有卷、功能指纹
 │   ├── verify-bpq.mjs              # .bpq 题库包发包前自检（与前端同一份算法）
 │   ├── probe-practice.mjs          # 练习页断言：自动载题 + 题库带入字段不丢 + 换题
@@ -471,6 +475,10 @@ bluepencil/
 | GET | `/api/v1/stats` | 用量与成本统计 |
 | POST | `/api/v1/settings/test-llm` | 测试模型连通性 |
 | GET | `/api/v1/settings/llm-default` | 查询服务端是否已托管 Key（只回布尔值，不回传 Key） |
+| POST | `/api/v1/session/hello` | 页面注册自己（桌面版「关页即退」用；同时取消退出倒计时） |
+| POST | `/api/v1/session/ping` | 页面心跳（只用于回收崩溃留下的僵尸会话） |
+| POST | `/api/v1/session/bye` | 页面卸载时注销自己（用 POST 是为了能走 `sendBeacon`） |
+| GET | `/api/v1/session/state` | 当前有几个页面连着（排查 / 探针断言用） |
 
 ---
 
@@ -512,9 +520,31 @@ cd backend
 # .venv/bin/python build_desktop.py           # macOS / Linux（产物需在对应系统上构建）
 ```
 
-产出 `release/蓝笔申论-桌面版-vX.Y.Z.zip`（约 23 MB；同名解压目录也在 release/ 下，方便本机直接试跑），对方解压后双击 `蓝笔申论.exe`：程序自己起本地服务、自动打开浏览器、关掉黑窗口即退出。
+产出 `release/蓝笔申论-桌面版-vX.Y.Z.zip`（约 23 MB；同名解压目录也在 release/ 下，方便本机直接试跑），对方解压后双击 `蓝笔申论.exe`：程序自己起本地服务、自动打开浏览器，**关掉浏览器页面就自动退出**（黑窗口跟着消失），也可以直接关黑窗口。
 
 解压目录里还有一份 `使用说明.txt` 和 `config.example.json`，可以直接连同 zip 一起发给对方。
+
+### 关掉页面就退出（免得留下"幽灵进程"）
+
+桌面版最容易被忽略的状态是**进程其实还在跑**：用户关掉页面后普遍以为程序已经结束了，
+可它还在后台占着 8765，下次双击就命中残留实例——看着像"启动了"，其实什么也没重启。
+升级后打开旧界面的老问题，根子就在这里。所以桌面版认两种关闭方式，任意一种都退干净：
+
+- 浏览器页面**全部关掉**：前端在 `pagehide` 时用 `navigator.sendBeacon` 通知后端，后端等 6 秒（给刷新留窗口）后优雅退出
+- 直接关黑窗口：照旧
+
+判定**三条同时成立**才退：曾经有过页面会话 + 当前没有活跃会话 + 这个"空"状态已持续超过 6 秒。
+三个设计取舍值得记下来：
+
+- **不给"关闭"设开关，只认事实**：从没打开过页面（比如只 curl 过 `/docs`）不触发退出，免得把自己关掉。
+- **心跳不参与退出判定**。后台标签页的定时器会被浏览器节流（可能压到 1 分钟以上），
+  拿它当"页面还活着"的证据，会把明明开着的页面误杀。心跳只用来回收**僵尸会话**——
+  浏览器崩溃或被杀时不会有 `bye`，只能靠心跳过期兜底。
+- **刷新不是关闭**。刷新等于「先 bye 后 hello」，新页面在 6 秒内注册回来就取消退出倒计时。
+  这条最容易写错，所以有专门的真实浏览器探针盯着（`.tools/probe-desktop-exit.mjs`，4 项断言）。
+
+> 只对桌面版生效：后端 `health` 会报 `desktop: true/false`，前端据此决定挂不挂这套逻辑。
+> 网站版和单文件版一律不挂——否则某个访客关掉标签页就会把别人的服务杀掉。
 
 ### 为什么别人不用配置
 
@@ -584,6 +614,9 @@ node .tools/probe-wechat.mjs
 
 # 10) 发包前产物体检：递归数 exam chunk、查有无私有卷、看功能指纹
 backend/.venv/Scripts/python.exe .tools/check_release_private.py
+
+# 11) 桌面版「关页即退」：起真桌面版 + 真浏览器，验「关页会退、刷新不退」
+node .tools/probe-desktop-exit.mjs
 ```
 
 | 脚本 | 用途 |
@@ -601,6 +634,7 @@ backend/.venv/Scripts/python.exe .tools/check_release_private.py
 | `test-standards.mjs` | 采分点标准层单测：解析、标准缺失时的回退、按**练习页题目 id** 命中，17 组断言 |
 | `probe-wechat.mjs` | 微信引流入口断言：四处入口的位置与开合、群码过期后的降级文案；`BP_BASE` 可指向解压后的桌面版产物 |
 | `test-desktop-reuse.py` | 桌面版实例复用：同版本复用、版本不同另起端口且不把用户带去旧界面 |
+| `probe-desktop-exit.mjs` | 起一个真桌面版 + 真 headless 浏览器，用 CDP 走「打开 → 刷新 → 离开」三步：验页面会登记会话、**刷新不会误退**、离开后进程自行退出。后端单测验不了"关闭页面时 `sendBeacon` 到底发没发出去"，只能靠它 |
 | `check_release_private.py` | 破开每个归档产物的 chunk 清单，报「exam chunk 数 / 是否含私有卷 / 功能指纹」，**发之前跑一遍** |
 
 > **为什么评分内核要有纯代码单测？**
@@ -632,6 +666,7 @@ backend/.venv/Scripts/python.exe .tools/check_release_private.py
    BluePencil，新 exe 会认定「已经在运行」、把浏览器指过去、自己退出——现象与「解压错了包」一模一样。
    现在**只复用版本相同的实例**；版本不同就另起端口，并在黑窗口里打印
    「端口 8765 上运行着旧版本 vX，当前是 vY，新版本已改用 …:8766」。
+   从 v0.9.0 起还有一层保障：**关掉浏览器页面程序就自动退出**，不留残留实例，这种冲突本身也少了很多。
 2. **浏览器缓存了入口页。** 每次升级都跑在同一个地址，早期响应不带 `Cache-Control`，
    浏览器就把入口 HTML 留住了。现在入口 HTML 一律 `no-cache, must-revalidate`（靠 ETag 拿 304），
    带内容哈希的 js/css/图片长缓存。

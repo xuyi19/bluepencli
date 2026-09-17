@@ -9,15 +9,18 @@
 双击 exe（或 `python desktop.py`）后：
   1. 找端口起本地服务（界面 + API 同一个进程，无跨域）
   2. 自动打开默认浏览器
-  3. 控制台保留日志，关闭窗口即退出
+  3. **浏览器页面全关了就自动退出**；关控制台窗口同样退出
 
 设计要点：
 - **只复用「同版本」的已运行实例**。重复双击同一版时不会启第二份服务，直接开浏览器指向已在跑的那个；
   但若那个实例是**别的版本**（用户升级后旧窗口还开着），绝不复用——见下面 _running_version 的注释。
+- **关页即退**（见 _shutdown_on_page_close）。桌面版最容易被忽略的状态是"进程其实还在跑"：
+  用户以为关了页面就结束了，下次双击命中残留实例、什么也没重启。让它退干净，这类问题就不存在了。
 - 端口冲突自动顺延，不需要用户改配置。
 - 传 app 对象给 uvicorn（而不是 "app.main:app" 字符串），避免打包后动态导入失败。
 """
 
+import os
 import socket
 import sys
 import threading
@@ -99,6 +102,21 @@ def _open_browser_when_ready(port: int, delay: float = 0.0) -> None:
     webbrowser.open(url)
 
 
+def _shutdown_on_page_close(server: uvicorn.Server) -> None:
+    """把「浏览器页面全关完了」接到 uvicorn 的优雅退出上。
+
+    为什么用 `server.should_exit` 而不是 `os._exit()`：前者会正常走完 lifespan
+    的收尾（关掉 httpx 客户端、dispose 数据库连接池），后者是直接砍进程。
+    桌面版是别人电脑上反复开关的程序，退得干净比退得快重要。
+
+    为什么需要这个功能：用户关掉页面后普遍以为程序已经退出，但黑窗口还开着，
+    下次双击就命中残留实例 —— 看着像"启动了"，其实什么也没重启。
+    """
+    print()
+    print("  浏览器页面已全部关闭，程序即将退出…")
+    server.should_exit = True
+
+
 def _banner(port: int) -> None:
     line = "─" * 52
     print()
@@ -109,13 +127,17 @@ def _banner(port: int) -> None:
     print(f"  接口文档 : http://127.0.0.1:{port}/docs")
     print()
     print("  浏览器会自动打开；若没弹出，手动复制上面的地址访问。")
-    print("  关闭本窗口即退出程序。")
+    print("  关掉浏览器页面就会自动退出，也可以直接关掉本窗口。")
     print(line)
     print()
 
 
 def main() -> None:
     _enable_utf8_console()
+
+    # 必须在导入 settings 之前设：它决定 health 里报不报 desktop=True，
+    # 前端据此才敢挂「关掉页面就结束进程」（网站版绝不能有这行为）
+    os.environ.setdefault("DESKTOP_MODE", "1")
 
     # 延迟导入：让端口探测阶段保持轻量；这里只需要版本号
     from app.core.config import settings as app_settings
@@ -153,10 +175,19 @@ def main() -> None:
     if "--no-browser" not in sys.argv:
         threading.Thread(target=_open_browser_when_ready, args=(port,), daemon=True).start()
 
+    # 用显式的 Server 对象（而不是 uvicorn.run 的语法糖）：
+    # 关页即退需要能拿到 server 句柄、把 should_exit 置真，才能优雅退出。
+    from app.services.session_watch import watch
+
+    server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="info"))
+    watch.bind_exit(lambda: _shutdown_on_page_close(server))
+    watch.start()
+
     try:
-        uvicorn.run(app, host="127.0.0.1", port=port, log_level="info")
+        server.run()
     except KeyboardInterrupt:
         pass
+    print("  已退出。")
 
 
 if __name__ == "__main__":
