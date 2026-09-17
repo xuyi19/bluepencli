@@ -234,7 +234,7 @@ import {
 } from '../data/questions'
 import { pickDaily } from '../data/daily'
 import { AUTHOR } from '../data/author'
-import { readPackFile, importPack } from '../bpq/importer'
+import { readPackFile, importPack, openSealedPack } from '../bpq/importer'
 import { copyAuthorLine } from '../utils/watermark'
 import WeChatPanel from '../components/WeChatPanel.vue'
 
@@ -339,6 +339,9 @@ async function load() {
 /**
  * 导入 .bpq 私有题库包。
  * 校验不过就整包拒绝 —— 半截导入会让题库里混进读不通的题，比不导入更糟。
+ *
+ * 加密包（v2）比明文包多一步「问口令」：口令是作者另外给的（不跟着包走），
+ * 所以这里最多问 3 次，够用又不至于让人一直撞。
  */
 async function onPackFile(e) {
   const file = e.target.files?.[0]
@@ -346,7 +349,26 @@ async function onPackFile(e) {
   if (!file) return
   importing.value = true
   try {
-    const r = await readPackFile(file)
+    let r = await readPackFile(file)
+
+    for (let attempt = 0; r.sealed && !r.pack && attempt < 3; attempt++) {
+      const pwd = await toast.askPassword(
+        '这份题库包是加密的，需要作者给你的口令才能打开。\n'
+        + '（口令与包是分开给的——如果作者把两者发在同一条消息里，提醒他一下）',
+        { placeholder: '口令', okText: '打开' },
+      )
+      if (!pwd) return              // 用户取消
+      r = await openSealedPack(r.text, pwd)
+      if (r.ok) break
+      const msg = r.errors.join('')
+      // 口令错可以重试；签名不过、格式不对这类问题再输一百遍也没用，直接说清
+      if (!msg.includes('口令')) {
+        toast.error(r.errors[0] || '打不开这个题库包')
+        return
+      }
+      toast.warning(attempt < 2 ? '口令不对，再试一次' : '口令仍不对，稍后再试或联系作者')
+    }
+
     if (!r.ok) {
       toast.error(r.errors[0] || '题库包不可用')
       return

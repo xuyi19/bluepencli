@@ -341,11 +341,50 @@ def _zip() -> None:
     tmp.replace(ZIP_PATH)
 
 
+def _stale_dist_seconds() -> float | None:
+    """dist 落后于源码多少秒；不落后（或判断不了）返回 None。
+
+    为什么值得专门挡一道：桌面版打的是 `frontend/dist/`，而**单文件版走的是
+    另一条命令**（`npm run release:single` → `dist-single/`）。只跑了单文件版那条
+    就来打包，桌面版包里会是**旧界面前端** —— 可黑窗口、`版本信息.txt`、
+    界面上的版本号全都显示新版本，外表一点看不出来。
+
+    2026-09-17 真踩到：v0.10.0 的桌面版包里还是 v0.9.0 的界面代码，
+    比对产物内容才发现。这与 v0.8.1「解压出来是旧界面」是同一类问题 ——
+    **产物说自己是新的，内容却是旧的**，而这类问题最贵的地方在于没人会去怀疑它。
+    """
+    index = WEB_DIST / "index.html"
+    src = ROOT / "frontend" / "src"
+    if not index.is_file() or not src.is_dir():
+        return None
+    newest = 0.0
+    for f in src.rglob("*"):
+        if f.is_file():
+            newest = max(newest, f.stat().st_mtime)
+    if not newest:
+        return None
+    delta = newest - index.stat().st_mtime
+    return delta if delta > 1 else None
+
+
 def main() -> int:
     if not WEB_DIST.is_dir():
         print(f"❌ 未找到前端构建产物：{WEB_DIST}")
         print("   请先在 frontend/ 目录执行：npm run build")
         return 1
+
+    stale = _stale_dist_seconds()
+    if stale is not None:
+        print(f"❌ 前端产物比源码旧约 {stale / 60:.0f} 分钟：{WEB_DIST}")
+        print("   桌面版打的是 frontend/dist/，而单文件版走的是另一条命令")
+        print("   （npm run release:single → dist-single/）。只跑了后者就打包，")
+        print("   包里会是**旧界面前端**，而版本号显示是新的，外表看不出来。")
+        print("   请先执行：cd frontend && npm run build")
+        if "--allow-stale-dist" not in sys.argv:
+            print("   （确实要用现有 dist 就加 --allow-stale-dist）")
+            return 1
+        print("   ⚠ --allow-stale-dist：按现有（较旧的）dist 继续打包")
+        print()
 
     stamp = time.strftime("%Y%m%d-%H%M%S")
     stage = Path(tempfile.gettempdir()) / "bluepencil-build" / stamp

@@ -2,7 +2,7 @@
 
 > 输入一篇作答 → 五位申论名师各按自己的方法论独立阅卷 → 分歧自动复核 → 圆桌合议出一份综合批改
 
-![Version](https://img.shields.io/badge/version-0.8.1-8B9D77?style=flat-square)
+![Version](https://img.shields.io/badge/version-0.10.0-8B9D77?style=flat-square)
 ![License](https://img.shields.io/badge/license-AGPL--3.0-5C4033?style=flat-square)
 ![Vue](https://img.shields.io/badge/Vue-3.5-4FC08D?style=flat-square&logo=vuedotjs)
 ![Vite](https://img.shields.io/badge/Vite-8-646CFF?style=flat-square&logo=vite)
@@ -368,7 +368,9 @@ bluepencil/
 │   │   │   └── orchestrator.js     # 圆桌调度：并行阅卷 → 分歧检测 → 辩论 → 合议
 │   │   ├── prompts.js              # 追问与范文生成的 Prompt
 │   │   ├── bpq/
-│   │   │   └── importer.js         # .bpq 私有题库包：解析 / 校验和 / 入库
+│   │   │   ├── importer.js         # .bpq 题库包：解析 / 校验 / 解密验签 / 入库
+│   │   │   ├── crypto.js           # v2 的加解密与签名（作者侧脚本 import 同一份）
+│   │   │   └── pubkey.js           # 验签公钥，由 bpq-keygen.mjs 写入（公钥本就该公开）
 │   │   ├── data/
 │   │   │   ├── author.js               # **作者信息唯一来源**（署名 / 邮箱 / 仓库 / 许可）
 │   │   │   ├── builtin-articles.json   # 内置 31 篇时评
@@ -426,7 +428,9 @@ bluepencil/
 │   ├── test-desktop-reuse.py       # 桌面版实例复用：同版本复用 / 异版本另起端口
 │   ├── probe-desktop-exit.mjs      # 真浏览器验「关页即退」：关页退、刷新不退（4 断言）
 │   ├── check_release_private.py    # 产物体检：递归数 exam chunk、查有无私有卷、功能指纹
-│   ├── verify-bpq.mjs              # .bpq 题库包发包前自检（与前端同一份算法）
+│   ├── verify-bpq.mjs              # .bpq 发包前自检（明文包与加密包都支持）
+│   ├── test-bpq-crypto.mjs         # 题库包加解密 + 签名（20 项，含各类失败分支）
+│   ├── probe-bpq-browser.mjs       # 跨运行时验证：Node 加密 → 真浏览器验签解密
 │   ├── probe-practice.mjs          # 练习页断言：自动载题 + 题库带入字段不丢 + 换题
 │   ├── probe-gridpaper.mjs         # 方格纸断言：25 字必须正好一行
 │   ├── probe-site-links.mjs        # 首页入口与日志页断言：位置正确 + 与 CHANGELOG.md 一致
@@ -436,7 +440,12 @@ bluepencil/
 │   ├── batch-shots.mjs             # 全路由截图 + 渲染校验
 │   ├── shot-full.mjs               # 整页截图（viewport 之外的题目/材料/格纸）
 │   ├── shot-annotations.mjs        # 放大看色标批注区
-│   ├── exams/                      # 真题流水线（PDF → 分题 → 结构化 → 校验 → 前端数据）+ export_bpq.py
+│   ├── exams/                      # 真题流水线（PDF → 分题 → 结构化 → 校验 → 前端数据）
+│   │   ├── extract.py              #   PDF → 结构化 JSON（含 OCR 错字修正表）
+│   │   ├── to_frontend.py          #   结构化数据 → 前端题库（按年份分层）
+│   │   ├── export_bpq.py           #   导出明文 .bpq 题库包（作者专用）
+│   │   ├── bpq-keygen.mjs          #   生成题库包签名密钥对（公钥自动写入前端）
+│   │   └── seal-bpq.mjs            #   明文包 → 加密 + 签名包（含自检回读）
 │   ├── standards/gen_standards.mjs # 采分点批量预解析（--mock 无 Key 也能跑）
 │   ├── add_watermark.py            # 给核心源文件打作者注释头（幂等）
 │   └── push-all.mjs                # 一键推 GitHub + Gitee
@@ -617,6 +626,10 @@ backend/.venv/Scripts/python.exe .tools/check_release_private.py
 
 # 11) 桌面版「关页即退」：起真桌面版 + 真浏览器，验「关页会退、刷新不退」
 node .tools/probe-desktop-exit.mjs
+
+# 12) 题库包的加密与签名（不发外部请求）
+node .tools/test-bpq-crypto.mjs      # 算法与失败分支：20 项
+node .tools/probe-bpq-browser.mjs    # 跨运行时：Node 加密 → 浏览器验签解密
 ```
 
 | 脚本 | 用途 |
@@ -635,6 +648,8 @@ node .tools/probe-desktop-exit.mjs
 | `probe-wechat.mjs` | 微信引流入口断言：四处入口的位置与开合、群码过期后的降级文案；`BP_BASE` 可指向解压后的桌面版产物 |
 | `test-desktop-reuse.py` | 桌面版实例复用：同版本复用、版本不同另起端口且不把用户带去旧界面 |
 | `probe-desktop-exit.mjs` | 起一个真桌面版 + 真 headless 浏览器，用 CDP 走「打开 → 刷新 → 离开」三步：验页面会登记会话、**刷新不会误退**、离开后进程自行退出。后端单测验不了"关闭页面时 `sendBeacon` 到底发没发出去"，只能靠它 |
+| `test-bpq-crypto.mjs` | 题库包加解密与签名：口令错 / 密文被改 / **水印被改** / 换成他人公钥 / 他人私钥冒充 / v1 老包回归 / 作者命令行通路，20 项 |
+| `probe-bpq-browser.mjs` | 作者用 Node 加出来的密，**真浏览器**能不能验签解开。跨运行时是最容易被忽略的失败面：标准一致但实现有差异，真出事时作者自测完全正常 |
 | `check_release_private.py` | 破开每个归档产物的 chunk 清单，报「exam chunk 数 / 是否含私有卷 / 功能指纹」，**发之前跑一遍** |
 
 > **为什么评分内核要有纯代码单测？**
@@ -798,6 +813,48 @@ SQLite 文件在 `backend/data/bluepencil.db`，启动时自动创建。如果�
 已 gitignore；构建走 `frontend/src/data/real-exams-private-stub/` 的空实现）。
 拿不到私有卷时软件照常可用，只是题库里没有 2022 年起的卷 —— 需要向作者索取题库包，
 在「题库 → 导入题库包」里导入。每个包带使用者水印，**请勿二次转发**。
+
+#### 题库包是怎么保护的
+
+`.bpq` 两代格式并存，导入时按 `magic` 自动分辨：
+
+| | v1（`BPQ00001`） | v2（`BPQ00002`） |
+|---|---|---|
+| 正文 | 明文 | **AES-256-GCM 加密**（密钥由口令经 PBKDF2-SHA256 派生） |
+| 完整性 | FNV-1a 校验和（只防"传坏了"） | GCM auth tag（改一位就解不开） |
+| 身份 | 无 | **ECDSA P-256 签名**（作者私钥签，程序内置公钥验） |
+
+两件事必须分清，代码里也是分开的：
+
+- **加密（AES-GCM）解决"读不到"**。口令由作者**另外**告知，与包分开走 ——
+  一起发就不叫加密了。包本身外流，没有口令也只是乱码。
+- **签名（ECDSA）解决"是不是作者发的"**。GCM 的完整性**不等于**身份认证：
+  知道口令的人也能造出合法的 GCM 密文。签名覆盖水印字段，所以改水印一样验不过 ——
+  「泄露可溯源」靠的是这条。
+- 导入时**先验签、再解密**。伪造的包在验签就被拒掉，不必白跑一次 PBKDF2；
+  报错也更准（不然"打不开"会让人以为是口令问题）。
+- 公钥是**数组**，轮换密钥时追加、不删旧的 —— 删掉哪一把，之前发出去的包就永久验不过签了。
+- **v1 明文包继续支持**：已经发出去的包不能因为升级就失效。
+
+作者侧的完整流程：
+
+```bash
+# 1) 只跑一次：生成签名密钥对（私钥进 .tools/exams/keys/，已 gitignore）
+node .tools/exams/bpq-keygen.mjs --force
+
+# 2) 导出明文包（含材料与答案，只能本机看）
+backend/.venv/Scripts/python.exe .tools/exams/export_bpq.py --user "张三/zhangsan@qq.com"
+
+# 3) 封装成加密+签名包（自带回读自检）
+node .tools/exams/seal-bpq.mjs --in "release/私有题库/…-明文.bpq" --passphrase "你的分发口令"
+
+# 4) 发出前复核（模拟用户那边打开一遍）
+node .tools/verify-bpq.mjs "release/私有题库/…-加密.bpq" --passphrase "你的分发口令"
+```
+
+> 加密与签名走的是 **WebCrypto**（Node 与浏览器同一套 API），所以后端**零新增依赖**；
+> 也绕开了"Python 的 ECDSA 默认输出 DER、而 WebCrypto 要 raw(r‖s)"这个必踩的坑 ——
+> 踩了的话症状是"验签永远不通过"，完全看不出原因。
 
 构建时的分层开关（默认不含私有卷，这一条是刻意的）：
 

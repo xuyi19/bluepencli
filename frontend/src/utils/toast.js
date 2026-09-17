@@ -16,6 +16,7 @@ import { reactive } from 'vue'
 export const toastState = reactive({
   items: [],     // { id, type, text }
   confirm: null, // { id, text, title, okText, cancelText }
+  prompt: null,  // { id, text, title, placeholder, okText, cancelText, value }
 })
 
 let seq = 0
@@ -43,6 +44,14 @@ export function resolveConfirm(ok) {
   c.resolve(ok)
 }
 
+/** 输入框同理：传 null 表示取消 */
+export function resolvePrompt(value) {
+  const p = toastState.prompt
+  if (!p) return
+  toastState.prompt = null
+  p.resolve(value)
+}
+
 export const toast = {
   success: (t) => push('success', t),
   info: (t) => push('info', t),
@@ -59,6 +68,22 @@ export const toast = {
     if (toastState.confirm) resolveConfirm(false)
     return new Promise((resolve) => {
       toastState.confirm = { id: ++seq, text, title, okText, cancelText, resolve }
+    })
+  },
+
+  /**
+   * 输入框，返回 Promise<string|null>（取消/关掉返回 null）。
+   *
+   * 目前只有一处用到：导入加密题库包时问口令。
+   * 用遮字输入是有意的 —— 口令会留在屏幕上的话，旁边的人一眼就看到了。
+   * 但别用它当"密码框"：这只是个本地文本框，不做任何安全处理。
+   */
+  askPassword(text, {
+    title = '需要口令', okText = '打开', cancelText = '取消', placeholder = '请输入口令',
+  } = {}) {
+    if (toastState.prompt) resolvePrompt(null)
+    return new Promise((resolve) => {
+      toastState.prompt = { id: ++seq, text, title, okText, cancelText, placeholder, value: '', resolve }
     })
   },
 }
