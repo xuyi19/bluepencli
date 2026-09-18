@@ -55,30 +55,91 @@ if (!CHROME) {
 }
 
 // ── 起桌面版（默认 8765，被占则顺延，所以扫一段） ─────────────
-const desk = spawn(PY, ['desktop.py', '--no-browser'], {
-  cwd: path.join(ROOT, 'backend'),
+const CANDIDATE_PORTS = Array.from({ length: 20 }, (_, i) => 8765 + i)
+
+/** 读某个端口上的同族实例信息；不是蓝笔申论就返回 null。 */
+async function peek(port) {
+  try {
+    const res = await fetch(`http://127.0.0.1:${port}/api/v1/health`, {
+      signal: AbortSignal.timeout(400),
+    })
+    if (!res.ok) return null
+    const b = await res.json()
+    if (!String(b.app || '').includes('BluePencil')) return null
+    return { version: String(b.version || ''), desktop: b.desktop === true }
+  } catch {
+    return null
+  }
+}
+
+// ⚠️ **必须显式指定一个非默认端口**，否则会撞上 desktop.py 的「同版本复用」逻辑：
+// 默认端口上若已有一个同版本实例，`main()` 会**直接 return**（把浏览器指向那个旧实例），
+// 我起的进程随即退出 —— 探针就只能连到别人的实例上，断言全打偏。
+// 实测踩过：8765 上放一个同版本 v0.13.4 的残留，探针"4/4 通过"，但**退掉的是那个残留**，
+// 而起进程这一步压根没成功。这正是"假绿"最典型的样子。
+const PROBE_PORT = 8877
+// 基线要覆盖探针自己用的端口，否则"8877 本来就被占"这种情况看不见
+const BASELINE_PORTS = [...CANDIDATE_PORTS, PROBE_PORT]
+
+// ⚠️ **起进程之前**先拍一张基线快照：记下这段端口上已经活着的实例。
+//
+// 为什么需要它：这里曾经只判 `desktop === true`，于是**端口上任何同族实例都会被
+// 认成自家人**。真实踩过 —— 8765 上残留着一个 v0.13.3 的桌面版（上次探针没收干净，
+// 或用户自己开着），它保着 1 个会话，探针的断言就全打在了旧实例上：
+//   · sessions 变成 2（旧实例 1 + 探针页面 1），bye 之后只回到 1 → 第 3 条假红
+//   · 更糟的是第 4 条**假绿**："进程已退出"退掉的是那个残留实例，自己起的那个还活着
+// 这和桌面版 v0.13.2 修的「复用旧实例、把用户带去旧界面」是同一个病根，
+// 只是发生在探针这一侧：**"我这边是好的"和"真的测到了"之间，隔着"测的是不是我起的那个"**。
+//
+// 判据用「基线差集」而不是版本号：版本比对要先从日志里挖出版本（日志是异步的、
+// 文案还可能改），而"起进程前它就在了"这个事实不依赖任何解析，最稳。
+const baseline = new Map()
+for (const p of BASELINE_PORTS) {
+  const info = await peek(p)
+  if (info) baseline.set(p, info)
+}
+if (baseline.size) {
+  const desc = [...baseline.entries()].map(([p, i]) => `:${p} v${i.version}`).join('、')
+  console.log(`⚠️  起进程前，这些端口上已存在同族实例：${desc}`)
+  console.log('    它们不会参与本次断言（否则退的可能不是我自己起的那个）。\n')
+}
+
+// 起哪个：默认起 backend/desktop.py（源码），也可以用 `--exe` 指定一个**打包后的**
+// 蓝笔申论.exe —— 源码能跑不等于用户双击的那个包里能跑。
+// 打包产物和源码是两份不同的东西：PyInstaller 看不到动态导入、`_internal/web` 与
+// `frontend/dist` 也不是同一份文件，端口参数、静态托管、关页即退全都要在产物里再验一遍。
+const exeArg = (() => {
+  const i = process.argv.indexOf('--exe')
+  return i >= 0 ? process.argv[i + 1] : null
+})()
+if (exeArg && !existsSync(exeArg)) {
+  console.error(`--exe 指定的文件不存在：${exeArg}`)
+  process.exit(1)
+}
+
+// 产物和源码的启动方式不同：exe 自带解释器与工作目录，不能传 cwd=backend
+const [cmd, args, cwd] = exeArg
+  ? [exeArg, ['--no-browser', '--port', String(PROBE_PORT)], undefined]
+  : [PY, ['desktop.py', '--no-browser', '--port', String(PROBE_PORT)], path.join(ROOT, 'backend')]
+
+const desk = spawn(cmd, args, {
+  cwd,
   stdio: ['ignore', 'pipe', 'pipe'],
 })
+
+// 万一 exe 目录本来就有实例（比如作者自己开着），退出的会是那个进程 ——
+// 但下面只认 PROBE_PORT 上"基线里没有的"那一个，所以不会误判。
+if (exeArg) console.log(`被测对象：打包产物 ${exeArg}\n`)
 let deskLog = ''
 desk.stdout.on('data', (d) => (deskLog += d))
 desk.stderr.on('data', (d) => (deskLog += d))
 
-const CANDIDATE_PORTS = Array.from({ length: 20 }, (_, i) => 8765 + i)
-
 async function findPort() {
+  // 优先看我指定的那个端口 —— 那才是"我起的这个"最可靠的标志。
+  // 但要确认它不在基线里（万一它早被别人占着，desktop.py 会顺延）。
   for (let i = 0; i < 60; i++) {
-    for (const port of CANDIDATE_PORTS) {
-      try {
-        const res = await fetch(`http://127.0.0.1:${port}/api/v1/health`, {
-          signal: AbortSignal.timeout(400),
-        })
-        if (!res.ok) continue
-        const body = await res.json()
-        if (String(body.app || '').includes('BluePencil') && body.desktop === true) return port
-      } catch {
-        /* 还没起来 */
-      }
-    }
+    const here = await peek(PROBE_PORT)
+    if (here && here.desktop && !baseline.has(PROBE_PORT)) return PROBE_PORT
     await sleep(400)
   }
   return null
@@ -108,12 +169,32 @@ async function sessionState(port) {
 
 const port = await findPort()
 if (!port) {
-  console.error('桌面版没起来，日志尾部：')
+  console.error('没找到「我这次起的那一个」桌面版实例。')
+  if (baseline.has(PROBE_PORT)) {
+    console.error(
+      `→ 探针专用端口 ${PROBE_PORT} 上**本来就有**实例（v${baseline.get(PROBE_PORT).version}），` +
+        'desktop.py 会顺延到别的端口，探针无法确定哪个是自己起的。',
+    )
+    console.error(`   请先关掉占用 ${PROBE_PORT} 的实例再跑。`)
+  }
+  const now = []
+  for (const p of BASELINE_PORTS) {
+    const info = await peek(p)
+    if (!info) continue
+    const was = baseline.get(p)
+    now.push(`  · :${p} → v${info.version}${was ? `（起进程前就在，v${was.version}）` : '（本次新出现但版本未变？）'}`)
+  }
+  if (now.length) {
+    console.error('端口上当前的同族实例：')
+    console.error(now.join('\n'))
+    console.error('→ 如果它们都是"起进程前就在"，说明新实例没起来（或起了又退了）。')
+  }
+  console.error('启动日志尾部：')
   console.error(deskLog.slice(-1500))
   desk.kill()
   process.exit(1)
 }
-console.log(`桌面版已就绪：http://127.0.0.1:${port}/\n`)
+console.log(`桌面版已就绪：http://127.0.0.1:${port}/（本次新起的实例）\n`)
 
 // ── 起 Chrome ────────────────────────────────────────────
 // 调试端口用随机的：固定端口在 Windows 上可能连到上一次没杀干净的实例，

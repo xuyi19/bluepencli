@@ -29,6 +29,8 @@ import { parseJson } from '../utils/parse'
 import { resolveStandard, buildStandardPrompt, buildStandardComparison } from './grading/standardResolver'
 // 第③层：校验层（硬规则）——纯代码算出来的客观事实
 import { runHardRules, formatRulesForPrompt } from '../utils/grading/rules'
+// 多老师采分点归并：必须去重并对齐标准，不能直接 flatMap（会把同一采分点拼 N 次）
+import { mergeKeyPoints } from '../utils/grading/keyPoints'
 
 // 分歧阈值：最高分与最低分得分率差值超过此值即触发复核
 export const DISPUTE_THRESHOLD = 0.15
@@ -84,6 +86,7 @@ async function gradeByTeacher(teacher, paper, { onProgress, signal, deep, taskId
   if (!parsed) {
     return {
       teacherId: teacher.id,
+      teacherName: teacher.name,
       error: '解析失败',
       rawText: text,
       score: 0,
@@ -95,6 +98,8 @@ async function gradeByTeacher(teacher, paper, { onProgress, signal, deep, taskId
     }
   }
   parsed.teacherId = teacher.id
+  // 带上名字：采分点归并时要标注「这条是哪几位老师给的」
+  parsed.teacherName = teacher.name
   parsed.rawText = text
   return parsed
 }
@@ -376,7 +381,8 @@ export async function runGrading({ paper: paperInput, teacherIds, deep = false, 
         .map((b) => `${b.name}×${b.weight}`)
         .join('，')}）`,
       weighted: ws,
-      keyPoints: results.flatMap((r) => r.keyPoints || []),
+      // 归并去重并按标准对齐（详见 utils/grading/keyPoints.js 顶部说明）
+      keyPoints: mergeKeyPoints(results, stdInfo.standard),
     }
     return finish()
   }
@@ -405,7 +411,8 @@ export async function runGrading({ paper: paperInput, teacherIds, deep = false, 
       fusion?.roundtableNote ||
       `${teachers.length} 位老师圆桌合议${needDebate ? '（含分歧复核）' : '（评分一致，未触发辩论）'}`,
     weighted: ws,
-    keyPoints: results.flatMap((r) => r.keyPoints || []),
+    // 归并去重并按标准对齐（详见 utils/grading/keyPoints.js 顶部说明）
+    keyPoints: mergeKeyPoints(results, stdInfo.standard),
   }
   if (!fusion) {
     output.final.errorNote = '合议结果解析失败，已回退为加权计分'

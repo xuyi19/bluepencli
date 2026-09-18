@@ -148,6 +148,62 @@ def main() -> int:
 
         t("版本不同 → 不复用、另起端口且不打开旧界面", branch_diff)
 
+        # ---- 分支③：显式 --port → 连"同版本复用"都要绕过 ----
+        #
+        # 这条分支是为**自动化探针**加的，但它是行为约定、不是测试专用的后门，
+        # 所以必须和另两条一样有断言盯着。
+        # 为什么探针非绕过不可：默认端口上若已有一个同版本实例，复用分支会
+        # **直接 return**（把浏览器指向那个旧实例），探针起的进程随即退出 ——
+        # 于是它连到的是**别人的实例**，断言全打偏。实测踩过：8765 上放一个
+        # 同版本 v0.13.4 的残留，探针报"4/4 通过"，但退掉的是那个残留实例，
+        # 而它自己起的进程压根没起来。这是最典型的**假绿**。
+        def branch_explicit_port():
+            opened, ran = [], []
+            orig_open = desktop.webbrowser.open
+            orig_server = desktop.uvicorn.Server
+            orig_argv = sys.argv[:]
+            desktop.webbrowser.open = lambda u: opened.append(u)
+            desktop.uvicorn.Server = _fake_server(ran)
+            sys.argv = [sys.argv[0], "--no-browser", "--port", "8899"]
+            try:
+                out = _capture(desktop.main)
+            finally:
+                desktop.webbrowser.open = orig_open
+                desktop.uvicorn.Server = orig_server
+                sys.argv = orig_argv
+            assert ran, (
+                "显式指定端口时必须真的起服务（同版本在跑也不能复用，"
+                f"否则探针会连到别人的实例）：{out!r}"
+            )
+            assert "已在运行" not in out, f"显式端口不该走复用分支：{out!r}"
+            assert "8899" in out, f"应使用命令行指定的端口 8899：{out!r}"
+            assert not opened, "带 --no-browser 时不该自动开浏览器"
+
+        t("显式 --port → 绕过同版本复用，真的另起一个", branch_explicit_port)
+
+        # ---- 分支④：`--port=N` 等号写法同样要认 ----
+        # 同一件事有两种命令行写法，只认一种就会静默退回默认端口 ——
+        # 那种失败**看起来完全正常**（服务起在 8765 上了），最难发现。
+        def branch_port_equals():
+            assert desktop._requested_port.__doc__, "_requested_port 应有说明"
+            orig_argv = sys.argv[:]
+            try:
+                for argv, want in (
+                    ([], 8765),
+                    (["--no-browser"], 8765),
+                    (["--port", "8899"], 8899),
+                    (["--port=8899"], 8899),
+                    (["--port", "abc"], 8765),  # 非法值退回默认，不能崩
+                    (["--port"], 8765),  # 缺参数退回默认，不能崩
+                ):
+                    sys.argv = [sys.argv[0], *argv]
+                    got = desktop._requested_port()
+                    assert got == want, f"{argv} → 应得 {want}，实际 {got}"
+            finally:
+                sys.argv = orig_argv
+
+        t("--port 两种写法都认，非法/缺失退回默认", branch_port_equals)
+
     finally:
         proc.terminate()
         try:

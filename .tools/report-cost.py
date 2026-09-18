@@ -29,13 +29,52 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 
-# 与 backend/app/services/grading_service.py 保持一致（DeepSeek 价目：输入 ¥2/M、输出 ¥8/M）
-PRICE_PROMPT_PER_M = 2.0
-PRICE_COMPLETION_PER_M = 8.0
+# ── 价目表（元 / 百万 token，输入、输出）──────────────────────────
+#
+# ⚠️ 曾经只有一个写死的 DeepSeek 价目，而第一次真实批改用**智谱 glm-4-flash**跑出来，
+#    报告却按 DeepSeek 折算 —— 数字差了两个数量级，等于没测。
+#    教训：**价目必须跟着实际模型走**，不能默认用户用哪家。
+#
+# 查价日 2026-09-18，价目会变，改前先看厂商官网。
+MODEL_PRICES: dict[str, tuple[float, float]] = {
+    # 智谱（开放平台 bigmodel.cn）
+    "glm-4-flash": (0.5, 1.0),
+    "glm-4-flash-250414": (0.5, 1.0),
+    "glm-4-air": (1.0, 1.0),
+    "glm-4": (10.0, 10.0),
+    "glm-4-plus": (50.0, 50.0),
+    # DeepSeek（platform.deepseek.com）
+    "deepseek-chat": (2.0, 8.0),
+    "deepseek-reasoner": (2.0, 8.0),
+    # 兜底：没收录的模型按 DeepSeek 口径估
+    "_default": (2.0, 8.0),
+}
+PRICE_TABLE_NOTE = "查价日 2026-09-18"
 
 # 验收线：方案里定的目标
 TOKEN_BUDGET = 2500          # 常规模式单题
 COST_TARGET = {"solo": 0.03, "duo": 0.08, "roundtable": 0.22}
+
+
+def price_of(model: str) -> tuple[float, float]:
+    """按模型名找价目；带日期后缀的（如 glm-4-flash-250414）也能命中主名。"""
+    name = (model or "").strip().lower()
+    if not name:
+        return MODEL_PRICES["_default"]
+    if name in MODEL_PRICES:
+        return MODEL_PRICES[name]
+    # 前缀匹配：glm-4-flash-250414 → glm-4-flash（取最长的匹配，避免 glm-4 抢走 glm-4-plus）
+    hits = [k for k in MODEL_PRICES if k != "_default" and name.startswith(k)]
+    if hits:
+        return MODEL_PRICES[max(hits, key=len)]
+    return MODEL_PRICES["_default"]
+
+
+def is_priced(model: str) -> bool:
+    """该模型是否在价目表里（不在就是要用兜底价，得提醒）"""
+    return bool(model) and price_of(model) != MODEL_PRICES["_default"] or (
+        (model or "").strip().lower() in MODEL_PRICES
+    )
 
 
 def disp_len(s: str) -> int:
@@ -59,10 +98,25 @@ def candidates() -> list[Path]:
     return sorted([p for p in found if p.exists()], key=lambda p: p.stat().st_mtime, reverse=True)
 
 
-def money(prompt_tokens: int, completion_tokens: int) -> float:
-    return (prompt_tokens / 1_000_000) * PRICE_PROMPT_PER_M + (
-        completion_tokens / 1_000_000
-    ) * PRICE_COMPLETION_PER_M
+def money(prompt_tokens: int, completion_tokens: int, model: str = "") -> float:
+    """按**该次调用实际用的模型**折价。model 为空时用兜底价。"""
+    pi, po = price_of(model)
+    return (prompt_tokens / 1_000_000) * pi + (completion_tokens / 1_000_000) * po
+
+
+def money_by_model(detail: list[tuple]) -> tuple[float, str]:
+    """逐次调用按各自模型折价再求和（一次批改里可能混用模型）。
+
+    detail 行结构：teacher, stage, model, prompt, completion, ms, ok, err
+    """
+    total = 0.0
+    models: list[str] = []
+    for r in detail:
+        m = r[2] or ""
+        if m and m not in models:
+            models.append(m)
+        total += money(r[3] or 0, r[4] or 0, m)
+    return total, "、".join(models)
 
 
 def rows(cur: sqlite3.Cursor, sql: str, args: tuple = ()) -> list[tuple]:
@@ -98,6 +152,29 @@ def report(db: Path) -> int:
     (tid, mode, tids, qtype, title, chars, deep, score, mx, rate,
      ms, calls, pt, ct, disputed, status, error, created) = t
 
+    # ⚠️ 任务表的 prompt_tokens / completion_tokens **永远是 0**：
+    #    前端上报任务时不带这个字段（它手里没有），后端逐次记账在 llm_call_logs，
+    #    但没有任何环节把逐次结果汇总回填到任务行。
+    #    所以这里一律以 llm_call_logs 为准 —— 否则报告会显示「0 token / ¥0」，看着达标其实没测。
+    #    （若将来做了回填，下面的 fallback 会自动生效，不用改报告。）
+    detail_raw = rows(
+        cur,
+        """SELECT teacher_id, stage, model, prompt_tokens, completion_tokens,
+                  elapsed_ms, ok, error
+           FROM llm_call_logs WHERE task_id = ? ORDER BY id""",
+        (tid,),
+    )
+    # detail 行不含 task_id，供 money_by_model 使用
+    detail = [(r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7]) for r in detail_raw]
+
+    calls_pt = sum(r[3] or 0 for r in detail)
+    calls_ct = sum(r[4] or 0 for r in detail)
+    if calls_pt or calls_ct:
+        pt, ct = calls_pt, calls_ct
+        token_source = "逐次调用明细求和"
+    else:
+        token_source = "任务行字段（无明细可用）"
+
     teachers = [x for x in (tids or "").split(",") if x]
     print("\n── 最近一次批改 " + "─" * 44)
     print(f"  {pad('任务 ID', 12)}{tid}")
@@ -113,21 +190,17 @@ def report(db: Path) -> int:
           f"圆桌分歧 {'有' if disputed else '无'}")
 
     total_tokens = pt + ct
-    cost = money(pt, ct)
-    print("\n── Token 与成本（按 DeepSeek 价目折算）" + "─" * 28)
+    cost, models_used = money_by_model(detail)
+    if not detail:
+        cost = money(pt, ct)
+    print("\n── Token 与成本 " + "─" * 48)
     print(f"  {pad('Prompt', 14)}{pt:>8,} tokens")
     print(f"  {pad('Completion', 14)}{ct:>8,} tokens")
-    print(f"  {pad('合计', 14)}{total_tokens:>8,} tokens")
-    print(f"  {pad('估算成本', 14)}¥{cost:.4f}")
+    print(f"  {pad('合计', 14)}{total_tokens:>8,} tokens  （{token_source}）")
+    print(f"  {pad('估算成本', 14)}¥{cost:.4f}"
+          + (f"  （按 {models_used} 价目，{PRICE_TABLE_NOTE}）" if models_used else ""))
 
     print("\n── 逐次调用明细 " + "─" * 44)
-    detail = rows(
-        cur,
-        """SELECT teacher_id, stage, model, prompt_tokens, completion_tokens,
-                  elapsed_ms, ok, error
-           FROM llm_call_logs WHERE task_id = ? ORDER BY id""",
-        (tid,),
-    )
     if detail:
         head = f"  {pad('阶段', 10)}{pad('老师', 10)}{pad('模型', 18)}{'prompt':>8}{'compl':>8}{'耗时':>9}"
         print(head)
@@ -137,6 +210,12 @@ def report(db: Path) -> int:
                   f"{p2:>8,}{c2:>8,}{ms2 / 1000:>8.1f}s{flag}")
         print(f"  {pad('', 18)}{'合计':>8} {sum(r[3] for r in detail):>8,}"
               f"{sum(r[4] for r in detail):>8,}")
+        # 逐次折价，便于对比哪一段最贵
+        seg: dict[str, float] = {}
+        for r in detail:
+            seg[r[1] or "—"] = seg.get(r[1] or "—", 0.0) + money(r[3] or 0, r[4] or 0, r[2] or "")
+        if len(seg) > 1:
+            print(f"  {'分段成本：' + '，'.join(f'{k} ¥{v:.4f}' for k, v in seg.items())}")
     else:
         print("  （没有逐次明细 —— 这次调用没经过后端记账）")
 
@@ -150,16 +229,28 @@ def report(db: Path) -> int:
     if calls and total_tokens:
         print(f"  · 单次调用均值 {total_tokens // calls:,} tokens，"
               f"其中 completion 占 {ct / total_tokens * 100:.0f}%")
-    if model_of(detail) and "deepseek" not in model_of(detail).lower():
-        print(f"  ⚠️ 实际模型是「{model_of(detail)}」，上面成本是按 DeepSeek 价目折算的，"
-              "真实账单以该厂商价目为准")
+    unknown = [m for m in (models_used or "").split("、") if m and not is_priced(m)]
+    if unknown:
+        print(f"  ⚠️ 模型「{'、'.join(unknown)}」不在价目表里，已按兜底价估算 —— "
+              "真实账单以该厂商价目为准，请补进 MODEL_PRICES")
 
     print("\n── 历史累计 " + "─" * 48)
     all_calls = sum(x[11] for x in tasks)
-    all_pt = sum(x[12] for x in tasks)
-    all_ct = sum(x[13] for x in tasks)
-    print(f"  任务 {len(tasks)} 次 · 调用 {all_calls} 次 · "
-          f"tokens {all_pt + all_ct:,} · 折算成本 ¥{money(all_pt, all_ct):.4f}")
+    # 同样以明细为准：任务行 token 字段是空的，拿它累加会恒等于 0
+    hist = rows(
+        cur,
+        """SELECT model, prompt_tokens, completion_tokens FROM llm_call_logs""",
+    )
+    if hist:
+        all_pt = sum(r[1] or 0 for r in hist)
+        all_ct = sum(r[2] or 0 for r in hist)
+        all_cost = sum(money(r[1] or 0, r[2] or 0, r[0] or "") for r in hist)
+    else:
+        all_pt = sum(x[12] for x in tasks)
+        all_ct = sum(x[13] for x in tasks)
+        all_cost = money(all_pt, all_ct)
+    print(f"  任务 {len(tasks)} 次 · 调用 {len(hist) or all_calls} 次 · "
+          f"tokens {all_pt + all_ct:,} · 折算成本 ¥{all_cost:.4f}")
     okn = sum(1 for x in tasks if x[15] == "success")
     print(f"  成功 {okn} / 失败 {len(tasks) - okn}")
     conn.close()

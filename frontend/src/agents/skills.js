@@ -37,7 +37,7 @@ function outputContract(t) {
   if (t.hasCoverage) extra.push('  "coverage": 数字（要点覆盖率百分比，0-100）')
   if (t.hasKeyPoints)
     extra.push(
-      '  "keyPoints": [{ "point": "材料中的要点", "status": "hit|partial|miss", "earned": 数字, "weight": 数字, "note": "该要点在考生答案中的情况" }]'
+      '  "keyPoints": [{ "pointId": "有标准时必填：标准点的编号，如 p1；无标准时留空", "point": "材料中的要点", "status": "hit|partial|miss", "earned": 数字, "weight": 数字, "note": "该要点在考生答案中的情况" }]'
     )
   if (t.hasRewrites)
     extra.push('  "rewrites": [{ "original": "考生原句", "rewritten": "改写句", "reason": "改写理由" }]')
@@ -50,7 +50,14 @@ function outputContract(t) {
   return `【你独有的输出要求】
 dimensions 只允许出现这四项，名称必须完全一致：${dims}
 ${t.hasCoverage ? 'score 必须等于采分点得分之和，可被复算。\n' : ''}${
-    t.hasKeyPoints ? 'keyPoints 必须覆盖材料里该题应有的全部要点，漏掉的也要列出来并标 miss——这是你最有价值的部分。\n' : ''
+    t.hasKeyPoints ? `keyPoints 必须覆盖材料里该题应有的全部要点，漏掉的也要列出来并标 miss——这是你最有价值的部分。
+⚠️ **一条只写一个点**。实测踩过：把"组织保障 + 资金投入 + 标准体系"塞进同一条长句，
+   于是那一句的 weight 只能填一个值，程序按分值归并时就会错配，
+   考生看到的"漏点"和实际不符。**多个点就写多条，宁多勿并。**
+⚠️ 有标准时（见上文【本题采分点标准】）**必须逐点对应、带上 pointId**，
+   点数与标准一致、顺序一致，不要自行合并或拆分。
+   没有标准时才按你自己的理解拆分要点。
+` : ''
   }${t.hasRewrites ? 'rewrites 必须给出可直接替换的成句，不能只给方向。\n' : ''}${
     t.hasHighlights ? 'highlights 只写真的好的，没有就给空数组，不要凑数。\n' : ''
   }deductions 按扣分严重程度从大到小排列。

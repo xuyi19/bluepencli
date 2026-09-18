@@ -593,13 +593,17 @@
         <div class="text-xs text-c-muted mb-3">
           采分点核对
           <span class="text-c-muted">
-            （命中 {{ keyPoints.filter(p => p.status === 'hit').length }} / {{ keyPoints.length }} 项）
+            （命中 {{ kpSummary.hit }} / {{ kpSummary.total }} 项<span v-if="kpSummary.partial">
+              ，部分命中 {{ kpSummary.partial }}</span>）
+          </span>
+          <span v-if="kpSummary.weightSum" class="text-c-muted">
+            · 程序计 {{ kpSummary.earnedSum }} / {{ kpSummary.weightSum }} 分
           </span>
         </div>
         <div class="flex flex-wrap gap-1.5">
           <span v-for="(p, i) in keyPoints" :key="i"
             class="text-xs px-2 py-1 rounded-lg cursor-default"
-            :title="p.note || p.point"
+            :title="(p.sources?.length ? `[${p.sources.join('、')}] ` : '') + (p.note || p.point)"
             :style="{
               background: p.status === 'hit' ? '#e8ecdf' : p.status === 'partial' ? '#f7eddc' : '#f7e9e4',
               color: p.status === 'hit' ? '#4f7d5e' : p.status === 'partial' ? '#9c6b2f' : '#b4552d',
@@ -607,6 +611,9 @@
             {{ p.status === 'hit' ? '✓' : p.status === 'partial' ? '~' : '✗' }}
             {{ truncate(p.point, 10) }}
           </span>
+        </div>
+        <div v-if="kpSummary.extra" class="text-[11px] text-c-muted mt-2.5 leading-5">
+          另有 {{ kpSummary.extra }} 条标准之外的补充点（不计入上表分值）
         </div>
       </section>
 
@@ -724,6 +731,8 @@ import { chat } from '../api/llm'
 import { buildFollowupMessages, buildSampleMessages } from '../prompts'
 import { TEACHERS, TEACHER_LIST, MODE_LABEL, PRESETS, detectMode } from '../agents/teachers'
 import { runGrading } from '../agents/orchestrator'
+import { resolveStandard } from '../agents/grading/standardResolver'
+import { mergeKeyPoints, summarizeKeyPoints } from '../utils/grading/keyPoints'
 import { buildRecord, archiveRecord, countChars, fmtDateTime, listAllRecords } from '../utils/record'
 import { getAll, STORES } from '../store/db'
 import { DIFFICULTY_LABEL } from '../data/builtin-questions'
@@ -878,8 +887,15 @@ const runningTeachers = computed(() =>
 const keyPoints = computed(() => {
   const final = report.value?.final?.keyPoints
   if (Array.isArray(final) && final.length) return final
-  return (report.value?.results || []).flatMap((r) => r.keyPoints || [])
+  // 兜底：老记录（final.keyPoints 还没有这个字段时）走一遍归并。
+  // ⚠️ 这里**不能**直接 flatMap —— 那正是本 bug 的第二现场：
+  //    多老师时同一采分点会被拼 N 次，「命中 X / Y 项」跟着变成假数字。
+  //    历史归档里的记录同样要按新口径显示，所以兜底也必须归并。
+  return mergeKeyPoints(report.value?.results || [], resolveStandard(loadedId.value)?.standard || null)
 })
+
+/** 采分点统计：命中/部分/缺失、程序计分 —— 全部基于**归并后**的数据，可复算 */
+const kpSummary = computed(() => summarizeKeyPoints(keyPoints.value))
 
 function teacherName(id) {
   return TEACHERS[id]?.name || id

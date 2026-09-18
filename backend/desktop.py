@@ -33,6 +33,25 @@ DEFAULT_PORT = 8765
 PORT_SCAN_RANGE = 20
 
 
+def _requested_port() -> int:
+    """从命令行读 `--port N`；没给就用默认端口。
+
+    为什么需要它：**同版本复用**逻辑（见 main 里 `running == current` 那一段）
+    会在默认端口上已有一个同版本实例时直接退出、把浏览器指向那个旧实例 ——
+    这对用户是对的，但让自动化探针没法保证"我断言的就是我刚起的那个进程"。
+    探针因此要能换一个端口起，从根上避开复用分支。
+    顺带也给了用户一个显式指定端口的入口（默认行为完全不变）。
+    """
+    argv = sys.argv[1:]
+    for i, a in enumerate(argv):
+        # 支持 `--port 9000` 与 `--port=9000` 两种写法
+        if a == "--port" and i + 1 < len(argv) and argv[i + 1].isdigit():
+            return int(argv[i + 1])
+        if a.startswith("--port=") and a.split("=", 1)[1].isdigit():
+            return int(a.split("=", 1)[1])
+    return DEFAULT_PORT
+
+
 def _enable_utf8_console() -> None:
     """Windows 控制台默认 GBK，中文日志会乱码。"""
     for stream in (sys.stdout, sys.stderr):
@@ -155,15 +174,22 @@ def main() -> None:
 
     current = app_settings.APP_VERSION
 
+    # 用户（或探针）显式指定的端口。给了就**完全跳过"同版本复用"分支** ——
+    # 复用是给"用户重复双击"设计的，而显式指定端口的意思就是"我要另起一个"。
+    requested = _requested_port()
+    explicit_port = requested != DEFAULT_PORT
+
     # 已在跑的实例：**只有版本相同才复用**。
     # 版本不同就当作"旧窗口还开着"，另起一个端口，绝不把用户带去旧界面。
-    running = _running_version(DEFAULT_PORT)
+    running = None if explicit_port else _running_version(DEFAULT_PORT)
     if running is not None and running == current:
         print(f"检测到已在运行的实例 v{running}，直接打开浏览器：http://127.0.0.1:{DEFAULT_PORT}/?v={running}")
         webbrowser.open(f"http://127.0.0.1:{DEFAULT_PORT}/?v={running}")
         return
 
-    port = _pick_port()
+    port = _pick_port(requested)
+    if explicit_port:
+        print(f"已按命令行指定使用端口 {port}（默认 {DEFAULT_PORT} 上的实例不受影响）")
 
     if running is not None:
         # 这条提示很关键：用户升级后最常见的困惑就是"我明明换了新包，界面还是旧的"
