@@ -167,3 +167,72 @@ async def test_markdown_section_numbers_have_no_gap(client, _isolate_records_dir
     assert "## 二、我的作答" in md
     assert "## 三、老师批注" in md
     assert "给定资料" not in md
+
+
+# ---------------- 评分可信度 ----------------
+
+def _credibility():
+    """一份三师圆桌的可信度快照（形态与前端 assessCredibility 的输出一致）。"""
+    return {
+        "version": "1.0",
+        "level": "high",
+        "score": 96,
+        "headline": "可以采信：多个独立口径互相印证",
+        "signals": [
+            {
+                "id": "agreement",
+                "label": "老师一致性",
+                "valueText": "3 位老师得分率极差 2.5 个百分点",
+                "level": "good",
+                "basis": "取每位老师「得分 ÷ 满分」的极差与离散度。",
+            },
+            {
+                "id": "agreement_solo",
+                "label": "老师一致性（单人）",
+                "valueText": "不适用",
+                "level": "na",
+                "basis": "只有一位老师的有效成绩，无从判断一致与否。",
+            },
+        ],
+        "reasons": ["3 位老师的判断基本一致（极差 2.5 个百分点）"],
+        "caveats": ["客观扣分被封顶：AI 给出的分数可能比规则层更宽容"],
+    }
+
+
+async def test_credibility_survives_the_backend(client, _isolate_records_dir):
+    """⚠️ 这是本文件最要紧的一条。
+
+    create_record 走 `payload.model_dump()`，pydantic 对**没有在 schema 里声明**的字段
+    一律静默丢弃 —— 于是前端老老实实存了、docs 里却什么都没有，两边还不报错。
+    这类「静默成功」比报错难查得多，所以在这里钉死。
+    """
+    payload = _payload(rid="rec-cred")
+    payload["credibility"] = _credibility()
+    assert (await client.post("/api/v1/records", json=payload)).status_code == 200
+
+    data = next(_isolate_records_dir.glob("*.json")).read_text(encoding="utf-8")
+    assert "credibility" in data, "credibility 被后端丢掉了（多半是 schema 里没声明这个字段）"
+
+
+async def test_credibility_is_rendered_in_markdown(client, _isolate_records_dir):
+    payload = _payload(rid="rec-cred-md")
+    payload["credibility"] = _credibility()
+    await client.post("/api/v1/records", json=payload)
+    md = next(_isolate_records_dir.glob("*.md")).read_text(encoding="utf-8")
+
+    assert "评分可信度：可信度高 · 96" in md
+    assert "多个独立口径互相印证" in md
+    # 每个信号都要带口径：没有口径的数字会被当成拍脑袋的结论
+    assert "口径：取每位老师" in md
+    # 「不适用」必须原样显示为破折号，不能伪装成通过（✓）
+    assert "— **老师一致性（单人）**：不适用" in md
+    # caveat 是给读者的重要提醒，不能丢
+    assert "客观扣分被封顶" in md
+
+
+async def test_record_without_credibility_still_renders(client, _isolate_records_dir):
+    """老记录没有这个字段 —— 渲染必须照样能过，不能因为缺字段就崩。"""
+    await client.post("/api/v1/records", json=_payload(rid="rec-nocred"))
+    md = next(_isolate_records_dir.glob("*.md")).read_text(encoding="utf-8")
+    assert "可信度" not in md
+    assert "# " in md

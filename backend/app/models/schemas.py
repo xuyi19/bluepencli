@@ -178,6 +178,10 @@ class PracticeRecordIn(BaseModel):
     debate: dict | None = None
     teacher_results: list[dict] = []
     elapsed_ms: int = 0
+    # ⚠️ 这个字段必须显式声明：`create_record` 走的是 `payload.model_dump()`，
+    #    pydantic 对没声明的字段一律**静默丢弃** —— 前端存了、docs 里却没有，
+    #    且两边都不报错，是最难查的一类不一致。
+    credibility: dict | None = None
 
 
 class PracticeRecordSummary(BaseModel):

@@ -145,6 +145,13 @@ AI 批改最容易失去可信度的地方是：**换个模型分数就变了，
 `backend/tests/` 的接口冒烟 + `.tools/test-rules.mjs`（24 组断言）、`.tools/test-standards.mjs`（17 组断言）
 两组纯代码单测，以及 `.tools/probe-standard-panel.mjs` 的面板渲染验证。
 
+**能信到什么程度**：分数旁边会给出一张**评分可信度**卡（`utils/grading/credibility.js`，
+34 项单测盯住口径）——五个纯代码信号说清这个分数有多少依据：几位老师是否一致、
+和「程序按采分点标准粗判」的覆盖率差多少、有没有人解析失败、客观扣分有没有撞封顶。
+两条不能破的规矩：**没依据必须显示「不适用」**（单人批改不许谎称"分歧 0%"），
+**每个数字必须带算法口径**（"程序按关键词粗判""按分值加权"）。
+它只做旁证，**不改写 AI 的分数**；分数天花板是 96 分，再好的批改也不给满分。
+
 ---
 
 ## 技术栈
@@ -443,6 +450,7 @@ bluepencil/
 │   ├── probe-bpq-browser.mjs       # 跨运行时验证：Node 加密 → 真浏览器验签解密
 │   ├── probe-pack-drop.mjs         # 拖拽导入（真 Chrome 12 项：提示层 / 计数 / 真触发导入）
 │   ├── test-issue.mjs              # 发放工具（24 项：换批换口令 / 水印各异 / 台账哈希）
+│   ├── test-credibility.mjs        # 评分可信度（34 项：不许谎称一致 / 掉链子必降级 / 分数与等级自洽）
 │   ├── test-review-card.mjs        # 错误类型归一化 + 复盘卡（38 项，含 5 组反例专测）
 │   ├── test-key-points.mjs         # 采分点归并（34 项：按标准对齐 / 去重 / 一句多点的边界）
 │   ├── test-key-points-realdata.mjs # 用第一次真批改的原始数据回放，对照修复前/后口径
@@ -647,6 +655,7 @@ node .tools/probe-site-links.mjs
 # 8) 评分内核纯代码单测（不碰网络；改规则或采分点标准后先跑这两条）
 node .tools/test-rules.mjs            # 硬规则引擎：24 组断言
 node .tools/test-standards.mjs        # 采分点标准层：17 组断言
+node .tools/test-credibility.mjs      # 评分可信度：34 项（守的是"不许说假话"，改评分链路后必跑）
 
 # 9) 微信引流入口断言（BP_BASE=... 可指向解压后的桌面版产物）
 node .tools/probe-wechat.mjs

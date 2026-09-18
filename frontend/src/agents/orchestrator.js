@@ -29,6 +29,8 @@ import { parseJson } from '../utils/parse'
 import { resolveStandard, buildStandardPrompt, buildStandardComparison } from './grading/standardResolver'
 // 第③层：校验层（硬规则）——纯代码算出来的客观事实
 import { runHardRules, formatRulesForPrompt } from '../utils/grading/rules'
+// 第③层派生：评分可信度（纯代码，描述这套分数能信到什么程度，不改写分数）
+import { assessCredibility } from '../utils/grading/credibility'
 // 多老师采分点归并：必须去重并对齐标准，不能直接 flatMap（会把同一采分点拼 N 次）
 import { mergeKeyPoints } from '../utils/grading/keyPoints'
 
@@ -307,9 +309,22 @@ export async function runGrading({ paper: paperInput, teacherIds, deep = false, 
     createdAt: startedAt,
   }
 
-  // 收尾：算耗时并向后端上报任务记录（后端不可用时静默跳过，不影响主流程）
+  // 收尾：算耗时、定可信度，并向后端上报任务记录（后端不可用时静默跳过）
+  //
+  // 可信度放在这里算而不是在结果页现算，原因很具体：结果页拿不到 `standard`
+  // （标准是通过 orchestrator 注入的，记录里没存），而记录必须长期可读 ——
+  // 三个月后回看一份存档，也要能知道"当时这个分数有多少依据"。
   const finish = () => {
     output.elapsed = Date.now() - startedAt
+    output.credibility = assessCredibility({
+      results,
+      final: output.final,
+      standard: output.standard,
+      hardRules,
+      debate: output.debate,
+      mode: output.mode,
+    })
+    onProgress?.({ type: 'credibility', credibility: output.credibility })
     reportTask({
       task_id: taskId,
       mode,

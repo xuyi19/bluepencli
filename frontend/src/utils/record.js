@@ -92,6 +92,10 @@ export function buildRecord({ form, report, elapsedMs }) {
     highlights: report.final?.highlights || [],
     keyPoints: report.final?.keyPoints || [],
     debate: report.debate || null,
+    // 评分可信度：一次批改时算好、随记录一起存档。
+    // 为什么要存：三年后翻回这份 md，还能知道"当时这个分数有多少依据"，
+    // 而不是只剩一个孤零零的数字。
+    credibility: report.credibility || null,
     results: (report.results || []).map((r) => ({
       teacherId: r.teacherId,
       score: r.score,
@@ -139,6 +143,7 @@ function toBackend(rec) {
     highlights: rec.highlights,
     key_points: rec.keyPoints,
     debate: rec.debate,
+    credibility: rec.credibility || null,
     teacher_results: rec.results,
     elapsed_ms: rec.elapsed,
   }
@@ -170,6 +175,7 @@ function fromBackend(data) {
     highlights: data.highlights || [],
     keyPoints: data.key_points || [],
     debate: data.debate || null,
+    credibility: data.credibility || null,
     results: (data.teacher_results || []).map((r) => ({
       ...r,
       teacherId: r.teacherId || r.teacher_id || '',
@@ -232,6 +238,8 @@ export function ensureCanonical(r) {
     highlights: r.highlights || [],
     keyPoints: r.keyPoints || [],
     debate: r.debate || null,
+    // 老形态的记录不可能有可信度，落到 null（UI 一律不显示，不猜不算）
+    credibility: r.credibility || null,
     results: (r.teacherResults || []).map((t) => ({
       ...t,
       annotations: t.annotations || [],

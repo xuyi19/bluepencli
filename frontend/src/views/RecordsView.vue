@@ -92,6 +92,10 @@
           <!-- 复盘卡：回看旧记录时先看这个，不用再翻一遍几十条意见 -->
           <ReviewCard :record="detail" />
 
+          <!-- 评分可信度：这份存档里的分数，当时有多少依据。
+               老记录没有这个字段（credibility 为 null），卡片自动不显示 -->
+          <CredibilityCard :credibility="detail.credibility" />
+
           <!-- 老师色标批注 -->
           <div v-if="detail.answer" class="rounded-2xl p-5 neu-inset mb-6">
             <div class="flex items-center justify-between mb-3">
@@ -264,6 +268,7 @@ import { RouterLink, useRoute } from 'vue-router'
 import ScoreRing from '../components/ScoreRing.vue'
 import AnnotatedAnswer from '../components/AnnotatedAnswer.vue'
 import ReviewCard from '../components/ReviewCard.vue'
+import CredibilityCard from '../components/CredibilityCard.vue'
 import { TEACHERS, MODE_LABEL } from '../agents/teachers'
 import {
   listAllRecords,

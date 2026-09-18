@@ -32,6 +32,16 @@ MODE_LABEL = {
 
 STATUS_MARK = {"hit": "✓", "partial": "~", "miss": "✗"}
 
+# 可信度等级与信号的显示符号（与前端 utils/grading/credibility.js 的 LEVEL / SIGNAL_LEVEL 对应；
+# 两边的**取值集合**必须一致，改一头要改两头）
+CRED_LEVEL_LABEL = {
+    "high": "可信度高",
+    "medium": "基本可信",
+    "low": "仅供参考",
+    "unknown": "无从评估",
+}
+CRED_SIGNAL_MARK = {"good": "✓", "warn": "!", "bad": "✗", "na": "—"}
+
 # 章节编号用的中文数字（一、二、三……）
 _CN_NUM = ["零", "一", "二", "三", "四", "五", "六", "七", "八", "九", "十"]
 
@@ -221,6 +231,25 @@ def render_markdown(record: dict) -> str:
         L.append(f"> 阅卷老师：{names}")
     if record.get("elapsed_ms"):
         L.append(f"> 批改耗时：{record['elapsed_ms'] / 1000:.1f} 秒")
+
+    # —— 评分可信度 ——
+    # 放在最显眼的开头：一个分数如果没有"能信到什么程度"的说明，
+    # 半年后翻出来就是一个无从判断的数字。
+    cred = record.get("credibility") or {}
+    if cred:
+        label = CRED_LEVEL_LABEL.get(str(cred.get("level") or ""), "")
+        head = f"> **评分可信度：{label or '—'} · {cred.get('score', 0)}**"
+        if cred.get("headline"):
+            head += f" —— {cred['headline']}"
+        L.append(head)
+        for s in cred.get("signals") or []:
+            mark = CRED_SIGNAL_MARK.get(str(s.get("level") or ""), "·")
+            L.append(f">   - {mark} **{s.get('label', '')}**：{s.get('valueText', '')}")
+            if s.get("basis"):
+                L.append(f">     - 口径：{s['basis']}")
+        for c in cred.get("caveats") or []:
+            L.append(f">   - ⚠ {c}")
+
     L.append("")
 
     # 章节号按实际出现的章节递增——「给定资料」为空时不该留下一、三的跳号

@@ -384,6 +384,10 @@
         </div>
       </section>
 
+      <!-- 评分可信度：这个分数有多少依据。
+           紧贴分数是刻意的 —— 先把"能不能信"说清楚，考生才有心情看下面的改进建议 -->
+      <CredibilityCard :credibility="report.credibility" />
+
       <!-- 复盘卡：考生看完分数最想知道"那我改哪儿"，所以放在分数下面第一个位置 -->
       <ReviewCard :record="report" />
 
@@ -726,6 +730,7 @@ import { toast } from '../utils/toast'
 import ScoreRing from '../components/ScoreRing.vue'
 import AnnotatedAnswer from '../components/AnnotatedAnswer.vue'
 import ReviewCard from '../components/ReviewCard.vue'
+import CredibilityCard from '../components/CredibilityCard.vue'
 import GridPaper from '../components/GridPaper.vue'
 import { chat } from '../api/llm'
 import { buildFollowupMessages, buildSampleMessages } from '../prompts'
