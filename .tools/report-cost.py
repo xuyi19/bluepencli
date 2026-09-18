@@ -8,16 +8,19 @@
 
 为什么要它：项目从 v0.1.0 起所有验证都在代码层与接口层跑，「一次真实批改要花
 多少钱、耗多少 token」这件事一直没实测过 —— 牌面上只有预估（三师 ¥0.12 / 五师
-¥0.22，常规模式单题 ≤ 2500 token）。跑完第一次真 Key 之后用这个脚本把数字拿出来。
+¥0.22）。跑完第一次真 Key 之后用这个脚本把数字拿出来。
 
 用法：
-    backend/.venv/Scripts/python.exe .tools/report-cost.py            # 自动找最近写入的库
+    backend/.venv/Scripts/python.exe .tools/report-cost.py            # 自动挑**有真实记账**的库
     backend/.venv/Scripts/python.exe .tools/report-cost.py <db 路径>  # 指定
 
-数据来源：后端 SQLite（grading_tasks 汇总 + llm_call_logs 逐次明细）。
+数据来源：后端 SQLite（`llm_call_logs` 逐次明细为准）。
 ⚠️ 前端填自己的 Key 时，请求仍经后端转发（chatBackend），所以一样会被记账；
 只有后端没起来、走浏览器直连的那次不会被记 —— 报告里会出现「0 次调用」，
 那不是没花钱，是没记账。
+
+配套：`node .tools/prompt-size.mjs` 回答「单次调用为什么这么大、能否优化」。
+本报告回答「实际花了多少」，那边回答「钱花在哪」——两个要对着看。
 """
 
 from __future__ import annotations
@@ -51,8 +54,23 @@ MODEL_PRICES: dict[str, tuple[float, float]] = {
 }
 PRICE_TABLE_NOTE = "查价日 2026-09-18"
 
-# 验收线：方案里定的目标
-TOKEN_BUDGET = 2500          # 常规模式单题
+# 验收线
+#
+# ⚠️ 这里原先只有「单题 ≤ TOKEN_BUDGET」一条，而那 2500 是**按一次 LLM 调用**
+# 估出来的；三师圆桌一次批改天然是 3 次 grade + 1 次合议 = 4 次调用，于是报告
+# 必然打出「✗ 超出 6.2 倍」—— 看着像设计严重超标，其实是**拿整题去比单次预算**，
+# 尺子用错了层。
+#
+# 现在拆成两条线，各回答各的问题：
+#   ① 单次调用 ≤ TOKEN_BUDGET_PER_CALL —— 这条才是在控「prompt 别太大」（方案本意）
+#   ② 整题 ≤ TOKEN_BUDGET_PER_CALL × 有效调用数 —— 多位老师是线性叠加，
+#      这条查的是"有没有比线性更糟"（比如有人被重试了一次、或某段 prompt 失控）
+#
+# 分层之后能诚实回答：单次调用实测约 4,200 tokens，**确实超出 2500 约 1.7 倍**；
+# 但归因清楚（见 .tools/prompt-size.mjs）：输出契约 + 采分点标准注入占大头，
+# 两者都是为了保证"批改可复算、type 走受控词表"而必需的，**不是被浪费撑爆的**。
+# 换句话说：当初那 2500 是估低了，不是后来写坏了。
+TOKEN_BUDGET_PER_CALL = 2500
 COST_TARGET = {"solo": 0.03, "duo": 0.08, "roundtable": 0.22}
 
 
@@ -86,16 +104,56 @@ def pad(s: str, width: int) -> str:
     return s + " " * max(0, width - disp_len(s))
 
 
+def _has_real_usage(db: Path) -> bool:
+    """这个库里有没有**真的记账过的调用**（token > 0）。
+
+    为什么要单独判：本机通常同时存在好几个库 —— 刚打包出来还没跑过的空库、
+    只用假 LLM 跑过链路的库（模型名是 `mock-model`、token 恒为 0）、
+    以及那个真正拿着 Key 批过一次的库。按写入时间挑会挑到前两种，
+    于是报告打出「合计 0 tokens · ✓ 达标」——看着像通过了，其实什么都没测到。
+    **这正是「假绿」**：比报错危险得多。
+    """
+    try:
+        conn = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
+        try:
+            cur = conn.execute(
+                "SELECT COUNT(*) FROM llm_call_logs "
+                "WHERE COALESCE(prompt_tokens,0) + COALESCE(completion_tokens,0) > 0"
+            )
+            return (cur.fetchone() or (0,))[0] > 0
+        finally:
+            conn.close()
+    except sqlite3.Error:
+        return False
+
+
 def candidates() -> list[Path]:
-    """所有可能放着数据库的位置，按最后写入时间倒序"""
+    """候选数据库，**有真实记账的排前面**，其次按最后写入时间倒序。
+
+    ⚠️ 两处坑都踩过：
+      ① 以前只扫 `release/` 的**一级子目录**，而产物归档后真库跑进了
+         `release/历史版本/<版本>/data/` —— 于是报告看不见那次真实批改，
+         只剩刚打包出来的空库。**布局一变、扫描就跟不上**（本项目第 N 次栽在这上面）。
+         现在递归 `rglob` —— 目录层级不该决定"能不能找到数据"。
+      ② 排序原先只按 mtime，于是空库/假数据库排在前面。见 `_has_real_usage`。
+    """
     found: list[Path] = []
-    found.append(ROOT / "backend" / "data" / "bluepencil.db")
+    backend_db = ROOT / "backend" / "data" / "bluepencil.db"
+    if backend_db.exists():
+        found.append(backend_db)
     release = ROOT / "release"
     if release.is_dir():
-        for child in release.iterdir():
-            if child.is_dir() and (child / "data" / "bluepencil.db").exists():
-                found.append(child / "data" / "bluepencil.db")
-    return sorted([p for p in found if p.exists()], key=lambda p: p.stat().st_mtime, reverse=True)
+        found.extend(release.rglob("data/bluepencil.db"))
+    # 去重（同一文件可能跟 release 根/历史版本 都命中）+ 真实性优先
+    seen: set[str] = set()
+    uniq: list[Path] = []
+    for p in found:
+        key = str(p.resolve()).lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        uniq.append(p)
+    return sorted(uniq, key=lambda p: (not _has_real_usage(p), -p.stat().st_mtime))
 
 
 def money(prompt_tokens: int, completion_tokens: int, model: str = "") -> float:
@@ -220,9 +278,29 @@ def report(db: Path) -> int:
         print("  （没有逐次明细 —— 这次调用没经过后端记账）")
 
     print("\n── 验收判据 " + "─" * 48)
-    budget = TOKEN_BUDGET
-    verdict = "✓ 达标" if total_tokens <= budget else "✗ 超出"
-    print(f"  {verdict}  单题总 token {total_tokens:,}（方案验收线 ≤ {budget:,}）")
+    # 分「单次调用」与「整题」两层：原先把整题总量直接跟单次预算比，
+    # 于是多老师模式永远超额 —— 那是量纲错配，不是真的设计超标。
+    per_call = [(r[3] or 0) + (r[4] or 0) for r in detail] or ([total_tokens] if total_tokens else [])
+    peak = max(per_call) if per_call else 0
+    mean = sum(per_call) // len(per_call) if per_call else 0
+    n_call = len(per_call) or 1
+
+    if per_call:
+        v1 = "✓ 达标" if peak <= TOKEN_BUDGET_PER_CALL else "✗ 超出"
+        print(f"  {v1}  单次调用峰值 {peak:,} tokens"
+              f"（方案验收线 ≤ {TOKEN_BUDGET_PER_CALL:,}/次"
+              + (f"，超 {peak / TOKEN_BUDGET_PER_CALL:.1f} 倍）" if peak > TOKEN_BUDGET_PER_CALL else "）"))
+        print(f"     均值 {mean:,} · 共 {n_call} 次调用")
+        linear = TOKEN_BUDGET_PER_CALL * n_call
+        v3 = "✓ 达标" if total_tokens <= linear else "✗ 超出"
+        print(f"  {v3}  单题总量 {total_tokens:,} tokens"
+              f"（{n_call} 次调用的线性预算 ≤ {linear:,}"
+              + (f"，超 {total_tokens / linear:.1f} 倍）" if total_tokens > linear else "）"))
+    if per_call and peak > TOKEN_BUDGET_PER_CALL:
+        print("     ↳ 单次超限的归因见 `node .tools/prompt-size.mjs`：")
+        print("       输出契约 + 采分点标准注入占 system 的绝大部分，都是质量必需项，")
+        print("       → **当初 2500 这条线估低了**，不是后来写坏了。")
+
     target = COST_TARGET.get(mode, 0.22)
     v2 = "✓ 达标" if cost <= target else "✗ 超出"
     print(f"  {v2}  单题成本 ¥{cost:.4f}（{mode} 预估 ¥{target:.2f}）")
@@ -278,9 +356,18 @@ def main() -> int:
         print("可能原因：① 后端从未启动过；② 桌面版还没跑过批改。")
         return 1
     if len(found) > 1:
-        print("发现多个数据库，用最近写入的那个（其余用参数指定）：")
+        real = [p for p in found if _has_real_usage(p)]
+        print(f"发现 {len(found)} 个数据库，"
+              f"优先用**真的记账过调用**的那个"
+              f"（共 {len(real)} 个有真实数据；其余用参数指定）：")
         for p in found:
-            print(f"  · {p.relative_to(ROOT)}")
+            mark = "★ 有真实记账" if p in real else "· 无数据/仅假 LLM"
+            print(f"  {mark}  {p.relative_to(ROOT)}")
+        if not real:
+            print()
+            print("  ⚠️ 这些库里都没有真实调用的 token 记录 ——")
+            print("     下面的数字会是 0，且「✓ 达标」是**没有意义的**。")
+            print("     要拿到真数字，得用真实 Key 跑一次批改（请求需经过后端才会被记账）。")
     return report(found[0])
 
 
