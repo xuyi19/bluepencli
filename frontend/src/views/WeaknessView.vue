@@ -35,6 +35,58 @@
 
     <template v-else>
 
+      <!-- 再练一题：放在短板列表之前 —— 它是"看完这些该干什么"的答案。
+           没依据时这块**不出现**，而不是显示一句安慰话：页面空着说明数据不够，
+           比给一条编出来的建议诚实。 -->
+      <div v-if="next.ok" class="rounded-2xl p-5 neu mb-6"
+        style="background: linear-gradient(135deg, #f6f3ec 0%, #efe9f4 100%)">
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="text-xs px-2 py-0.5 rounded-full" style="background: #8b9d77; color: #fff">
+            再练一题
+          </span>
+          <span class="text-xs px-2 py-0.5 rounded-full"
+            :style="next.basis === 'typed'
+              ? 'background: #e3e8ef; color: #3d5a7a'
+              : 'background: #f2ebe2; color: #5c4033'">
+            {{ next.basis === 'typed' ? '同题型对症' : '跨题型通病' }}
+          </span>
+        </div>
+
+        <p class="text-sm text-c-body mt-3 leading-relaxed">{{ next.reason }}</p>
+
+        <div v-if="next.issue?.selfCheck" class="text-xs text-c-muted mt-2.5 flex items-start gap-1.5">
+          <span class="shrink-0" style="color: #8b9d77">动笔前自检</span>
+          <span class="min-w-0">{{ next.issue.selfCheck }}</span>
+        </div>
+
+        <div class="mt-4 rounded-xl px-4 py-3" style="background: rgba(255,255,255,.55)">
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="text-xs px-2 py-0.5 rounded-full"
+              style="background: #e8e2d6; color: #6b5b45">{{ next.question.type || '未主题型' }}</span>
+            <span v-if="next.question.exam" class="text-xs text-c-muted">{{ next.question.exam }}</span>
+            <span v-if="next.question.maxScore" class="text-xs text-c-muted tnum">
+              {{ next.question.maxScore }} 分
+            </span>
+          </div>
+          <p class="text-sm text-c-ink mt-2 leading-relaxed">{{ next.question.title }}</p>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2.5 mt-4">
+          <button @click="practiceNext"
+            class="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm
+              bg-c-bark text-c-cream transition-opacity duration-300 ease-in-out hover:opacity-90">
+            练这道
+          </button>
+          <button @click="reroll"
+            class="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm
+              border border-c-line text-c-muted transition-colors duration-300 ease-in-out
+              hover:text-c-bark hover:bg-c-barkSoft hover:border-transparent">
+            换一道
+          </button>
+          <span class="text-xs text-c-muted tnum">{{ next.candidates }} 道候选</span>
+        </div>
+      </div>
+
       <div v-if="repeated.length" class="space-y-3">
         <div v-for="(it, i) in repeated" :key="it.id" class="rounded-2xl p-5 neu">
 
@@ -119,13 +171,18 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRouter } from 'vue-router'
 import { listAllRecords } from '../utils/record'
 import { buildWeaknessProfile } from '../utils/grading/reviewCard'
+import { recommendNextQuestion } from '../utils/grading/nextQuestion'
+import { BUILTIN_POOL } from '../data/questions'
 
 const loading = ref(true)
 const records = ref([])
 const showSingle = ref(false)
+const router = useRouter()
+// 「换一道」时把上一道排除掉，避免连点两下推的还是同一题
+const skipIds = ref([])
 
 // 口径在 reviewCard.js 里，这里只管展示：反复栽的坑排前面，只出现一次的收在折叠里。
 // 一次算出全量（minRecords=1）再按份数分层，比调两次省一遍遍历。
@@ -133,6 +190,22 @@ const all = computed(() => buildWeaknessProfile(records.value, { minRecords: 1 }
 const total = computed(() => all.value.recordCount)
 const repeated = computed(() => all.value.items.filter((x) => x.recordCount >= 2))
 const single = computed(() => all.value.items.filter((x) => x.recordCount === 1))
+
+// 推荐拿全量题库（含真题摘要）。真题摘要的 material 是空的，
+// 但点「练这道」跳过去后练习页会 resolveQuestion 去取正文 —— 这里不需要先加载。
+const next = computed(() => recommendNextQuestion(records.value, BUILTIN_POOL, { excludeId: skipIds.value[0] || '' }))
+
+function practiceNext() {
+  const q = next.value.question
+  if (!q) return
+  router.push({ path: '/practice', query: { questionId: q.id } })
+}
+
+function reroll() {
+  const q = next.value.question
+  if (!q) return
+  skipIds.value = [q.id, ...skipIds.value].slice(0, 5)
+}
 
 onMounted(async () => {
   records.value = await listAllRecords()

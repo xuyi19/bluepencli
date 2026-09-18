@@ -56,13 +56,23 @@ function parseDateTime(text) {
 
 // ---------------- 构建规范记录 ----------------
 
-/** 从一次批改结果构建规范记录。 */
+/**
+ * 从一次批改结果构建规范记录。
+ *
+ * `questionType` 是后加的字段（v0.13.3）。加它的原因很具体：
+ * 「再练一题」要按短板**找同题型的题**，而记录里原本只有标题和材料，
+ * 题型只活在练习页的 UI 状态里，批改完就丢了 —— 于是有这个字段。
+ *
+ * 老记录没有这个字段，读的地方一律按空串处理（`byQuestionType` 会跳过），
+ * 不能拿标题去猜题型：标题里出现「概括」两个字，题不一定就是归纳概括题。
+ */
 export function buildRecord({ form, report, elapsedMs }) {
   const teacherIds = report.teacherIds || []
   return {
     id: report.taskId,
     createdAt: Date.now(),
     title: form.title || '未命名练习',
+    questionType: form.questionType || '',
     requirement: form.requirement || '',
     material: form.material || '',
     answer: form.answer || '',
@@ -202,6 +212,7 @@ export function ensureCanonical(r) {
     id: r.id,
     createdAt: Number(r.createdAt) || 0,
     title: r.title || '未命名练习',
+    questionType: r.questionType || '',
     requirement: r.requirement || '',
     material: r.material || '',
     answer: r.answer || '',

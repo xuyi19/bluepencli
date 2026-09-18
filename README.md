@@ -435,6 +435,7 @@ bluepencil/
 │   ├── probe-desktop-exit.mjs      # 真浏览器验「关页即退」：关页退、刷新不退（4 断言）
 │   ├── check_release_private.py    # 产物体检：递归数 exam chunk、查有无私有卷、功能指纹
 │   ├── archive-release.mjs         # 把 release/ 根目录里**非最新版**的产物移进 历史版本/（只挪不删）
+│   ├── report-cost.py              # 真实批改的成本 / Token 实测报告（读后端 SQLite，自动找最近的库）
 │   ├── verify-bpq.mjs              # .bpq 发包前自检（明文包与加密包都支持）
 │   ├── test-bpq-crypto.mjs         # 题库包加解密 + 签名（20 项，含各类失败分支）
 │   ├── probe-bpq-browser.mjs       # 跨运行时验证：Node 加密 → 真浏览器验签解密
@@ -450,6 +451,7 @@ bluepencil/
 │   ├── probe-nav-click.mjs         # 点击导航：真鼠标事件逐个点侧边栏入口，量实际尺寸并看 hash 变没变
 │   ├── probe-version-reload.mjs    # 版本自检：伪造服务端版本，验"只刷一次"且版本一致时不乱刷
 │   ├── probe-weakness.mjs          # 错题本：注入构造记录，验跨记录聚合（同类问题记到几份）
+│   ├── probe-next-question.mjs     # 再练一题：注入带题型的记录，验定向/泛化/不给推荐三分支
 │   ├── probe-wechat.mjs            # 微信引流断言（支持 BP_BASE 指向桌面版产物）
 │   ├── probe-standard-panel.mjs    # 客观校验 / 采分点对照两块面板的渲染验证
 │   ├── cdp-probe.mjs               # CDP 探针：真实等待 + 读页面文本
@@ -690,6 +692,7 @@ node .tools/test-route-eager.mjs      # 路由静态导入护栏（改路由 / �
 | `probe-version-reload.mjs` | 入口那段**版本自检**的护栏。桌面版每次启动都开同一个地址，浏览器会复用早就打开的标签页，页面里的代码可能是好几版之前的 —— 实测遇到的是 **v0.8.1** 留下的标签页，它连"自动刷新"的兜底都没有，所以后面每一版都修不到它。自检负责让页面发现落后并刷新，但**自动刷新写错就是无限闪烁，比原 bug 更糟**，所以这里必须实测两件事：伪造服务端版本 → 只刷一次然后停下；版本一致 → 一次都不刷 |
 | `e2e-grade.mjs` | 假 LLM 跑完整批改链路（答题 → 批改 → 色标批注 → 复盘卡 → 归档）。断言里包含复盘卡：三位老师的自由文本批注真的聚成了两类并命中共识标记 |
 | `check_release_private.py` | 破开每个归档产物的 chunk 清单，报「exam chunk 数 / 是否含私有卷 / 功能指纹」，**发之前跑一遍** |
+| `report-cost.py` | **真实批改的成本与 Token 实测**。读后端 SQLite（`grading_tasks` 汇总 + `llm_call_logs` 逐次明细），自动挑最近写入的那个库（桌面版的库在 `release/<版本>/data/`，与 `backend/data/` 不是一个）。起因：`e2e-grade.mjs` 用假 LLM 把链路验穿了，但**「一次真实批改花多少钱、耗多少 token」从 v0.1.0 起一直是预估**。报告末尾直接给验收判据（单题 ≤ 2500 token、对照三师 ¥0.12 / 五师 ¥0.22）。⚠️ 成本按 DeepSeek 价目折算，换厂商只是数字口径不同 |
 
 > **为什么评分内核要有纯代码单测？**
 > 批改链路依赖模型，很难一次跑一次断言；但**评分里能确定性计算的部分（字数、格式、覆盖率加权）不该依赖模型**。

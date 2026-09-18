@@ -744,6 +744,9 @@ const form = reactive({
   answer: '',
   maxScore: 40,
   wordLimit: null,
+  // 题型随 form 一起走：批改记录要存它（「再练一题」按同题型找题）。
+  // 不要在这里删掉改用 loadedMeta.type —— 记录是从 form 构建的，读不到 loadedMeta。
+  questionType: '',
 })
 
 const selected = ref(['yuandong', 'zhoutairan', 'bailu'])
@@ -946,6 +949,7 @@ async function applyQuestion(q, { resetAnswer = true } = {}) {
   form.requirement = q.requirement || ''
   form.maxScore = Number(q.maxScore) || 40
   form.wordLimit = Number(q.wordLimit) || null
+  form.questionType = q.type || ''
   if (resetAnswer) form.answer = ''
 
   loadedId.value = q.id || ''
@@ -982,6 +986,7 @@ function startBlank() {
   form.requirement = ''
   form.maxScore = 40
   form.wordLimit = null
+  form.questionType = ''
   form.answer = ''
   loadedId.value = ''
   Object.assign(loadedMeta, { type: '', exam: '', difficulty: 0, kind: '', topics: [] })
