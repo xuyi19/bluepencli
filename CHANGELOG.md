@@ -24,6 +24,46 @@
 
 ---
 
+## v0.15.0 · 2026-09-21 · 桌面版补齐记账与记录归档：批完的稿子能落成 markdown 了
+
+> 上一版把桌面端换成 Tauri 后，**前端有 10 个接口还是 404** —— 界面能开、能答题、能批改，
+> 但批完的记录只存在浏览器 IndexedDB 里、成本报告永远没有数据。
+> 而前端对这些端点是**静默降级**的（后端不可用就退回本地存储），所以界面上
+> **看不出任何异常**。这一版把 Rust 侧补齐。
+
+### 新增
+- **记录归档**（`desktop/src-tauri/src/records.rs`）：批改完落盘成
+  `docs/practice/<日期>-<标题>-<完整 id>.{md,json}`。位置在 **exe 同级目录** ——
+  复制一份 exe 就等于带着自己的数据走（与旧 Python 桌面版行为一致）。
+  五个端点：保存 / 列表 / 详情 / 取回 markdown 原文 / 删除
+- **记账**（`desktop/src-tauri/src/db.rs`）：SQLite 落两张表 ——
+  `grading_tasks`（任务汇总，前端上报）与 `llm_call_logs`（**逐次转发时后端自己记**，含 token）。
+  成本数字只认后者：只有它知道每次调用真正花了多少
+- **`paths.rs`**：统一数据落点。exe 同级不可写时（比如丢进 `C:\Program Files\`）
+  退回 `%LOCALAPPDATA%\com.xuyi.bluepencil\`。判断方式是**真写一个探针文件**试一次 ——
+  Windows 上光看属性位不可靠（目录带只读属性照样能写，ACL 拒绝时属性位又看不出来）
+- 两个新护栏：`.tools/probe-tauri-data.mjs`（19 项，记账与归档端到端）、
+  `.tools/test-md-parity.mjs`（2 项，md 渲染的两套实现逐字比对）
+
+### 变更
+- 表结构与 Python 侧（`backend/app/models/entities.py`）**逐字段一致** ——
+  这样 `.tools/report-cost.py` 那套分析工具不用改就能读桌面版的库
+- 流式转发里的 token 用量以前是丢掉的，现在拿去记账；并且加了**兜底**：
+  上游不回 usage 时也记一条（token 记 0，但不能让这次调用从成本账上凭空消失）
+
+### 修复
+- **两份 md 渲染实现原本会漂移**：Windows 上 Python 的 `write_text` 会把 `\n` **静默转成**
+  `\r\n`，而 Rust 的 `fs::write` 不会 —— 同一份记录，网站版与桌面版写出的文件不一样，
+  且不报任何错。统一为 LF（与项目其他文本文件一致）。这个问题是逐字比对测试发现的
+
+### 测试
+- `probe-tauri-data` **19/19**：磁盘上真的生成了文件、md 渲染 9 处抽查、删除后文件真的消失、
+  `score_rate` 算得对、时间戳与 Python 侧同一种格式
+- `test-md-parity` **2/2**：全字段与极简两份样本，Python 与 Rust 的渲染结果**逐字相同**
+- 产物 8.2 MB → **9.4 MB**（多了 rusqlite 自带的 SQLite）
+
+---
+
 ## v0.14.1 · 2026-09-21 · 清掉 PyInstaller 时代的残留代码
 
 > 桌面端换成 Tauri 2 之后，有一批只为旧桌面版存在的代码仍留在仓库里：不再被任何路径调用，

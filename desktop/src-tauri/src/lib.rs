@@ -6,16 +6,22 @@
 // ──────────────────────────────────────────────────────────────
 // 桌面版入口：开窗口、起本地 LLM 网关、把网关地址告诉前端。
 //
-// 三个模块各管一段：
-//   · preset.rs —— 读 exe 同级的 config.json（零配置）
-//   · llm.rs    —— LLM 转发（含 build_url / build_payload，与前端和 Python 三份必须一致）
-//   · server.rs —— 本地 axum 服务（health + /llm/chat[/stream]）
+// 模块各管一段：
+//   · preset.rs  —— 读 exe 同级的 config.json（零配置）
+//   · llm.rs     —— LLM 转发（含 build_url / build_payload，与前端和 Python 三份必须一致）
+//   · server.rs  —— 本地 axum 服务（网关 + 记账 + 记录归档的全部端点）
+//   · paths.rs   —— 数据落哪（exe 同级；不可写时退回 AppData）
+//   · db.rs      —— 记账库（SQLite，**schema 与 Python 侧逐字段一致**，分析工具通用）
+//   · records.rs —— 练习记录归档（docs/practice/*.{md,json} + markdown 渲染）
 //
 // 前端那边**不需要改请求逻辑**：`api/backend.js` 本来就会探测 `/api/v1/health`，
 // 通就用后端通道。这里只要把服务地址注入进去即可（见 frontend/src/main.js）。
 
+mod db;
 mod llm;
+mod paths;
 mod preset;
+mod records;
 mod server;
 
 use std::net::TcpListener as StdTcpListener;
@@ -79,6 +85,11 @@ pub fn run() {
             let exe_dir = preset::Preset::exe_dir();
             let pre = preset::Preset::load(&exe_dir);
             log::info!("[蓝笔] 程序目录：{}", exe_dir.display());
+
+            // ── 记账库：建表 ──
+            // ⚠️ 失败**只记日志、不中断启动**：记账是附加能力，
+            //    写不进去不该让人连批改都用不了。
+            db::init();
 
             // ── 起本地服务 ──
             // ⚠️ 用 **std 的 TcpListener 同步绑定**，而不是直接 await tokio 的：

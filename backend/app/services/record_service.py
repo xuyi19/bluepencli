@@ -90,10 +90,14 @@ def save(record: dict) -> dict:
 
     stem = _stem(record)
     json_path, md_path = _pair(stem)
+    # ⚠️ `newline="\n"` 不能省：Windows 上文本模式会把 `\n` **静默转成** `\r\n`，
+    # 于是同一份记录，网站版（Python）写出 CRLF、桌面版（Rust）写出 LF ——
+    # 两个版本的文件长得不一样，而这种漂移**不会报任何错**。
+    # 实测是 `.tools/test-md-parity.mjs` 逐字比对时发现的。
     json_path.write_text(
-        json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8"
+        json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8", newline="\n"
     )
-    md_path.write_text(render_markdown(record), encoding="utf-8")
+    md_path.write_text(render_markdown(record), encoding="utf-8", newline="\n")
     return {
         "id": record["id"],
         "file": stem,
