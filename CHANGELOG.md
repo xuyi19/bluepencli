@@ -16,11 +16,42 @@
 - 给某条挂子项：**缩进两格再写 `- `**，父条目末尾用「：」收口
 - 写附注（比如"某个旧包有风险"）用 `>` 引用，页面渲染成单独一行小字
 - 行内 `代码` / **加粗** / *斜体* 都支持，会渲染成元素，不会把记号原样显示
-- 脚本只依赖第一条：版本号取**最上面那一版**。`frontend/scripts/publish-single.mjs` 与
-  `backend/build_desktop.py` 都按这条规则读，读不到会直接报错停下，不会静默出个错包
+- 脚本只依赖第一条：版本号取**最上面那一版**。`desktop/scripts/publish.mjs` 与
+  `frontend/scripts/publish-single.mjs` 都按这条规则读，读不到会直接报错停下，不会静默出个错包
 - ⚠️ **改完跑 `node .tools/test-changelog.mjs`**。它盯的是「条目有没有丢、
   句子有没有被切断、记号有没有漏出去」—— 页面**能打开**不等于**能读**，
   v0.12.1 就是栽在这个区别上。
+
+---
+
+## v0.14.1 · 2026-09-21 · 清掉 PyInstaller 时代的残留代码
+
+> 桌面端换成 Tauri 2 之后，有一批只为旧桌面版存在的代码仍留在仓库里：不再被任何路径调用，
+> 却会让人以为"这条路还在走"。这一版把它们删干净 —— **净减 1,692 行**，产物本身没有变化。
+
+### 删除
+- **PyInstaller 桌面版的整套入口**：`backend/desktop.py`（选端口 / 起服务 / 开浏览器）、
+  `backend/build_desktop.py`（打包脚本）、`backend/release_utils.py`（打包共用的清理函数）
+- **「关页即退」的看门狗**：`app/services/session_watch.py`、`app/api/v1/session.py`
+  （hello / ping / bye / state 四个端点），以及随之失效的 `tests/test_session_watch.py`（13 项）
+- **两个桌面版探针**：`.tools/probe-desktop-exit.mjs`、`.tools/test-desktop-reuse.py`
+
+### 变更
+- **Tauri 版不需要「关页即退」**：窗口就是进程，关窗口即退出，不存在"残留实例"这个状态
+- **也不需要「复用同版本实例」**：Tauri 自带单实例插件，并自己选一个空闲端口
+- `health` 的 `desktop` 字段**保留**：网站版必须能表达"我不是桌面版"，
+  否则某个访客关掉标签页就会把公网服务杀掉 —— 只是现在已无人把它置真
+
+### 修复
+- 同步改掉指向已删文件的引用：`backend/app/main.py` 的路由注册、
+  `.tools/test-route-eager.mjs` 里那条「桌面版开浏览器要带版本号」的断言（对象已不存在）、
+  水印清单，以及 `README.md` / `PLAN.md` 的相关说明
+- 本条之外的旧版本条目、以及 `docs/开发记录.md` 里的旧引用**故意保留** ——
+  那是历史记录，改了就不是事实了
+
+### 测试
+- `pytest` 从 35 项变 **22 项**（少掉的 13 项正是会话看门狗的）
+- 其余 11 个 Node 套件全绿；`test-route-eager` 从 6 项变 5 项，删掉的正是失效那一条
 
 ---
 

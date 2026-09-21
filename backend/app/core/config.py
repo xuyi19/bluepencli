@@ -90,7 +90,7 @@ class Settings(BaseSettings):
     )
 
     APP_NAME: str = "蓝笔申论 BluePencil"
-    APP_VERSION: str = "0.14.0"
+    APP_VERSION: str = "0.14.1"
     DEBUG: bool = True
 
     # SQLite：默认落在可写数据目录下的 data/bluepencil.db，零外部服务依赖
@@ -104,9 +104,13 @@ class Settings(BaseSettings):
     # 是否把练习批改结果归档成 markdown（docs/practice/），供后期复盘
     ENABLE_RECORD_ARCHIVE: bool = True
 
-    # 桌面版模式：`desktop.py` 启动时置为 True（环境变量 DESKTOP_MODE=1）。
-    # 打开后启用「浏览器页面全关了就结束进程」——这**只对本地单机形态成立**：
+    # 桌面版模式：打开后启用「浏览器页面全关了就结束进程」。这**只对本地单机形态成立**：
     # 网站版绝不能开，否则某个访客关掉标签页就会把公网服务杀掉。
+    #
+    # ⚠️ 2026-09-21：旧 PyInstaller 桌面版退场（桌面端改为 Tauri 2）后，**已无人把它置真**
+    # （原先由 `backend/desktop.py` 置 DESKTOP_MODE=1，该文件已删除）。
+    # Tauri 不需要这套 —— 关窗口即进程退出，天然满足「关页即退」。
+    # 字段保留是为了给 `/health` 的 `desktop` 一个明确答案（前端据此决定挂不挂那套心跳）。
     DESKTOP_MODE: bool = False
 
     # 服务端兜底 LLM 配置：前端未传时使用；留空则要求前端自带配置

@@ -45,7 +45,7 @@ function readVersion() {
   const m = line && line.match(/^##\s+(v[\d.]+)/)
   if (!m) {
     fail('CHANGELOG.md 里找不到 `## vX.Y.Z · 日期 · 标题` 开头的版本行，'
-      + '改完格式后请同步更新 publish-single.mjs 与 build_desktop.py')
+      + '改完格式后请同步更新 publish-single.mjs 与 desktop/scripts/publish.mjs')
   }
   return m[1]
 }

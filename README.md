@@ -339,21 +339,16 @@ bluepencil/
 │   │   │   ├── grading.py          # 批改任务记录与历史
 │   │   │   ├── records.py          # 练习记录归档（读写 docs/practice/）
 │   │   │   ├── stats.py            # 成本与用量统计
-│   │   │   ├── settings.py         # 模型连通性测试 + 服务端托管配置查询
-│   │   │   └── session.py          # 桌面版会话登记：hello / ping / bye / state
+│   │   │   └── settings.py         # 模型连通性测试 + 服务端托管配置查询
 │   │   ├── services/
 │   │   │   ├── llm_service.py      # httpx 调用、重试退避、并发限流
 │   │   │   ├── grading_service.py  # 落库与统计聚合
-│   │   │   ├── record_service.py   # 记录渲染：结构化数据 → Markdown
-│   │   │   └── session_watch.py    # 桌面版看门狗：页面全关了就结束进程
+│   │   │   └── record_service.py   # 记录渲染：结构化数据 → Markdown
 │   │   └── agents/llm.py           # LLM 配置解析、URL 拼接、请求体构造
 │   ├── assets/                     # icon.svg（图标源）+ icon.ico（make_icon.py 生成）
 │   ├── data/                       # SQLite 数据库（启动自动生成）
-│   ├── tests/                      # conftest.py（临时库隔离）+ 19 项用例
-│   ├── desktop.py                  # 桌面版入口：选端口 → 起服务 → 开浏览器（支持 --port N）
-│   ├── build_desktop.py            # 一键打包成可分发的桌面版压缩包
+│   ├── tests/                      # conftest.py（临时库隔离）+ pytest 用例
 │   ├── make_icon.py                # SVG → 多尺寸 ICO（用 Chrome 无头渲染）
-│   ├── release_utils.py            # 打包脚本共用的安全清理函数
 │   ├── requirements.txt
 │   └── run.py                      # 开发用：python run.py（启动前自检）
 │
@@ -416,7 +411,7 @@ bluepencil/
 │   │       ├── readiness.js        # 批改就绪判定：本机 Key ∪ 服务端托管 Key
 │   │       ├── grading/rules.js    # 硬规则引擎：字数 / 格式 / 结构 / 重复照抄（纯代码可复算）
 │   │       ├── wechatPanel.js      # 引流弹层的命令式开合（各入口统一调用）
-│   │       ├── desktopSession.js   # 桌面版会话登记：关页即退，刷新不误杀
+│   │       ├── desktopSession.js   # 会话登记（旧 PyInstaller 桌面版遗留，Tauri 下恒不激活）
 │   │       ├── watermark.js        # 控制台作者横幅
 │   │       ├── toast.js            # 命令式提示 / 确认（替代 Arco Message/Modal）
 │   │       ├── parse.js            # 批改结果解析（三层兜底）
@@ -438,8 +433,6 @@ bluepencil/
 │   ├── e2e-grade.mjs               # 走完「答题→批改→归档」并核对结果
 │   ├── test-rules.mjs              # 硬规则引擎单测（24 组断言）
 │   ├── test-standards.mjs          # 采分点标准层单测（17 组断言）
-│   ├── test-desktop-reuse.py       # 桌面版实例复用：同版本复用 / 异版本另起端口
-│   ├── probe-desktop-exit.mjs      # 真浏览器验「关页即退」：关页退、刷新不退（4 断言）
 │   ├── check_release_private.py    # 产物体检：递归数 exam chunk、查有无私有卷、功能指纹
 │   ├── archive-release.mjs         # 各产物通道里**非最新版**的移进它自己的 历史版本/（只挪不删）
 │   ├── probe-tauri-render.mjs      # 验桌面版加载的是内嵌前端（断言 URL 不是 devUrl，防"只有开发者能跑"）
@@ -524,10 +517,6 @@ bluepencil/
 | GET | `/api/v1/stats` | 用量与成本统计 |
 | POST | `/api/v1/settings/test-llm` | 测试模型连通性 |
 | GET | `/api/v1/settings/llm-default` | 查询服务端是否已托管 Key（只回布尔值，不回传 Key） |
-| POST | `/api/v1/session/hello` | 页面注册自己（桌面版「关页即退」用；同时取消退出倒计时） |
-| POST | `/api/v1/session/ping` | 页面心跳（只用于回收崩溃留下的僵尸会话） |
-| POST | `/api/v1/session/bye` | 页面卸载时注销自己（用 POST 是为了能走 `sendBeacon`） |
-| GET | `/api/v1/session/state` | 当前有几个页面连着（排查 / 探针断言用） |
 
 ---
 
@@ -535,22 +524,26 @@ bluepencil/
 
 ```bash
 cd frontend
-npm run build          # → dist/         多文件，用于部署网站 / 打包桌面版
+npm run build          # → dist/         多文件，用于部署网站
 npm run build:single   # → dist-single/  单个 HTML，双击即用
 npm run release:single # = build:single + 复制进 release/单文件版/ 并带上版本号
+
+cd ../desktop
+npm run build          # → 单文件 exe，内嵌前端（前端不必先单独 build，hook 会代跑）
+npm run publish        # 验产物后复制进 release/桌面版/，文件名带版本号
 ```
 
 | 产物 | 体积 | 要不要装东西 | 要不要填 Key | 适用 |
 |---|---|---|---|---|
 | `frontend/dist/` | 3.3 MB | 需要服务器 | 可不填（服务端托管） | 上线网站 |
 | `蓝笔申论-单文件版-vX.Y.Z.html` | 3.0 MB | 都不要 | **要填** | 浏览器直连，受 CORS 限制 |
-| `蓝笔申论-桌面版-vX.Y.Z.zip` | 23 MB（解压 45 MB） | 都不要 | 可不填（服务端托管） | **发给别人，双击即用** |
+| `蓝笔申论-桌面版-vX.Y.Z.exe` | 8.2 MB | 都不要 | 可不填（服务端托管） | **发给别人，双击即用** |
 
 > 单文件版把所有 JS/CSS/数据内联进一个 `.html`，31 篇文章、五份讲义、以及微信二维码图片全在里面，所以体积看起来不小——但它是**一个自包含的文件**，不依赖任何外部资源（离线双击打开，引流入口照样能扫码）。没有后端时自动走浏览器直连，需要在设置页填自己的 Key，且接口必须允许跨域。
 
 **发布约定：产物名带版本号；每个产物通道目录的根只放最新一版，往期进该通道自己的 `历史版本/`。**
 
-- 版本号统一取自仓库根 `CHANGELOG.md` 最上面那一版；两个发布脚本（`frontend/scripts/publish-single.mjs`、`backend/build_desktop.py`）都按这条规则读，**读不到会直接报错停下**，不会静默打出一个版本号不对的包
+- 版本号统一取自仓库根 `CHANGELOG.md` 最上面那一版；每个发布脚本（`desktop/scripts/publish.mjs`、`frontend/scripts/publish-single.mjs`）都按这条规则读，**读不到会直接报错停下**，不会静默打出一个版本号不对的包
 - **分层是为了不挑错包**：早先多个版本的包平铺在一起，文件名只差一处版本号，随手解压一个就是旧版（真发生过）。现在**每个通道目录的根只剩最新一版**；历史版本一律保留、只挪位置不删除——要回溯"某版当时是什么样"，历史包本身就是证据，重新构建出来的并不是当时那一版
 - **按通道分目录**（2026-09-21）：原先两条通道的产物混在 `release/` 根、往期全塞进同一个 `历史版本/`，回溯时要在几十个文件里分辨"这是哪条通道的哪一版"。现在 `release/桌面版/`、`release/单文件版/` 各自自洽，归档统一走 `node .tools/archive-release.mjs`（加新通道时**要把它登记进该脚本的 `CHANNELS`**，否则往期永远不会被归档，而这件事不会报错）
 - **产物自证版本**：构建时把 `app-version` / `app-build-time` 写进 `index.html` 的 meta；桌面版另附 `版本信息.txt`（解压第一眼就能看到是哪一版）。不靠文件名猜——文件名可以被随手改
@@ -563,40 +556,36 @@ npm run release:single # = build:single + 复制进 release/单文件版/ 并带
 
 ## 做个桌面版发给别人
 
-**目标：对方电脑上不装 Python、不装 Node、不装数据库，解压双击就能用。**
-
-```bash
-cd backend
-.venv/Scripts/python.exe build_desktop.py     # Windows
-# .venv/bin/python build_desktop.py           # macOS / Linux（产物需在对应系统上构建）
-```
-
-产出 `release/桌面版/蓝笔申论-桌面版-vX.Y.Z.zip`（约 23 MB；同名解压目录也在该通道目录下，方便本机直接试跑），对方解压后双击 `蓝笔申论.exe`：程序自己起本地服务、自动打开浏览器，**关掉浏览器页面就自动退出**（黑窗口跟着消失），也可以直接关黑窗口。
-
-解压目录里还有一份 `使用说明.txt` 和 `config.example.json`，可以直接连同 zip 一起发给对方。
-
-> **发完记得归档：`node .tools/archive-release.mjs`。**
-> 它把每个产物通道目录里**非最新版**的产物移进该通道自己的 `历史版本/`（只挪不删）。
-> 这一步以前没人真的做 —— 两个构建脚本各自"报告"了历史版本、却没移动文件，
-> 于是每次发版后目录里都会多留一版，文件名只差一处版本号，**随手解压一个就是旧版**。
-
-### 另一条路：Tauri 2（体积从 45 MB 降到 6.7 MB）
-
-上一条是 PyInstaller 路线（一条命令出包，功能最全）。另有一条 **Tauri 2** 路线已经跑通骨架：
+**目标：对方电脑上不装 Python、不装 Node、不装数据库，双击一个 exe 就能用。**
 
 ```bash
 cd desktop
 npm run build          # = tauri build --no-bundle → 单文件 exe，内嵌前端
-npm run probe          # 验它加载的确实是内嵌前端，而不是 devUrl
+npm run publish        # 先跑探针验产物，再复制进 release/桌面版/ 并带上版本号
 ```
 
-| | PyInstaller | Tauri 2 |
-|---|---|---|
-| 产物 | 目录 45 MB / zip 23 MB | **单文件 exe 6.7 MB**，免解压 |
-| 前端 | 原样打进去 | 原样打进去（Vue 一行不改） |
-| 后端 | Python（FastAPI） | Rust（**进行中**：LLM 转发已写，记账/归档待补） |
+产出 `release/桌面版/蓝笔申论-桌面版-vX.Y.Z.exe`（约 8 MB，**双击即用、免安装免解压**）。
+程序自己选一个空闲端口起本地服务并开窗口；**关掉窗口进程就退出**，不残留。
 
-体积能差这么多，是因为去掉了 Python 运行时：`libcrypto+libssl` 9.3 MB、`python313.dll + base_library` 7.3 MB、`pydantic_core` 5.0 MB —— 这几项占 PyInstaller 包的一半以上，跟业务代码毫无关系。
+> **发布脚本刻意「先验后复制」** —— 反过来的话，验证失败时那份坏产物已经躺在发布目录里了。
+> 归档交给 `node .tools/archive-release.mjs`（只挪不删）。
+> 这一步以前没人真的做 —— 发布脚本各自"报告"了历史版本、却没移动文件，
+> 于是每次发版后目录里都会多留一版，文件名只差一处版本号，**随手拿一个就是旧版**。
+
+### Tauri 2 是怎么把体积降下来的（45 MB → 8 MB）
+
+旧版走 PyInstaller：目录 45 MB / zip 23 MB。现在走 Tauri 2：**单文件 8 MB**。
+
+| | PyInstaller（已退场） | Tauri 2（现行） |
+|---|---|---|
+| 产物 | 目录 45 MB / zip 23 MB | **单文件 exe 8 MB**，免解压 |
+| 前端 | Vue 原样打进去 | Vue 原样打进去（**一行不改**） |
+| 后端 | Python（FastAPI，同进程托管前端） | Rust（axum 薄网关：LLM 转发 / 设置探测） |
+| 关页即退 | 三端联动的会话看门狗 | **不需要**：关窗口即进程退出 |
+
+体积差在哪儿：PyInstaller 必背 Python 运行时 —— `libcrypto+libssl` 9.3 MB、
+`python313.dll + base_library` 7.3 MB、`pydantic_core` 5.0 MB、PyInstaller 壳 12 MB，
+这几项跟业务代码毫无关系，占了旧包的一半以上。
 
 > ⚠️ **必须用 `npm run build`（即 `tauri build`），不要直接 `cargo build --release`。**
 > 后者**不内嵌前端**，而是去连 `tauri.conf.json` 里的 `devUrl`（5273）—— 它照样起窗口、
@@ -604,27 +593,22 @@ npm run probe          # 验它加载的确实是内嵌前端，而不是 devUrl
 > 这个假绿有专门护栏：`.tools/probe-tauri-render.mjs` 会断言页面 URL 必须是
 > `http://tauri.localhost/`、标题必须是「蓝笔申论 · 三师圆桌阅卷」。
 
-### 关掉页面就退出（免得留下"幽灵进程"）
+### 关掉窗口就退出（Tauri 里不再需要看门狗）
 
-桌面版最容易被忽略的状态是**进程其实还在跑**：用户关掉页面后普遍以为程序已经结束了，
+旧 PyInstaller 桌面版最容易被忽略的状态是**进程其实还在跑**：用户关掉浏览器页面后以为程序结束了，
 可它还在后台占着 8765，下次双击就命中残留实例——看着像"启动了"，其实什么也没重启。
-升级后打开旧界面的老问题，根子就在这里。所以桌面版认两种关闭方式，任意一种都退干净：
+为此当时做了一套三端联动的看门狗（前端 `pagehide` 发 `sendBeacon` → 后端会话表 → 空置 6 秒后退出），
+踩出来的三条取舍仍然成立：**不给"关闭"设开关、只认事实**（从没打开过页面不触发退出）、
+**心跳不参与判定**（后台标签的定时器会被节流，拿它判活会误杀）、
+**刷新等于「先 bye 后 hello」**（要留窗口给新页面注册回来）。
 
-- 浏览器页面**全部关掉**：前端在 `pagehide` 时用 `navigator.sendBeacon` 通知后端，后端等 6 秒（给刷新留窗口）后优雅退出
-- 直接关黑窗口：照旧
+**Tauri 版把这一整类问题消掉了**：窗口就是进程，关窗口即退出；
+Rust 网关是同一个进程里的任务，不残留。所以：
 
-判定**三条同时成立**才退：曾经有过页面会话 + 当前没有活跃会话 + 这个"空"状态已持续超过 6 秒。
-三个设计取舍值得记下来：
-
-- **不给"关闭"设开关，只认事实**：从没打开过页面（比如只 curl 过 `/docs`）不触发退出，免得把自己关掉。
-- **心跳不参与退出判定**。后台标签页的定时器会被浏览器节流（可能压到 1 分钟以上），
-  拿它当"页面还活着"的证据，会把明明开着的页面误杀。心跳只用来回收**僵尸会话**——
-  浏览器崩溃或被杀时不会有 `bye`，只能靠心跳过期兜底。
-- **刷新不是关闭**。刷新等于「先 bye 后 hello」，新页面在 6 秒内注册回来就取消退出倒计时。
-  这条最容易写错，所以有专门的真实浏览器探针盯着（`.tools/probe-desktop-exit.mjs`，4 项断言）。
-
-> 只对桌面版生效：后端 `health` 会报 `desktop: true/false`，前端据此决定挂不挂这套逻辑。
-> 网站版和单文件版一律不挂——否则某个访客关掉标签页就会把别人的服务杀掉。
+- 前端那套会话登记（`utils/desktopSession.js`）在 Tauri 下**恒不激活**
+- 后端不再需要会话端点与看门狗（`api/v1/session.py`、`services/session_watch.py` 已删除）
+- `health` 仍会报 `desktop` 字段 —— 因为**网站版必须能表达"我不是桌面版"**，
+  否则某个访客关掉标签页就会把公网服务杀掉。Tauri 侧报 `false`（它不需要这套）
 
 ### 为什么别人不用配置
 
@@ -649,13 +633,14 @@ npm run probe          # 验它加载的确实是内嵌前端，而不是 devUrl
 
 | 问题 | 原因 | 处理 |
 |---|---|---|
-| 打包后启动即崩 `No module named 'aiosqlite'` | SQLAlchemy 方言里写的是 `__import__("aiosqlite")`，纯字符串导入，PyInstaller 静态分析看不到 | `--hidden-import aiosqlite`（同理还有 `greenlet`、uvicorn 的 loop/protocol 实现） |
-| 打包后读不到 `.env` / 写的库重启就没 | `config.py` 用 `__file__` 推算路径，打包后指向临时解包目录 | 检测 `sys.frozen`，改为取 `sys.executable` 所在目录 |
-| 用 one-file 还是 one-folder | — | 选 **one-folder**：启动快（不必每次解压到临时目录），被安全软件误报的概率也低得多 |
-| 重新打包时报 `PermissionError` / `Device or resource busy` | 上一次的 exe 还在跑，它的工作目录锁住了发布文件夹 | 先关掉 `蓝笔申论.exe` 再打包（脚本会给出这个提示） |
-| 打包脚本在临时目录构建 | 直接删旧产物会触发 Windows 的批量删除保护，连带把打包进程一起杀掉 | 在新目录里构建、用**改名**代替删除、收尾时再清理 |
+| 直接 `cargo build --release` 出来的 exe 是"空壳" | 不带 Tauri 的构建环境变量，`generate_context!()` 走 devUrl 分支、**不内嵌前端**；它照样起窗口、进程照样活着 | 必须走 `npm run build`（= `tauri build`）。护栏断言 URL 必须是 `tauri.localhost` 而非 devUrl |
+| 双击 exe 秒退，**一行报错都看不到** | `TcpListener::from_std` 必须在 tokio runtime 上下文里调用，放在 `setup` 的同步上下文会直接 panic；release 版没有控制台 | 改到 `tauri::async_runtime::spawn` 里建 listener；并把日志落文件（`%LOCALAPPDATA%\com.xuyi.bluepencil\logs\`），否则下次崩了还是抓瞎 |
+| `cargo fetch` 卡十几分钟 / 报 `failed to download from static.crates.io` | ① `.cargo/config.toml` **放错位置**：cargo 从*当前工作目录*向上找配置，而 `npm run build` 的 cwd 是 `desktop/`；② 清华的 sparse index **只镜像索引**，它 `config.json` 里的 `dl` 仍指向官方源 | 配置放 `desktop/.cargo/config.toml`；换 **rsproxy**（它的 `dl` 指向自己）。**选镜像要看 `dl` 字段，不能只看"有没有镜像"** |
+| 双击两次，第二次"没反应" | 两个实例抢 WebView2 的 user data 目录，后来者初始化不出页面 | 装 `tauri-plugin-single-instance`（必须**第一个注册**），第二个实例把已有窗口唤到前面 |
+| 点仓库地址 / 邮箱没反应 | Tauri 默认拦截 `target="_blank"`，**不报错、不白屏，就是没动静** | `tauri-plugin-opener` + 入口处一层全局点击拦截（`http(s)`／`mailto` 交给系统浏览器）；capabilities 里只放行自己的仓库和邮箱，**不用 `Any`** |
+| 漏实现一个后端端点 → 界面显示"测试失败" | Rust 网关是 FastAPI 的等价替换，少一个端点不会报错、只会让该功能静默失效 | 端点要对着 `frontend/src/api/backend.js` **数一遍**，不能只实现"当前用到的"；探针里逐端点断言 |
 
-> `backend/build_desktop.py` 里对每个隐藏导入都写了原因。图标由 `backend/make_icon.py` 从 `assets/icon.svg` 生成——用系统自带 Chrome 无头模式渲染 SVG，不引入任何图形库依赖。
+> 图标由 `backend/make_icon.py` 从 `assets/icon.svg` 生成 `icon.ico`（系统自带 Chrome 无头渲染 SVG，不引入图形库），再由 `tauri icon` 展开成各平台尺寸。
 
 ---
 
@@ -696,8 +681,8 @@ node .tools/probe-wechat.mjs
 # 10) 发包前产物体检：递归数 exam chunk、查有无私有卷、看功能指纹
 backend/.venv/Scripts/python.exe .tools/check_release_private.py
 
-# 11) 桌面版「关页即退」：起真桌面版 + 真浏览器，验「关页会退、刷新不退」
-node .tools/probe-desktop-exit.mjs
+# 11) 桌面版（Tauri）：验内嵌前端 / 本地网关 / 转发链路（--llm 会真打上游，含真实点击仓库链接）
+node .tools/probe-tauri-render.mjs --llm
 
 # 12) 题库包的加密与签名（不发外部请求）
 node .tools/test-bpq-crypto.mjs      # 算法与失败分支：20 项
@@ -723,8 +708,6 @@ node .tools/test-route-eager.mjs      # 路由静态导入护栏（改路由 / �
 | `test-rules.mjs` | 硬规则引擎的纯代码单测：字数 / 标点格式 / 结构分条 / 重复照抄四类，24 组断言，毫秒级跑完 |
 | `test-standards.mjs` | 采分点标准层单测：解析、标准缺失时的回退、按**练习页题目 id** 命中，17 组断言 |
 | `probe-wechat.mjs` | 微信引流入口断言：四处入口的位置与开合、群码过期后的降级文案；`BP_BASE` 可指向解压后的桌面版产物 |
-| `test-desktop-reuse.py` | 桌面版实例复用：同版本复用、版本不同另起端口且不把用户带去旧界面、**显式 `--port` 必须绕过复用**（探针靠这条保证"断言打在自己起的那个进程上"）、`--port N` 与 `--port=N` 两种写法都认且非法值退回默认。共 6 项 |
-| `probe-desktop-exit.mjs` | 起一个真桌面版 + 真 headless 浏览器，用 CDP 走「打开 → 刷新 → 离开」三步：验页面会登记会话、**刷新不会误退**、离开后进程自行退出。后端单测验不了"关闭页面时 `sendBeacon` 到底发没发出去"，只能靠它。⚠️ 它**显式用独立端口（8877）起实例**，并在起进程前拍一张端口基线快照、只认"基线里没有的那个" —— 起因是实测踩到的**假绿**：默认端口上残留着一个同版本实例时，探针会连到它、断言全打偏，凑巧时还报"全部通过"，而自己起的进程压根没起来 |
 | `test-bpq-crypto.mjs` | 题库包加解密与签名：口令错 / 密文被改 / **水印被改** / 换成他人公钥 / 他人私钥冒充 / v1 老包回归 / 作者命令行通路，20 项 |
 | `probe-bpq-browser.mjs` | 作者用 Node 加出来的密，**真浏览器**能不能验签解开。跨运行时是最容易被忽略的失败面：标准一致但实现有差异，真出事时作者自测完全正常 |
 | `probe-pack-drop.mjs` | 拖拽导入。合成原生 `DragEvent` 在真 Chrome 里走一遍：提示层显隐、**划过子元素不闪**（`dragenter` 会随鼠标划过每个子元素反复触发，用布尔值必然闪）、纯文本拖拽不误触发、松手 `.bpq` 真的走完导入链路、不支持的类型无副作用 |
@@ -768,17 +751,15 @@ node .tools/test-route-eager.mjs      # 路由静态导入护栏（改路由 / �
 
 两个原因，软件里都已处理：
 
-1. **旧版本还开着。** 桌面版默认在 `127.0.0.1:8765` 起服务。如果那个端口上已经跑着一个旧版
-   BluePencil，新 exe 会认定「已经在运行」、把浏览器指过去、自己退出——现象与「解压错了包」一模一样。
-   现在**只复用版本相同的实例**；版本不同就另起端口，并在黑窗口里打印
-   「端口 8765 上运行着旧版本 vX，当前是 vY，新版本已改用 …:8766」。
-   从 v0.9.0 起还有一层保障：**关掉浏览器页面程序就自动退出**，不留残留实例，这种冲突本身也少了很多。
+1. **旧版本还开着。** 旧的 PyInstaller 桌面版默认在 `127.0.0.1:8765` 起服务，那个端口上已经有实例时，
+   新 exe 会认定「已经在运行」、把浏览器指过去、自己退出 —— 现象与「解压错了包」一模一样。
+   （Tauri 版**没有这个状态**：它内嵌前端、自己起一个随机端口的本地网关，关窗口即进程退出。）
 2. **浏览器缓存了入口页。** 每次升级都跑在同一个地址，早期响应不带 `Cache-Control`，
    浏览器就把入口 HTML 留住了。现在入口 HTML 一律 `no-cache, must-revalidate`（靠 ETag 拿 304），
    带内容哈希的 js/css/图片长缓存。
 
-**怎么确认自己在跑哪一版**：看解压目录里的 `版本信息.txt`，或页面里的 `app-version` meta。
-不要用文件名猜——文件名可以被随手改。护栏在 `.tools/test-desktop-reuse.py`。
+**怎么确认自己在跑哪一版**：看页面里的 `app-version` meta（源码在 `frontend/index.html`）。
+不要用文件名猜——文件名可以被随手改。护栏在 `.tools/probe-tauri-render.mjs`。
 
 </details>
 

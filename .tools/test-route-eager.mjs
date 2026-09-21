@@ -26,7 +26,6 @@ const ROOT = path.resolve(import.meta.dirname, '..')
 const ROUTER = path.join(ROOT, 'frontend/src/router/index.js')
 const DIST_ASSETS = path.join(ROOT, 'frontend/dist/assets')
 const INDEX_HTML = path.join(ROOT, 'frontend/index.html')
-const DESKTOP_PY = path.join(ROOT, 'backend/desktop.py')
 
 let failed = 0
 const check = (label, ok, extra = '') => {
@@ -77,12 +76,6 @@ const html = readFileSync(INDEX_HTML, 'utf8')
 check('入口 HTML 里有版本自检（页面落后时会自己刷新）',
   html.includes('bp:version-reloaded') && html.includes('api/v1/health'),
   html.includes('bp:version-reloaded') ? '已就位' : '缺失 —— 老标签页将永远停在旧代码上')
-
-// 桌面版开浏览器时必须带上版本号，否则浏览器会复用那个早就打开的标签页
-const py = readFileSync(DESKTOP_PY, 'utf8')
-check('桌面版打开浏览器时带上版本号（避免复用旧标签页）',
-  /\?v=\{/.test(py),
-  /\?v=\{/.test(py) ? '已就位' : '缺失 —— 每次都是同一个 URL，浏览器会复用旧页面')
 
 console.log(failed ? `\n✗ ${failed} 项未通过` : '\n全部通过')
 process.exit(failed ? 1 : 0)

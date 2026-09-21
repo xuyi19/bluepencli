@@ -53,8 +53,6 @@ TARGETS = [
     'frontend/src/components/WeChatHost.vue',
     'backend/app/main.py',
     'backend/app/core/config.py',
-    'backend/desktop.py',
-    'backend/build_desktop.py',
     'frontend/vite.config.js',
     '.tools/exams/extract.py',
     '.tools/exams/qc.py',
@@ -64,7 +62,6 @@ TARGETS = [
     '.tools/exams/export_bpq.py',
     '.tools/standards/gen_standards.mjs',
     '.tools/check_release_private.py',
-    '.tools/test-desktop-reuse.py',
 ]
 
 RULE = '─' * 62

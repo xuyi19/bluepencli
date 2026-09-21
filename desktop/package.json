@@ -1,7 +1,7 @@
 {
   "name": "bluepencil-desktop",
   "private": true,
-  "version": "0.14.0",
+  "version": "0.14.1",
   "description": "蓝笔申论桌面端（Tauri 2 外壳 + Rust 侧 LLM 网关）",
   "type": "module",
   "scripts": {

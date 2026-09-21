@@ -52,7 +52,7 @@ function readVersion() {
   if (!m) {
     fail(
       'CHANGELOG.md 里找不到 `## vX.Y.Z · 日期 · 标题` 开头的版本行，' +
-        '改完格式后请同步更新 publish-single.mjs / build_desktop.py / 本脚本'
+        '改完格式后请同步更新 publish-single.mjs / 本脚本'
     )
   }
   return m[1]
