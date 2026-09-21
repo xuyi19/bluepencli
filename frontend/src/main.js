@@ -33,6 +33,39 @@ if (globalThis.__TAURI_INTERNALS__) {
   }
 }
 
+// 外部链接交给系统浏览器打开。
+//
+// 为什么要在入口统一接管：`<a target="_blank">` 在 WebView2 里会被 Tauri 拦下，
+// 表现就是**点仓库地址没反应**（桌面版实测报上来的问题）。而这类链接散在
+// 侧边栏底部、首页页脚、更新日志页、微信面板四处 —— 逐个改不仅容易漏，
+// 而且**漏掉的那一处不会有任何报错**，只会静默失效。
+//
+// 所以在这里拦一次收口：`http(s)` 与 `mailto` 一律交出去。
+// 内部路由（`#/xxx`）和页内锚点不匹配这两个前缀，原样交给 vue-router。
+//
+// 用**捕获阶段**（第三个参数 true）是刻意的：要在组件自己的 click 处理之前生效。
+if (globalThis.__TAURI_INTERNALS__) {
+  document.addEventListener(
+    'click',
+    async (e) => {
+      const a = e.target?.closest?.('a[href]')
+      if (!a) return
+      const href = a.getAttribute('href') || ''
+      if (!/^(https?:|mailto:)/i.test(href)) return
+      e.preventDefault()
+      try {
+        const { openUrl } = await import('@tauri-apps/plugin-opener')
+        await openUrl(href)
+      } catch (err) {
+        // 打不开也不能让页面乱掉：桌面版权限里只放行了作者自己的仓库与邮箱，
+        // 别的域名会被拒 —— 这是有意的（见 src-tauri/capabilities/default.json）
+        console.warn('[蓝笔] 打开外部链接失败：', href, err)
+      }
+    },
+    true
+  )
+}
+
 const app = createApp(App)
 app.use(router)
 app.mount('#app')

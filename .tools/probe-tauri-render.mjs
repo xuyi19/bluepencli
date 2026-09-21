@@ -342,6 +342,108 @@ if (page) {
     }
   }
 
+  // ── 判据⑧：外部链接（仓库地址 / 邮箱）点击后交给系统浏览器 ──
+  //
+  // Tauri 默认会拦下 `<a target="_blank">` —— 表现是**点仓库地址没反应**，
+  // 而这个故障在页面上完全看不出来（没有报错、没有白屏，就是没动静）。
+  // 实测由用户报上来才发现。
+  //
+  // 这里验整条链：点击 → 前端入口的全局拦截 → 调 opener 打开**对应那个** URL。
+  // ⚠️ 验法是**把 invoke 临时换成假的** —— 既验了链路，又不会真弹出浏览器窗口
+  //    （否则每跑一次探针就开一次 GitHub，探针就没法日常跑了）。
+  //    真实调用（含 capabilities 权限）另行手动验一次，别只信这条。
+  const linkJson = await evaluate(
+    page.webSocketDebuggerUrl,
+    `(async () => {
+       const a = document.querySelector('a[href*="github.com"], a[href*="gitee.com"]')
+       if (!a) return JSON.stringify({ ok: false, reason: '页面上找不到仓库链接' })
+       const before = location.href
+       const realInternals = window.__TAURI_INTERNALS__
+       let opened = null
+       // ⚠️ 必须**整个替换** __TAURI_INTERNALS__，不能只改它的 .invoke 属性 ——
+       //    Tauri 注入的这个对象上的属性是不可写的，直接赋值会**静默失败**，
+       //    于是"链接没被交给 opener"这个假结论就出来了（第一版就栽在这）。
+       const fake = Object.create(realInternals)
+       fake.invoke = (cmd, args) => {
+         if (String(cmd).includes('opener')) {
+           opened = (args && args.url) || ''
+           return Promise.resolve()
+         }
+         return realInternals.invoke(cmd, args)
+       }
+       let mocked = false
+       try {
+         Object.defineProperty(window, '__TAURI_INTERNALS__', {
+           value: fake,
+           configurable: true,
+           writable: true,
+         })
+         mocked = window.__TAURI_INTERNALS__ === fake
+       } catch (e) {
+         // Tauri 把 __TAURI_INTERNALS__ 定义成不可重定义（configurable: false），
+         // 所以**mock 装不上是正常现象**，不是被测对象有问题。
+          // 这时不点击 —— 真点击会调 opener、真的弹出浏览器，
+          // 不该让日常跑的探针有这个副作用。真实点击验证放在 --llm 那一节。
+          // ⚠️ 本段整体在 template literal 里，**注释里不能出现反引号** ——
+          //    会提前把字符串截断，报"Invalid left-hand side expression in
+          //    postfix operation"这种看不出所以然的语法错（真踩过）。
+         return JSON.stringify({
+           ok: true,
+           href: a.getAttribute('href'),
+           interactive: false,
+           reason: String(e),
+         })
+       }
+       try {
+         const ev = new MouseEvent('click', { bubbles: true, cancelable: true })
+         a.dispatchEvent(ev)
+         await new Promise((r) => setTimeout(r, 400))
+         return JSON.stringify({
+           ok: true,
+           mocked,
+           href: a.getAttribute('href'),
+           opened,
+           prevented: ev.defaultPrevented,
+           navigated: location.href !== before,
+         })
+       } finally {
+         try {
+           Object.defineProperty(window, '__TAURI_INTERNALS__', {
+             value: realInternals,
+             configurable: true,
+             writable: true,
+           })
+         } catch {}
+       }
+     })()`
+  )
+  let link = {}
+  try {
+    link = JSON.parse(linkJson.value || '{}')
+  } catch {}
+  check('⑧ 页面上找得到仓库链接', link.ok === true, link.href || link.reason || '')
+  if (link.interactive === false) {
+    // ⚠️ 这里**不能**把跳过的项记成通过 —— 那就是假绿（"看着验过了，其实没验"）。
+    //    明说跳过，并指向真正会验它的那条路。
+    console.log('· ⑧ 点击链路未验（页面里装不上 mock），请跑 `--llm` 做真实点击验证')
+  } else {
+    check(
+      '⑧ 点击被入口拦截处理（默认行为被阻止）',
+      link.prevented === true,
+      `defaultPrevented = ${link.prevented}`
+    )
+    check(
+      '⑧ 链接地址被交给 opener（而不是在窗口里裸跳）',
+      !!link.opened && link.opened === link.href,
+      `opened = ${link.opened || '（没被调用）'}`
+    )
+    check(
+      '⑧ 页面没有自己导航走（没有在 WebView 内打开外站）',
+      link.navigated === false,
+      `navigated = ${link.navigated}`
+    )
+  }
+
   // ── 判据⑥（只在 `--llm` 时跑）：转发链路真的通到上游 ──
   //
   // 为什么单独开关：它会**真发一次网络请求**。日常跑探针要快、不能依赖网络；
@@ -448,6 +550,56 @@ if (page) {
         mock.kill('SIGKILL')
       } catch {}
     }
+
+    // ④ 真实点击仓库链接 —— 验证「点击 → 入口拦截 → opener → 系统浏览器」整条链。
+    //
+    // ⚠️ 这一步**会真的弹出浏览器**，所以只在 `--llm` 下跑（这个开关的含义就是
+    //    "允许真实外部副作用"：发真网络请求、开真浏览器）。
+    //    判据是**没有报错**：入口拦截器把失败都收进了 console.warn，
+    //    所以劫持 console.warn 就能知道 openUrl 有没有抛 —— 不必去观察浏览器本身
+    //    （那是探针观察不到的）。
+    //    Tauri 把 `__TAURI_INTERNALS__` 锁成了不可重定义，没法 mock invoke，
+    //    所以这是唯一能真验这条链路的办法。
+    const clickJson = await evaluate(
+      page.webSocketDebuggerUrl,
+      `(async () => {
+         const a = document.querySelector('a[href*="github.com"], a[href*="gitee.com"]')
+         if (!a) return JSON.stringify({ ok: false, reason: '页面上找不到仓库链接' })
+         const before = location.href
+         const warns = []
+         const realWarn = console.warn
+         console.warn = function () {
+           const line = Array.prototype.map.call(arguments, String).join(' ')
+           warns.push(line)
+           realWarn.apply(console, arguments)
+         }
+         try {
+           const ev = new MouseEvent('click', { bubbles: true, cancelable: true })
+           a.dispatchEvent(ev)
+           await new Promise((r) => setTimeout(r, 1200))
+           return JSON.stringify({
+             ok: true,
+             href: a.getAttribute('href'),
+             prevented: ev.defaultPrevented,
+             navigated: location.href !== before,
+             fails: warns.filter((w) => w.indexOf('打开外部链接失败') >= 0),
+           })
+         } finally {
+           console.warn = realWarn
+         }
+       })()`
+    )
+    let ck = {}
+    try {
+      ck = JSON.parse(clickJson.value || '{}')
+    } catch {}
+    check('⑧ 真实点击被入口拦截处理', ck.prevented === true, `defaultPrevented = ${ck.prevented}`)
+    check(
+      '⑧ 点击后 opener 没报错（插件与 capabilities 权限都通了）',
+      ck.ok === true && (ck.fails || []).length === 0,
+      (ck.fails || []).join(' | ') || '无警告'
+    )
+    check('⑧ 真实点击没有让页面在窗口内导航走', ck.navigated === false, `navigated = ${ck.navigated}`)
   }
 }
 

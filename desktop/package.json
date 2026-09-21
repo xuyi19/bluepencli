@@ -1,14 +1,16 @@
 {
   "name": "bluepencil-desktop",
   "private": true,
-  "version": "0.13.7",
+  "version": "0.14.0",
   "description": "蓝笔申论桌面端（Tauri 2 外壳 + Rust 侧 LLM 网关）",
   "type": "module",
   "scripts": {
     "dev": "tauri dev",
     "build": "tauri build --no-bundle",
     "build:bundle": "tauri build",
-    "probe": "node ../.tools/probe-tauri-render.mjs"
+    "probe": "node ../.tools/probe-tauri-render.mjs",
+    "publish": "npm run build && node scripts/publish.mjs",
+    "archive": "node ../.tools/archive-release.mjs"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.11.5"

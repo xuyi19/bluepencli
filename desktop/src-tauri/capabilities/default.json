@@ -1,11 +1,17 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "enables the default permissions",
-  "windows": [
-    "main"
-  ],
+  "description": "桌面端默认权限。改动前先想清楚「这个权限被滥用会怎样」—— 桌面版是发给别人的程序。",
+  "windows": ["main"],
   "permissions": [
-    "core:default"
+    "core:default",
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [
+        { "url": "https://github.com/xuyi19/*" },
+        { "url": "https://gitee.com/xuyi_19/*" },
+        { "url": "mailto:*" }
+      ]
+    }
   ]
 }

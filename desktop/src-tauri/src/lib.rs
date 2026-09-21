@@ -43,6 +43,11 @@ fn api_base(state: State<'_, ApiPort>) -> Option<String> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        // 外部链接（仓库地址 / 邮箱）交给系统浏览器。
+        // ⚠️ WebView2 里 `<a target="_blank">` 只会被 Tauri 拦下，不会真的打开 ——
+        //    表现是"点仓库地址没反应"，而页面上完全看不出哪里错了。
+        //    前端入口处有一层全局点击拦截（见 frontend/src/main.js）。
+        .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             // 日志**不只在 debug 下开**（骨架默认是那样）。
             // 理由很具体：release 版带 `windows_subsystem = "windows"`，没有控制台，
