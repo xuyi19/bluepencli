@@ -43,6 +43,9 @@ const getArg = (n) => {
 }
 const KEEP = argv.includes('--keep')
 const EXE_ARG = getArg('--exe')
+/** `--real`：用**真 Key** 跑 —— 不启假 LLM、不注入本机配置，
+ *  改走 exe 同级 `config.json` 的服务端托管配置（顺手把零配置机制也验了） */
+const REAL = argv.includes('--real')
 
 const results = []
 const check = (name, ok, detail = '') => {
@@ -163,11 +166,14 @@ if (!exe) {
 }
 console.log(`  被测产物：${exe}（${(statSync(exe).size / 1048576).toFixed(1)} MB）`)
 
-// 起假 LLM：只影响内容质量，不影响链路正确性
-const mock = spawn(process.execPath, [join(ROOT, '.tools', 'mock-llm.mjs'), String(MOCK_PORT)], {
-  stdio: 'ignore',
-  detached: false,
-})
+// 起假 LLM：只影响内容质量，不影响链路正确性。
+// `--real` 时不启动 —— 那时走 exe 同级 config.json 里托管的那份真配置。
+const mock = REAL
+  ? null
+  : spawn(process.execPath, [join(ROOT, '.tools', 'mock-llm.mjs'), String(MOCK_PORT)], {
+      stdio: 'ignore',
+      detached: false,
+    })
 await sleep(600)
 
 const child = spawn(exe, [], {
@@ -182,7 +188,7 @@ const child = spawn(exe, [], {
 function killAll() {
   for (const p of [child, mock]) {
     try {
-      p.kill('SIGKILL')
+      p?.kill('SIGKILL')
     } catch {}
   }
 }
@@ -206,9 +212,33 @@ if (!page) {
 }
 
 const WS = page.webSocketDebuggerUrl
-const got = await evaluate(WS, `(async () => await window.__TAURI_INTERNALS__.invoke('api_base'))()`)
-const BASE = got.ok ? got.value : ''
-check('本地网关就绪', !!BASE, BASE || got.error || '')
+
+// ⚠️ **页面 target 出现 ≠ Tauri 注入完成**：`__TAURI_INTERNALS__` 要等前端脚本跑起来
+//    才有，直接 invoke 会拿到 `Cannot read properties of undefined (reading 'invoke')`。
+//    这是个偶发失败（多数时候页面已经就绪，偶尔慢一步就红）—— 所以必须轮询等它。
+let BASE = ''
+let lastErr = ''
+const baseDeadline = Date.now() + 25000
+while (Date.now() < baseDeadline && !BASE) {
+  const targets = await fetchTargets()
+  const ready = (targets || []).find((t) => t.type === 'page' && t.url && t.url !== 'about:blank')
+  if (ready) page = ready
+  if (page) {
+    const got = await evaluate(
+      page.webSocketDebuggerUrl,
+      `(async () => {
+         const internals = window.__TAURI_INTERNALS__
+         if (!internals || typeof internals.invoke !== 'function') return ''
+         try { return await internals.invoke('api_base') } catch (e) { return 'ERR:' + e }
+       })()`
+    )
+    if (got.ok && typeof got.value === 'string' && got.value.startsWith('http')) BASE = got.value
+    else if (got.value) lastErr = String(got.value).slice(0, 120)
+    else if (got.error) lastErr = got.error
+  }
+  if (!BASE) await sleep(600)
+}
+check('本地网关就绪', !!BASE, BASE || lastErr || '25 秒内没就绪')
 if (!BASE) {
   killAll()
   console.log('\n桌面版批改端到端：中止（拿不到服务地址）')
@@ -220,29 +250,64 @@ const statsBefore = await api(BASE, '/stats')
 const tasksBefore = statsBefore.ok ? Number(statsBefore.body?.total_tasks || 0) : 0
 console.log(`  批改前记账：${tasksBefore} 条任务`)
 
-// ── 1. 注入假 LLM 配置 ──
-await evaluate(
-  WS,
-  `(() => {
-     localStorage.setItem('llm_config', JSON.stringify({
-       api_key: 'sk-mock',
-       base_url: 'http://127.0.0.1:${MOCK_PORT}/v1',
-       model: 'mock-model'
-     }));
-     localStorage.removeItem('backend_url');
-     return 'ok'
-   })()`
-)
-// ⚠️ 必须显式 reload：hash 路由下光改 localStorage 不会重载页（JS 上下文不重建，
-//    computed 仍持旧值），不 reload 会误判成"配置没生效"。
-await cdp(WS, 'Page.reload', { ignoreCache: true }, 20000)
-await sleep(5000)
+// ── 1. 准备 LLM 配置 ──
+if (REAL) {
+  // 真 Key 模式：**先清掉本机配置**，让前端走「服务端托管 Key」那条路 ——
+  // Rust 侧从 exe 同级 config.json 读，前端靠 /settings/llm-default 探测到。
+  //
+  // ⚠️ 这一步不能省。localStorage 是**持久化**的：上次跑 mock 探针注入的
+  //    `llm_config` 还在，而「本机 Key」优先于「服务端托管」——
+  //    于是请求会被发到早就关掉的 mock 端口。
+  //    实测踩到：库里 12 条失败调用全是 `model=mock-model` +
+  //    `error sending request for url (http://127.0.0.1:9942/v1/chat/completions)`，
+  //    而页面照样渲染出一个空的「批改结果」（日期显示 1970-01-01），
+  //    看起来像"批改完成了但没内容"。
+  await evaluate(
+    WS,
+    `(() => {
+       localStorage.removeItem('llm_config');
+       localStorage.removeItem('backend_url');
+       return 'ok'
+     })()`
+  )
+  await cdp(WS, 'Page.reload', { ignoreCache: true }, 20000)
+  await sleep(5000)
+  {
+    const targets = await fetchTargets()
+    const ready = (targets || []).find((t) => t.type === 'page' && t.url && t.url !== 'about:blank')
+    if (ready) page = ready
+  }
 
-// reload 之后要重新拿一次页面 WS（页面上下文重建了）
-{
-  const targets = await fetchTargets()
-  const ready = (targets || []).find((t) => t.type === 'page' && t.url && t.url !== 'about:blank')
-  if (ready) page = ready
+  const dft = await api(BASE, '/settings/llm-default')
+  check(
+    '服务端托管 Key 已生效（前端据此判定"可以批改"）',
+    dft.ok && dft.body?.server_key_configured === true,
+    dft.ok ? `model = ${dft.body?.model}` : `HTTP ${dft.status}`
+  )
+} else {
+  await evaluate(
+    WS,
+    `(() => {
+       localStorage.setItem('llm_config', JSON.stringify({
+         api_key: 'sk-mock',
+         base_url: 'http://127.0.0.1:${MOCK_PORT}/v1',
+         model: 'mock-model'
+       }));
+       localStorage.removeItem('backend_url');
+       return 'ok'
+     })()`
+  )
+  // ⚠️ 必须显式 reload：hash 路由下光改 localStorage 不会重载页（JS 上下文不重建，
+  //    computed 仍持旧值），不 reload 会误判成"配置没生效"。
+  await cdp(WS, 'Page.reload', { ignoreCache: true }, 20000)
+  await sleep(5000)
+
+  // reload 之后要重新拿一次页面 WS（页面上下文重建了）
+  {
+    const targets = await fetchTargets()
+    const ready = (targets || []).find((t) => t.type === 'page' && t.url && t.url !== 'about:blank')
+    if (ready) page = ready
+  }
 }
 
 // ── 2. 进练习页（hash 路由，直接改 hash 即可）──
@@ -288,29 +353,54 @@ check('点到了「答完了」按钮（且未被禁用）', clicked.ok && click
 
 // ── 5. 真实等待批改（假 LLM 很快，但三师圆桌是 4 次调用）──
 let stage = 'other'
-for (let i = 1; i <= 10; i++) {
-  await sleep(3000)
+let sawGrading = false
+let lastText = ''
+// ⚠️ 判据不能只看"页面上有没有『批改结果』这几个字" —— 还没开始批改的页面上
+//    也可能有（空状态提示之类），于是**第 1 轮就误判成已完成、直接退出等待**。
+//    实测踩到：真 Key 那次 5 秒就 break，正文只有 158 字符、记账 0、没落盘，
+//    而探针当时报的是"批改跑到了结果页" —— 又一个"看着像通过"。
+//    正确判据：**"批改中"出现过** ∧ 现在不在批改中 ∧ 正文长得像结果页。
+//
+// ⚠️ 真 Key 下三师圆桌要 100 秒往上（假 LLM 只要 3 秒）—— 等待窗口按模式给。
+const MAX_ROUNDS = REAL ? 60 : 10
+const ROUND_MS = REAL ? 5000 : 3000
+for (let i = 1; i <= MAX_ROUNDS; i++) {
+  await sleep(ROUND_MS)
   const s = await evaluate(
     page.webSocketDebuggerUrl,
-    `(() => {
-       const t = document.body.innerText
-       return {
-         step: t.includes('批改中') ? 'grading' : (t.includes('批改结果') || t.includes('综合结论')) ? 'result' : 'other',
-         len: t.length
-       }
-     })()`
+    `(() => { const t = document.body.innerText; return { text: t, len: t.length } })()`
   )
-  stage = s.ok ? s.value?.step : 'other'
-  console.log(`   [${i * 3}s] ${stage}`)
+  const t = s.ok ? String(s.value?.text || '') : ''
+  lastText = t
+  const grading = /批改中/.test(t)
+  if (grading) sawGrading = true
+  stage = grading ? 'grading' : sawGrading && t.length > 800 ? 'result' : 'other'
+  console.log(`   [第 ${i} 轮 / 每轮 ${ROUND_MS / 1000}s] ${stage}（正文 ${t.length} 字符）`)
   if (stage === 'result') break
+}
+check('① 批改跑到了结果页', stage === 'result', `最终状态 = ${stage}（正文 ${lastText.length} 字符）`)
+if (stage !== 'result') {
+  console.log('  正文片段（排查用）：')
+  console.log('  ' + lastText.slice(0, 400).replace(/\n/g, '\n  '))
 }
 check('① 批改跑到了结果页', stage === 'result', `最终状态 = ${stage}`)
 
 // ── 6. 结果页真有内容 ──
 const resultText = await evaluate(page.webSocketDebuggerUrl, `document.body.innerText`)
 const text = resultText.ok ? String(resultText.value || '') : ''
+// ⚠️ 判据要具体。侧边栏本身就有「老师」两个字，拿它当判据会**假绿** ——
+//    实测踩到：批改全部失败、页面只剩一个空壳结果页，那条断言照样通过。
+const NAMES = ['袁东', '周泰然', '白鹭']
+const namedTeachers = NAMES.filter((n) => text.includes(n))
 check('② 结果页有分数', /[0-9]/.test(text) && text.includes('分'), `正文 ${text.length} 字符`)
-check('② 结果页有老师意见（三师各自的批注）', text.includes('袁东') || text.includes('老师'), '')
+check(
+  '② 结果页真的有老师批注（按老师名判，不按"老师"两字）',
+  namedTeachers.length > 0,
+  namedTeachers.length ? `出现：${namedTeachers.join('、')}` : '一个老师名都没有'
+)
+// 批改失败时界面**照常渲染**结果页，只是内容为空、日期退化成 1970-01-01 ——
+// 那正是最容易骗过"看到结果页就算成功"这类判据的形态。
+check('② 结果页不是空壳（没有 1970-01-01 那种时间戳）', !text.includes('1970-01-01'), '')
 
 // ── 7. ★ 关键：磁盘上真的多了一份记录 ──
 // 记录落在 **exe 同级** docs/practice/ —— 这正是"批完的稿子落成了 markdown"
