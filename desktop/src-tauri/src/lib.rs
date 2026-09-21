@@ -43,6 +43,22 @@ fn api_base(state: State<'_, ApiPort>) -> Option<String> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        // ⚠️ 单实例插件**必须第一个注册**（这是插件本身的约定）。
+        //
+        // 为什么需要它：Windows 上双击第二次会起第二个进程，而两个进程抢同一份
+        // WebView2 数据目录（`%LOCALAPPDATA%\<identifier>\EBWebView`）——
+        // 后者因此初始化不出页面。用户看到的现象是**"双击了但什么都没发生"**，
+        // 而这个现象在开发期就把人骗过一次（以为是探针坏了，查了半天）。
+        //
+        // 现在第二次启动不再开新窗口，而是把已有窗口唤到前面 —— 这也是用户
+        // 双击第二个图标时的真实意图。
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            if let Some(w) = app.get_webview_window("main") {
+                let _ = w.unminimize();
+                let _ = w.show();
+                let _ = w.set_focus();
+            }
+        }))
         // 外部链接（仓库地址 / 邮箱）交给系统浏览器。
         // ⚠️ WebView2 里 `<a target="_blank">` 只会被 Tauri 拦下，不会真的打开 ——
         //    表现是"点仓库地址没反应"，而页面上完全看不出哪里错了。

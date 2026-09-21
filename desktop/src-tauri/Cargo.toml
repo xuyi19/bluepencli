@@ -42,6 +42,7 @@ futures-util = "0.3"
 #    这个项目的目标就是「小包」，每个 MB 都值得挑一下。
 reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "native-tls"] }
 tauri-plugin-opener = "2.5.5"
+tauri-plugin-single-instance = "2.4.5"
 
 # 发布版体积优化 —— 这个项目的目标就是「小包」，所以值得多花编译时间。
 # codegen-units=1 + lto 让跨 crate 内联充分，opt-level="s" 优先体积，

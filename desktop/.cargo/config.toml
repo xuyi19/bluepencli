@@ -1,0 +1,26 @@
+# cargo 的 crates.io 镜像（项目级，不动用户全局配置）
+#
+# ── 为什么用 rsproxy，而不是清华源 ──
+#   ⚠️ 清华的 sparse index **只镜像了索引**。它的 config.json 里写着：
+#        { "dl": "https://static.crates.io/crates", "api": "https://crates.io" }
+#      —— 也就是说索引走得快，但 **.crate 包文件照样从官方源慢慢下**。
+#      表现是 `cargo fetch` 跑十几分钟不动，或者直接报
+#        failed to download from https://static.crates.io/...（这次真踩到，卡了 15 分钟）。
+#
+#   **选镜像时不能只看"有没有镜像"，要看它 config.json 里的 `dl` 字段指哪儿。**
+#   （判断方法：`curl -s <镜像>/crates.io-index/config.json`）
+#   rsproxy / ustc / aliyun 三家的 dl 都指向自己；这里选 rsproxy。
+#
+# ── 为什么放在 desktop/ 而不是 desktop/src-tauri/ ──
+#   cargo 找配置是**从当前工作目录向上**逐级找 `.cargo/config.toml`，
+#   不是从 Cargo.toml 所在目录找。`npm run build` 的 cwd 是 desktop/，
+#   所以配置放 src-tauri/ 里在那种调用下**根本读不到** —— 而且读不到是静默的，
+#   包照样去官方源下，直到某次网络波动才暴露。
+#
+# 放在项目内而不是 ~/.cargo/ —— 只影响本项目，不改变用户其它 Rust 项目的行为。
+
+[source.crates-io]
+replace-with = "rsproxy"
+
+[source.rsproxy]
+registry = "sparse+https://rsproxy.cn/index/"

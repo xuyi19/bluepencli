@@ -196,17 +196,62 @@ function cleanup() {
 }
 
 let targets = null
+let page = null
 const deadline = Date.now() + 40000
 while (Date.now() < deadline) {
   targets = await fetchTargets()
-  if (targets?.some((t) => t.type === 'page' && t.webSocketDebuggerUrl)) break
-  await sleep(700)
+  const list = (targets || []).filter((t) => t.type === 'page' && t.webSocketDebuggerUrl)
+  // ⚠️ 这里要等的是**两件事**：① WebView2 起来了（有 page target）；
+  //    ② 页面**导航完成**（target 的 url 从 about:blank 变成 tauri.localhost）。
+  //    两者之间隔着几百毫秒到几秒。抢在前面断言会读到 about:blank，
+  //    于是①~⑧全线报红 —— 而那是**探针太急**，不是被测对象坏了。
+  //    这一条栽过两次：第一次还误以为是单实例插件的锅，白查一轮。
+  page = list.find((t) => t.url && t.url !== 'about:blank') || null
+  if (page) break
+  await sleep(600)
+}
+if (!page) {
+  // 40 秒都没导航成功 → 退回第一个 target，让下面的断言**去报红**
+  // （而不是在这里静默跳过；跳过等于把真故障藏起来）
+  page = (targets || []).filter((t) => t.type === 'page' && t.webSocketDebuggerUrl)[0] || null
 }
 
 check('CDP 端口通了（WebView2 已启动）', !!targets, targets ? `${targets.length} 个 target` : '40 秒内没起来')
 
-const page = targets?.find((t) => t.type === 'page' && t.webSocketDebuggerUrl) || null
-check('拿到页面 target', !!page, page ? `id=${page.id}` : '')
+// ⚠️ 可能有**多个** page target：单实例插件（Windows）会额外创建一个辅助窗口
+//    用于跨进程通信，它的 URL 是 `about:blank`。
+//    如果只取 targets[0]，很可能连到那个空白辅助窗口上 —— 于是①~⑧全部失败，
+//    而真正的主窗口其实好端端的（这个假故障骗过一次，别再用下标取 target 了）。
+//    做法：优先选"加载了真实文档"的那个，并把全部 target 打出来备查。
+const allPages = (targets || []).filter((t) => t.type === 'page' && t.webSocketDebuggerUrl)
+console.log(
+  `  全部 CDP target：${(targets || []).map((t) => `${t.type}:${t.url || '(无 url)'}`).join(' | ') || '（无）'}`
+)
+if (allPages.length > 1) {
+  console.log(`  页面 target 共 ${allPages.length} 个：${allPages.map((p) => p.url).join(' | ')}`)
+}
+// page 已在上面（"等导航完成"那一段）选好了。
+// 这里只打印诊断信息：出现多个 page target 时，一眼能看出是不是连错了窗口。
+console.log(
+  `  全部 CDP target：${(targets || []).map((t) => `${t.type}:${t.url || '(无 url)'}`).join(' | ') || '（无）'}`
+)
+check('拿到页面 target', !!page, page ? `url = ${page.url}` : '')
+
+// ⚠️ 等页面**真正就绪**再往下断言 —— WebView2 起来了 ≠ 页面加载完成了。
+//    加了单实例插件之后启动略微变慢，探针"拿到 target 就断言"会读到
+//    `about:blank` 或空 DOM，于是①~⑧全线报红 —— 而那是**探针太急**，
+//    不是被测对象坏了（实测白查过一轮：改了三处代码才发现只要等一下）。
+//    宁可在这里安静地等，也不要让一次真实故障淹没在假红里。
+if (page) {
+  for (let i = 0; i < 40; i++) {
+    const r = await evaluate(
+      page.webSocketDebuggerUrl,
+      `(document.querySelector('#app') || {}).childElementCount || 0`
+    )
+    if (r.ok && Number(r.value) > 0) break
+    await sleep(500)
+  }
+}
 
 if (page) {
   // ── 判据①：绝对不能是 devUrl ──
@@ -239,6 +284,7 @@ if (page) {
          title: document.title,
          nodes,
          textLen: (document.body && document.body.innerText || '').trim().length,
+         html: (document.documentElement.outerHTML || '').slice(0, 220),
        })
      })()`
   )
@@ -442,6 +488,31 @@ if (page) {
       link.navigated === false,
       `navigated = ${link.navigated}`
     )
+  }
+
+  // ── 判据⑨：单实例 —— 双击第二次不该再起一个进程 ──
+  //
+  // 为什么这条值得钉：两个实例会抢同一份 WebView2 数据目录
+  // （`%LOCALAPPDATA%\<identifier>\EBWebView`），后者初始化不出页面。
+  // 用户看到的现象是**"双击了但什么都没发生"** —— 而这个现象在开发期
+  // 把人骗过一次：反复起停做验证时，我以为是探针坏了，查了半天才发现是抢目录。
+  //
+  // 期望：第二个进程起来后很快自己退出（单实例插件把它拦下，并把已有窗口唤到前面）。
+  const second = spawn(exe, [], { stdio: 'ignore' })
+  let secondExited = false
+  second.on('exit', () => {
+    secondExited = true
+  })
+  await sleep(3500)
+  check(
+    '⑨ 第二次启动自己退出了（单实例生效，不会抢 WebView2 数据目录）',
+    secondExited,
+    secondExited ? '第二个进程已退出' : '⚠️ 第二个进程还活着 —— 单实例没生效'
+  )
+  if (!secondExited) {
+    try {
+      second.kill('SIGKILL')
+    } catch {}
   }
 
   // ── 判据⑥（只在 `--llm` 时跑）：转发链路真的通到上游 ──
