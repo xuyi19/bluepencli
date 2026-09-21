@@ -1,0 +1,13 @@
+# cargo 的 crates.io 镜像（项目级，不动用户全局配置）
+#
+# 为什么需要：cargo 默认直连 crates.io，国内首次拉依赖常常几分钟到十几分钟，
+# 甚至直接超时失败。用户的 rustup 用的是清华源，这里保持一致。
+#
+# 放在 src-tauri/.cargo/ 而不是 ~/.cargo/ —— cargo 会从当前目录向上找 .cargo/config.toml，
+# 所以这样只影响本项目，不改变用户其它 Rust 项目的行为。
+
+[source.crates-io]
+replace-with = "tuna"
+
+[source.tuna]
+registry = "sparse+https://mirrors.tuna.tsinghua.edu.cn/crates.io-index/"

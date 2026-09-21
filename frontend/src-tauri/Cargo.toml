@@ -1,0 +1,42 @@
+# ──────────────────────────────────────────────────────────────
+# 蓝笔申论 BluePencil · 作者 许一 <xuconghui_03@qq.com>
+# GitHub: https://github.com/xuyi19/bluepencli
+# Gitee : https://gitee.com/xuyi_19/bluepencil
+# 许可: AGPL-3.0 · 转发或修改请保留本署名
+# ──────────────────────────────────────────────────────────────
+[package]
+name = "bluepencil"
+version = "0.13.7"
+description = "蓝笔申论 —— 公考申论练习与 AI 批改的桌面端"
+authors = ["许一 <xuconghui_03@qq.com>"]
+license = "AGPL-3.0"
+repository = "https://github.com/xuyi19/bluepencli"
+edition = "2021"
+rust-version = "1.77.2"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+name = "bluepencil_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.6.3", features = [] }
+
+[dependencies]
+serde_json = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+log = "0.4"
+tauri = { version = "2.11.6", features = [] }
+tauri-plugin-log = "2"
+
+# 发布版体积优化 —— 这个项目的目标就是「小包」，所以值得多花编译时间。
+# codegen-units=1 + lto 让跨 crate 内联充分，opt-level="s" 优先体积，
+# strip 去掉调试符号。
+# ⚠️ 这里**不用** `panic = "abort"`：它与上面 lib 的 `cdylib` 组合在 Tauri 上有过
+#    兼容问题，省下的不过几百 KB，不值得冒险。
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true
