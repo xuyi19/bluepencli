@@ -20,6 +20,24 @@
 //     所以「单题 ≤ 2500 token」这条验收线不是被浪费撑爆的，
 //     是**当初估的时候就没把"标准注入 + 输出契约"算进去**。
 //
+// 补充（2026-09-21，真 Key 跑了一次之后又查了一轮）：
+//   那次真批改的单次 prompt 是 **11,061 字符**，比静态测算的 ~3,700 大了近两倍。
+//   逐段对账的结果（可复算，不是猜）：
+//     system（老师方法论 + 契约）  3,476
+//     paper 骨架（题干/要求/作答）   270
+//     给定资料                    7,009  ← 就是这一项
+//     合计                       10,748（与实测 11,061 差 313，来自标准注入与老师差异）
+//   → **大头是「给定资料」，不是方法论，也不是选型问题。**
+//     材料是 7,009 字，因为练习页默认载入的「今日一练」是一道**真题小题**，
+//     而真题的 material 字段存的是**整卷材料**（本卷 6 则共 7,009 字），
+//     可这道题只问「给定资料4」—— 其余五则与本次批改无关，却一起付了钱。
+//
+//   ⚠️ 这是**已知的、可优化的浪费**，但没做，因为取舍不在代码在判据：
+//      ・大作文（"参考给定资料，但不拘泥于给定资料"）本来就要通读全卷，不能裁；
+//      ・裁错了会让老师看不到依据，分数变虚 —— 那比多花几分钱糟得多。
+//      真要动，得先能**稳定解析题干里的「给定资料N」**（正则 + 回退整卷），
+//      并且只在**非大作文**且**解析成功**时才裁。工作量约半天，收益见下方输出。
+//
 // 用法：
 //   node .tools/prompt-size.mjs                 # 默认 builtin-q-01
 //   node .tools/prompt-size.mjs <题目 id>
@@ -37,7 +55,7 @@ const { TEACHERS } = await import('../frontend/src/agents/teachers.js')
 const { buildStandardPrompt, resolveStandard } = await import(
   '../frontend/src/agents/grading/standardResolver.js'
 )
-const { BUILTIN_POOL } = await import('../frontend/src/data/questions.js')
+const { BUILTIN_POOL, resolveQuestion } = await import('../frontend/src/data/questions.js')
 
 /**
  * 复现 orchestrator.js::buildPaper 的**原样**拼接。
@@ -47,13 +65,7 @@ const { BUILTIN_POOL } = await import('../frontend/src/data/questions.js')
  * 这里不同步就会少算，于是「静态测算 vs 实测 token」对不上，
  * 那份交叉验证也就跟着失效。所以留一份副本，并标明同步关系。
  */
-function buildPaperRep(qid) {
-  let q = null
-  try {
-    q = (BUILTIN_POOL || []).find((x) => x.id === qid) || null
-  } catch {
-    q = null
-  }
+function buildPaperRep(q) {
   if (!q) return null
   const answer = ANSWER_SAMPLE
   return `【题目】${q.title || '（未填写题目）'}
@@ -131,9 +143,25 @@ if (stdText) {
   console.log(`  ${rpad('④ 采分点标准注入', 26)}${lpad(stdText.length, 8)} 字符   ${lpad(pct(stdText.length, r0.full.length) + '%', 7)}`)
 }
 
-const rep = buildPaperRep(questionId)
+// ⚠️ 真题在池子里只是**摘要**（material 为空），真正正文要 resolveQuestion 去 await
+//    对应年份的 chunk。直接用 BUILTIN_POOL.find() 会量到「材料 0 字符」，
+//    于是得出与实测完全对不上的结论 —— 这个坑踩过，别再踩。
+const stub = (BUILTIN_POOL || []).find((x) => x.id === questionId) || null
+const q = stub ? ((await resolveQuestion(stub)) || stub) : null
+
+const rep = buildPaperRep(q)
 if (rep) {
-  console.log(`  ${rpad('⑤ 题干 + 资料', 26)}${lpad(rep.length, 8)} 字符   ${lpad(pct(rep.length, r0.full.length + rep.length) + '%', 7)}`)
+  // 材料单独拆出来：它是唯一一项「量级会随题目翻倍」的，
+  // 不拆开看，很容易把 prompt 变大归错因（归到方法论或模型选型上）。
+  const matLen = (q?.material || '').length
+  const restLen = rep.length - matLen
+  const totalOnce = r0.full.length + rep.length
+  console.log(`  ${rpad('⑤ 题干 + 要求 + 作答', 26)}${lpad(restLen, 8)} 字符   ${lpad(pct(restLen, totalOnce) + '%', 7)}`)
+  console.log(`  ${rpad('⑥ 给定资料', 26)}${lpad(matLen, 8)} 字符   ${lpad(pct(matLen, totalOnce) + '%', 7)}`)
+  if (matLen) {
+    console.log(`     ${' '.repeat(24)}真题 material 存的是**整卷**，而小题只问其中某一则，`)
+    console.log(`     这一项占单次 prompt 的 ${pct(matLen, totalOnce)}%，是唯一可压缩的大头。`)
+  }
   const note = ANSWER_SAMPLE ? '' : '（作答未计入，见下）'
   console.log(`  ${rpad('合计（一次调用）', 26)}${lpad(r0.full.length + rep.length, 8)} 字符`
     + `   ≈ ${Math.round((r0.full.length + rep.length) * CHAR_PER_TOKEN)} tokens ${note}`)
@@ -168,6 +196,29 @@ console.log('  → 它是**可被缓存**的：这部分对所有老师完全相
 console.log('  → 但它**不能删**：通用铁律管"不许说空话"，输出契约管"quote 必须原样、'
   + '\n    type 必须走受控词表"。砍掉的每一句都会直接变成批改质量的下降。')
 console.log('')
+// 材料裁剪的收益测算（**只读**，不改写任何批改行为 —— 见 utils/grading/materialTrim.js 头）
+if (q?.material) {
+  const { trimMaterial } = await import('../frontend/src/utils/grading/materialTrim.js')
+  const stem = `${q.title || ''}\n${q.requirement || ''}`
+  const t = trimMaterial(q.material, stem)
+  console.log('── 给定资料：裁掉无关则能省多少 ' + '─'.repeat(20))
+  console.log(`  整卷 ${t.before} 字符 · 本题引用：${t.trimmed ? '第 ' + t.used.join('、') + ' 则' : '（未解析出）'}`)
+  if (t.trimmed) {
+    console.log(`  裁后 ${t.after} 字符（去掉 ${t.dropped} 则），材料省 ${t.savedPct}%`)
+    const saved = t.before - t.after
+    const totalOnce = r0.full.length + rep.length
+    console.log(`  → 单次 prompt 从 ${totalOnce} 降到 ${totalOnce - saved} 字符，省 ${pct(saved, totalOnce)}%`)
+    console.log(`  → ${ids.length} 位老师跑一遍，材料这块少发 ${saved * ids.length} 字符`
+      + ` ≈ ${Math.round(saved * ids.length * CHAR_PER_TOKEN)} tokens`)
+  } else {
+    console.log(`  不裁（${t.reason}）—— 这条规矩比省钱重要`)
+  }
+  console.log('')
+  console.log('  ⚠️ 上面只是**测算**，批改流程里并未启用。启用前要先定：')
+  console.log('     大作文一律不裁；解析不出资料号一律不裁；UI 要显示"本次用了几则"。')
+  console.log('')
+}
+
 console.log('══ 结论 ' + '═'.repeat(48))
 console.log('  构成里没有冗余项。单次调用的体量由「输出契约 + 标准注入」决定，')
 console.log('  这两项都是为保证批改可复算、可控词汇而必需的。')

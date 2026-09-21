@@ -89,6 +89,13 @@
             </div>
           </div>
 
+          <!-- 采分点核对：回看时最该看的是「分扣在哪几个点上」——
+               比翻几十条批注快，也比只看总分实在。
+               ⚠️ 记录里存的就是 mergeKeyPoints 归并后的那份（orchestrator 在 finish() 算好），
+               所以这里**不需要 standard**（standard 是批改时注入的、没存档）。
+               老记录连归并结果都没有，才从各老师结果兜底再归并一次。 -->
+          <KeyPointCheck :key-points="detailPoints" />
+
           <!-- 复盘卡：回看旧记录时先看这个，不用再翻一遍几十条意见 -->
           <ReviewCard :record="detail" />
 
@@ -268,8 +275,10 @@ import { RouterLink, useRoute } from 'vue-router'
 import ScoreRing from '../components/ScoreRing.vue'
 import AnnotatedAnswer from '../components/AnnotatedAnswer.vue'
 import ReviewCard from '../components/ReviewCard.vue'
+import KeyPointCheck from '../components/KeyPointCheck.vue'
 import CredibilityCard from '../components/CredibilityCard.vue'
 import { TEACHERS, MODE_LABEL } from '../agents/teachers'
+import { mergeKeyPoints } from '../utils/grading/keyPoints'
 import {
   listAllRecords,
   loadRecordDetail,
@@ -293,6 +302,18 @@ const filtered = computed(() => {
   if (k) list = list.filter((r) => (r.title || '').toLowerCase().includes(k))
   if (modeFilter.value) list = list.filter((r) => r.mode === modeFilter.value)
   return list
+})
+
+/**
+ * 这份记录要显示的采分点。
+ * 优先用存档里归并好的那份；老记录（final.keyPoints 还没这个字段）退到现场归并。
+ * ⚠️ 第二个参数只能传 null：standard 没进存档，传别的是自己骗自己。
+ */
+const detailPoints = computed(() => {
+  const d = detail.value
+  if (!d) return []
+  if (Array.isArray(d.keyPoints) && d.keyPoints.length) return d.keyPoints
+  return mergeKeyPoints(d.results || [], null)
 })
 
 const pct = (a, b) => (b ? Math.min(100, Math.round((a / b) * 100)) : 0)

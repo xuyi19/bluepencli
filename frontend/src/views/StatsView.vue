@@ -29,10 +29,56 @@
       </section>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-        <!-- 维度雷达 -->
+        <!-- 能力画像：维度口径固定（见 utils/grading/profile.js），
+             不直接用老师给的 dimensions —— 那是自由文本，跨记录聚合会漂 -->
         <section class="rounded-2xl p-6 neu">
-          <div class="text-sm font-medium text-c-body mb-5">能力维度</div>
-          <div ref="radarEl" style="height: 260px" />
+          <div class="flex items-baseline justify-between gap-3 mb-1">
+            <div class="text-sm font-medium text-c-body">能力画像</div>
+            <div v-if="profile.ready" class="text-[11px] text-c-muted tnum">
+              基于 {{ profile.judgedCount }} 篇有批注的记录
+            </div>
+          </div>
+
+          <!-- 样本不够：这里必须**不画图**。一篇记录画出的多边形会让读者以为
+               "我的能力就是这样"，那是比没有图更坏的假信号。 -->
+          <div v-if="!profile.ready"
+            class="rounded-xl p-5 mt-4 text-xs leading-6" style="background: #faf6f1; color: #78716c">
+            样本还不够，先不画画像 —— 再练 {{ profile.need }} 篇（满 3 篇）才看得出来。
+            <div class="mt-1.5">一两次的分数说明不了强弱，硬画出来的形状只会误导复习方向。</div>
+          </div>
+
+          <template v-else>
+            <div ref="radarEl" style="height: 260px" />
+
+            <!-- 维度明细：每个数字都要带口径，否则就是来历不明的断言 -->
+            <div class="space-y-2 mt-4">
+              <div v-for="d in profile.dimensions" :key="d.id"
+                class="rounded-xl p-3 neu-inset">
+                <div class="flex items-center gap-2">
+                  <span class="text-xs font-medium text-c-body w-16 shrink-0">{{ d.label }}</span>
+                  <div class="flex-1 h-1.5 rounded-full overflow-hidden" style="background: #eae2d8">
+                    <div v-if="d.applicable" class="h-full rounded-full"
+                      :style="{ width: d.score + '%', background: d.score >= 70 ? '#8b9d77' : d.score >= 45 ? '#c9a227' : '#b4552d' }" />
+                  </div>
+                  <span class="text-xs tnum w-12 text-right shrink-0"
+                    :class="d.applicable ? 'text-c-body' : 'text-c-muted'">
+                    {{ d.applicable ? d.score : '未评' }}
+                  </span>
+                </div>
+                <div class="text-[11px] text-c-muted mt-1 leading-5">
+                  口径：{{ d.basis }}
+                  <span v-if="d.applicable" class="text-c-muted">（{{ d.samples }} 篇）</span>
+                  <span v-if="d.topErrors?.length" style="color: #b4552d">
+                     · 常犯：{{ d.topErrors.join('、') }}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div v-if="weakest" class="text-[11px] mt-3 leading-5" style="color: #9c6b2f">
+              当前最弱的一环是「{{ weakest.label }}」（{{ weakest.score }}）。
+            </div>
+          </template>
         </section>
 
         <!-- 练习频次 -->
@@ -68,6 +114,7 @@ import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { RouterLink } from 'vue-router'
 import * as echarts from 'echarts'
 import { listAllRecords } from '../utils/record'
+import { buildProfile, weakestDimension } from '../utils/grading/profile'
 
 const records = ref([])
 const trendEl = ref(null)
@@ -99,6 +146,10 @@ const overview = computed(() => {
     },
   ]
 })
+
+const profile = computed(() => buildProfile(records.value))
+/** 最弱项：可用维度不足 2 个时为 null（没有比较对象，说了等于没说） */
+const weakest = computed(() => weakestDimension(profile.value))
 
 const topDeductions = computed(() => {
   const map = new Map()
@@ -159,26 +210,17 @@ function initCharts() {
     charts.push(c)
   }
 
-  // 维度雷达
+  // 能力画像雷达
+  // ⚠️ 数据源是 buildProfile()（固定六维，走错误类型表），
+  //    不再是 results[].dimensions —— 那是模型自由文本，跨记录聚合会漂成不同的轴。
   if (radarEl.value) {
-    const dims = new Map()
-    for (const r of records.value) {
-      for (const tr of r.results || []) {
-        for (const d of tr.dimensions || []) {
-          if (!d.name) continue
-          const cur = dims.get(d.name) || { got: 0, max: 0 }
-          cur.got += d.score || 0
-          cur.max += d.max || 0
-          dims.set(d.name, cur)
-        }
-      }
-    }
-    const entries = [...dims.entries()].slice(0, 6)
+    const usable = (profile.value.dimensions || []).filter((d) => d.applicable && d.score !== null)
     const c = echarts.init(radarEl.value)
-    if (!entries.length) {
+    // 少于 3 个轴画不成形状（两点只能连成线），宁可空着也不硬凑
+    if (!profile.value.ready || usable.length < 3) {
       c.setOption({
         title: {
-          text: '还没有分项评分数据',
+          text: usable.length ? '可评的维度不足 3 项' : '还没有可评的维度',
           left: 'center',
           top: 'middle',
           textStyle: { color: '#a8a29e', fontSize: 12, fontWeight: 400 },
@@ -187,19 +229,20 @@ function initCharts() {
     } else {
       c.setOption({
         radar: {
-          indicator: entries.map(([name]) => ({ name, max: 100 })),
+          indicator: usable.map((d) => ({ name: d.label, max: 100 })),
           axisName: { color: '#78716c', fontSize: 11 },
           splitLine: { lineStyle: { color: '#e7e5e4' } },
           splitArea: { areaStyle: { color: ['rgba(250,246,241,0.3)', 'rgba(250,246,241,0.6)'] } },
           axisLine: { lineStyle: { color: '#e7e5e4' } },
         },
+        tooltip: { trigger: 'item' },
         series: [
           {
             type: 'radar',
             data: [
               {
-                value: entries.map(([, v]) => (v.max ? +((v.got / v.max) * 100).toFixed(1) : 0)),
-                name: '平均得分率',
+                value: usable.map((d) => d.score),
+                name: '能力画像',
                 itemStyle: { color: '#5c4033' },
                 lineStyle: { color: '#5c4033', width: 2 },
                 areaStyle: { color: 'rgba(92,64,51,0.2)' },

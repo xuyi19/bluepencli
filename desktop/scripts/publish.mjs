@@ -66,6 +66,30 @@ const version = readVersion()
 const outName = `${PREFIX}-${version}.exe`
 const outPath = join(RELEASE, outName)
 
+// ⚠️ 版本号散在**三处**（CHANGELOG / tauri.conf.json / Cargo.toml），而健康接口报的是
+//    tauri.conf.json 那份。v0.16.0 实测：CHANGELOG 已升到 v0.16.0，产物却自报 0.15.0 ——
+//    界面「关于」里显示的版本与更新日志对不上，**没有任何地方会报错**。
+//    所以发布前必须拦住：不一致就停下，别指望自己记得同步。
+function declaredVersion(file, re) {
+  if (!existsSync(file)) return null
+  const m = readFileSync(file, 'utf8').match(re)
+  return m ? m[1] : null
+}
+const VERSION_FILES = [
+  [join(ROOT, 'desktop', 'src-tauri', 'tauri.conf.json'), /"version"\s*:\s*"([\d.]+)"/],
+  [join(ROOT, 'desktop', 'src-tauri', 'Cargo.toml'), /^version\s*=\s*"([\d.]+)"/m],
+]
+for (const [file, re] of VERSION_FILES) {
+  const got = declaredVersion(file, re)
+  if (got && got !== version.replace(/^v/, '')) {
+    fail(
+      `版本号不一致：CHANGELOG 写 ${version}，而 ${file.replace(ROOT + '\\', '')} 是 ${got}。\n` +
+        '  产物自报的版本取自 tauri.conf.json，不同步的话界面「关于」会与更新日志对不上。\n' +
+        '  请把这两处改成 ' + version.replace(/^v/, '') + ' 再发布。'
+    )
+  }
+}
+
 // ① 先验产物再发布 —— 顺序不能反：
 //    先复制过去再验的话，验证失败时那份坏产物已经躺在发布目录里了，
 //    而"发布目录里躺着一份坏包"正是最容易误发的情况。

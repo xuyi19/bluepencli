@@ -337,6 +337,22 @@ const filled = await evaluate(
 )
 check('表单填写成功（题干 / 要求 / 方格纸作答）', filled.ok && filled.value?.answer, JSON.stringify(filled.value))
 
+// 诊断：把页面上所有输入框的 placeholder 与长度打出来。
+// 起因很具体：真批改那次的 prompt 是 11,061 字符，而静态测算同套 prompt 只有 5,500 ——
+// 差近一倍。怀疑是**页面自带的材料**（探针只改了题干/要求/作答，没清材料字段）被一起发了。
+// 打印出来就能一眼看出"这次到底带了什么进 prompt"。
+const fields = await evaluate(
+  page.webSocketDebuggerUrl,
+  `(() => {
+     const ta = [...document.querySelectorAll('textarea')]
+     return ta.map(t => ({ ph: (t.placeholder || '').slice(0, 26), len: (t.value || '').length }))
+   })()`
+)
+if (fields.ok && Array.isArray(fields.value) && fields.value.length) {
+  console.log('  页面输入框（placeholder → 字符数）：')
+  for (const f of fields.value) console.log(`    ${f.ph || '(无 placeholder)'} → ${f.len}`)
+}
+
 // ── 4. 点「答完了」──
 await sleep(1000)
 const clicked = await evaluate(
@@ -374,7 +390,11 @@ for (let i = 1; i <= MAX_ROUNDS; i++) {
   lastText = t
   const grading = /批改中/.test(t)
   if (grading) sawGrading = true
-  stage = grading ? 'grading' : sawGrading && t.length > 800 ? 'result' : 'other'
+  // 结果页的**确定性标志**是出现了具体老师名（表单页只有侧边栏的「老师」两字）。
+  // ⚠️ 不能只看 sawGrading：假 LLM 三秒就跑完、**从没经过"批改中"**，
+  //    于是正文明明已经是 3864 字符的结果页，却被判成 other（实测踩到）。
+  const hasTeacher = /袁东|周泰然|白鹭|Kiwi|李崇立/.test(t)
+  stage = grading ? 'grading' : (sawGrading || hasTeacher) && t.length > 800 ? 'result' : 'other'
   console.log(`   [第 ${i} 轮 / 每轮 ${ROUND_MS / 1000}s] ${stage}（正文 ${t.length} 字符）`)
   if (stage === 'result') break
 }

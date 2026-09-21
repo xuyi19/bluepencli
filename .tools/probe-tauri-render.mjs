@@ -253,6 +253,24 @@ if (page) {
   }
 }
 
+// ⚠️ CDP target 的 **title 更新滞后于 url**（v0.16.0 实测：url 已经是 tauri.localhost，
+//    title 还是 about:blank；而同一时刻 DOM 里的 document.title 已经是对的）。
+//    不等这一步，判据② 会**假红**，并让整轮发布被拦下 —— 实际产物是好的
+//    （① url 对、③ DOM title 与节点都对）。所以这里单独再等 title，
+//    用 `webSocketDebuggerUrl` 认同一个 target，别连错窗口。
+if (page) {
+  for (let i = 0; i < 20; i++) {
+    if (String(page.title || '').includes('蓝笔申论')) break
+    const fresh = ((await fetchTargets()) || []).filter(
+      (t) => t.type === 'page' && t.webSocketDebuggerUrl
+    )
+    const same = fresh.find((t) => t.webSocketDebuggerUrl === page.webSocketDebuggerUrl)
+    if (same) page = same
+    if (String(page.title || '').includes('蓝笔申论')) break
+    await sleep(500)
+  }
+}
+
 if (page) {
   // ── 判据①：绝对不能是 devUrl ──
   const url = String(page.url || '')
