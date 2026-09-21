@@ -15,7 +15,7 @@
     backend/.venv/Scripts/python.exe .tools/exams/export_bpq.py            # 不带水印（自用）
 
 产出：
-    release/私有题库/蓝笔申论-私有题库-<年份区间>.bpq
+    私有题库/蓝笔申论-私有题库-<年份区间>.bpq
 
 ⚠️ 校验和必须与前端 frontend/src/bpq/importer.js::packChecksum 算出同一个值，
    否则导入端一律报"校验和不匹配"。改动其中任何一边都要同时改另一边。
@@ -35,7 +35,11 @@ sys.stdout.reconfigure(encoding='utf-8')
 HERE = os.path.dirname(os.path.abspath(__file__))
 SRC = os.path.join(HERE, 'out')
 ROOT = os.path.abspath(os.path.join(HERE, '..', '..'))
-DEST_DIR = os.path.join(ROOT, 'release', '私有题库')
+# 2026-09-21：私有题库从 `release/私有题库/` 挪到**项目根 `私有题库/`**。
+# 理由：它原先只是顺带被 `release/` 整目录规则忽略的 —— 私密数据靠别人的规则顺带挡住
+# 是一条随时会断的防线（有人为提交某个说明文件把 `release/` 改成逐个列，它就漏了）。
+# 挪出来后 .gitignore 里有**显式**规则 `私有题库/`，与目录绑在一起。
+DEST_DIR = os.path.join(ROOT, '私有题库')
 
 PUBLIC_MAX_YEAR = 2021          # 与 to_frontend.py 保持一致：这段以上才是私有
 FORMAT = 'bluepencil-bpq'

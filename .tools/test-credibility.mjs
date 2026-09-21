@@ -231,7 +231,7 @@ check('低档时给出「仅供参考」的措辞', /仅供参考/.test(lowCase.
 console.log('')
 console.log('── 六、真数据订住 ──')
 // 2026-09-17 那次真实批改：任务 mu68na1iptf4fr（三师圆桌 / 智谱 glm-4-flash）
-//   数据库可复核：release/历史版本/蓝笔申论-桌面版-v0.13.3/data/bluepencil.db
+//   数据库可复核：release/桌面版/历史版本/蓝笔申论-桌面版-v0.13.3/data/bluepencil.db
 //   grading_tasks：mode=trio, final_score=17.5, max_score=20, disputed=0
 //   程序按标准粗判覆盖率 85%（17/20）
 // 这两条数互不相干地指向同一个地方，是可信度模块存在的直接动因。

@@ -441,7 +441,8 @@ bluepencil/
 │   ├── test-desktop-reuse.py       # 桌面版实例复用：同版本复用 / 异版本另起端口
 │   ├── probe-desktop-exit.mjs      # 真浏览器验「关页即退」：关页退、刷新不退（4 断言）
 │   ├── check_release_private.py    # 产物体检：递归数 exam chunk、查有无私有卷、功能指纹
-│   ├── archive-release.mjs         # 把 release/ 根目录里**非最新版**的产物移进 历史版本/（只挪不删）
+│   ├── archive-release.mjs         # 各产物通道里**非最新版**的移进它自己的 历史版本/（只挪不删）
+│   ├── probe-tauri-render.mjs      # 验桌面版加载的是内嵌前端（断言 URL 不是 devUrl，防"只有开发者能跑"）
 │   ├── report-cost.py              # 真实批改的成本 / Token 实测报告（优先挑有真实记账的库）
 │   ├── prompt-size.mjs             # 单次 prompt 的体积构成与开销归因
 │   ├── vite-alias.mjs              # 让 Node 能 import 前端源码（Vite 别名 + 省略后缀）
@@ -481,12 +482,18 @@ bluepencil/
 │   ├── standards/gen_standards.mjs # 采分点批量预解析（--mock 无 Key 也能跑）
 │   ├── add_watermark.py            # 给核心源文件打作者注释头（幂等）
 │   └── push-all.mjs                # 一键推 GitHub + Gitee
+├── desktop/                        # 桌面端（Tauri 2 外壳 + Rust 侧 LLM 网关）
+│   ├── package.json                #   桌面端构建工具（@tauri-apps/cli）与脚本
+│   └── src-tauri/                  #   Rust 项目（产物：内嵌前端的单文件 exe）
+│       ├── Cargo.toml              #     release 开 LTO + strip 压体积
+│       ├── tauri.conf.json         #     窗口 / 内嵌 dist（../../frontend/dist）
+│       ├── .cargo/config.toml      #     cargo 镜像（项目级，不动用户全局配置）
+│       └── src/                    #     main + preset（读 config.json）+ llm（转发网关）
 ├── release/                        # 本机归档区（不进版本库）
-│   ├── 蓝笔申论-*-vX.Y.Z.*         #   最新一版产物（只放最新，避免解压到旧包）
-│   ├── 历史版本/                    #   往期产物（只增不删，回溯用）
-│   ├── 私有题库/                    #   明文包 + 已发出的加密包（含私有卷，绝不分发）
-│   ├── 发放台账.{json,md}           #   发给谁 / 哪批口令 / 文件 sha256，也不进库
-│   └── 版本说明.md                  #   分发台账（哪个包能发给别人），也不进库
+│   ├── 桌面版/                      #   产物通道①：最新一版 + 各自的历史版本/
+│   ├── 单文件版/                    #   产物通道②：最新一版 + 各自的历史版本/
+│   └── README.md                   #   分发台账（哪个包能发给别人），也不进库
+├── 私有题库/                        # .bpq 私有资产（2026-09-21 从 release/ 挪出并显式忽略）
 ├── CHANGELOG.md                    # 更新日志（唯一数据源：网页日志页与打包版本号都读它）
 ├── pytest.ini                      # pytest 配置（放仓库根，保证任意目录下跑结果一致）
 ├── PLAN.md                         # 开发计划与现状、待办
@@ -530,7 +537,7 @@ bluepencil/
 cd frontend
 npm run build          # → dist/         多文件，用于部署网站 / 打包桌面版
 npm run build:single   # → dist-single/  单个 HTML，双击即用
-npm run release:single # = build:single + 复制进 release/ 并带上版本号
+npm run release:single # = build:single + 复制进 release/单文件版/ 并带上版本号
 ```
 
 | 产物 | 体积 | 要不要装东西 | 要不要填 Key | 适用 |
@@ -541,12 +548,14 @@ npm run release:single # = build:single + 复制进 release/ 并带上版本号
 
 > 单文件版把所有 JS/CSS/数据内联进一个 `.html`，31 篇文章、五份讲义、以及微信二维码图片全在里面，所以体积看起来不小——但它是**一个自包含的文件**，不依赖任何外部资源（离线双击打开，引流入口照样能扫码）。没有后端时自动走浏览器直连，需要在设置页填自己的 Key，且接口必须允许跨域。
 
-**发布约定：产物名带版本号；`release/` 根只放最新一版，往期产物进 `release/历史版本/`。**
+**发布约定：产物名带版本号；每个产物通道目录的根只放最新一版，往期进该通道自己的 `历史版本/`。**
 
 - 版本号统一取自仓库根 `CHANGELOG.md` 最上面那一版；两个发布脚本（`frontend/scripts/publish-single.mjs`、`backend/build_desktop.py`）都按这条规则读，**读不到会直接报错停下**，不会静默打出一个版本号不对的包
-- **分层是为了不挑错包**：早先多个版本的包平铺在一起，文件名只差一处版本号，随手解压一个就是旧版（真发生过）。现在根目录只剩最新一版；历史版本一律保留、只挪位置不删除——要回溯"某版当时是什么样"，历史包本身就是证据，重新构建出来的并不是当时那一版
+- **分层是为了不挑错包**：早先多个版本的包平铺在一起，文件名只差一处版本号，随手解压一个就是旧版（真发生过）。现在**每个通道目录的根只剩最新一版**；历史版本一律保留、只挪位置不删除——要回溯"某版当时是什么样"，历史包本身就是证据，重新构建出来的并不是当时那一版
+- **按通道分目录**（2026-09-21）：原先两条通道的产物混在 `release/` 根、往期全塞进同一个 `历史版本/`，回溯时要在几十个文件里分辨"这是哪条通道的哪一版"。现在 `release/桌面版/`、`release/单文件版/` 各自自洽，归档统一走 `node .tools/archive-release.mjs`（加新通道时**要把它登记进该脚本的 `CHANNELS`**，否则往期永远不会被归档，而这件事不会报错）
 - **产物自证版本**：构建时把 `app-version` / `app-build-time` 写进 `index.html` 的 meta；桌面版另附 `版本信息.txt`（解压第一眼就能看到是哪一版）。不靠文件名猜——文件名可以被随手改
-- `release/版本说明.md` 是**本机维护的分发台账**：逐版本记「有什么功能 / 哪个包能发给别人 / 怎么辨认版本」，**不进版本库**（里面写明哪些产物含私有卷，只给作者自己看）
+- `release/README.md` 是**本机维护的分发台账**：逐版本记「有什么功能 / 哪个包能发给别人 / 怎么辨认版本」，**不进版本库**（里面写明哪些产物含私有卷，只给作者自己看）
+- **私有资产不再放在 `release/` 里**（2026-09-21）：`.bpq` 私有题库挪到项目根并在 `.gitignore` **显式**忽略。原先它只是顺带被 `release/` 整目录规则盖住的——私密数据靠别人的规则顺带挡住，是一条随时会断的防线
 - `.tools/check_release_private.py`：递归体检查询全部归档产物，报「exam chunk 数 / 是否含私有卷 / 功能指纹」，**发之前跑一遍**
 - 改动记录写在同一个 `CHANGELOG.md` 里 —— 网页「更新日志」页直接读它，改文档即改页面
 
@@ -562,14 +571,38 @@ cd backend
 # .venv/bin/python build_desktop.py           # macOS / Linux（产物需在对应系统上构建）
 ```
 
-产出 `release/蓝笔申论-桌面版-vX.Y.Z.zip`（约 23 MB；同名解压目录也在 release/ 下，方便本机直接试跑），对方解压后双击 `蓝笔申论.exe`：程序自己起本地服务、自动打开浏览器，**关掉浏览器页面就自动退出**（黑窗口跟着消失），也可以直接关黑窗口。
+产出 `release/桌面版/蓝笔申论-桌面版-vX.Y.Z.zip`（约 23 MB；同名解压目录也在该通道目录下，方便本机直接试跑），对方解压后双击 `蓝笔申论.exe`：程序自己起本地服务、自动打开浏览器，**关掉浏览器页面就自动退出**（黑窗口跟着消失），也可以直接关黑窗口。
 
 解压目录里还有一份 `使用说明.txt` 和 `config.example.json`，可以直接连同 zip 一起发给对方。
 
 > **发完记得归档：`node .tools/archive-release.mjs`。**
-> 它把 `release/` 根目录里**非最新版**的产物移进 `历史版本/`（只挪不删）。
+> 它把每个产物通道目录里**非最新版**的产物移进该通道自己的 `历史版本/`（只挪不删）。
 > 这一步以前没人真的做 —— 两个构建脚本各自"报告"了历史版本、却没移动文件，
-> 于是每次发版后根目录都会多留一版，文件名只差一处版本号，**随手解压一个就是旧版**。
+> 于是每次发版后目录里都会多留一版，文件名只差一处版本号，**随手解压一个就是旧版**。
+
+### 另一条路：Tauri 2（体积从 45 MB 降到 6.7 MB）
+
+上一条是 PyInstaller 路线（一条命令出包，功能最全）。另有一条 **Tauri 2** 路线已经跑通骨架：
+
+```bash
+cd desktop
+npm run build          # = tauri build --no-bundle → 单文件 exe，内嵌前端
+npm run probe          # 验它加载的确实是内嵌前端，而不是 devUrl
+```
+
+| | PyInstaller | Tauri 2 |
+|---|---|---|
+| 产物 | 目录 45 MB / zip 23 MB | **单文件 exe 6.7 MB**，免解压 |
+| 前端 | 原样打进去 | 原样打进去（Vue 一行不改） |
+| 后端 | Python（FastAPI） | Rust（**进行中**：LLM 转发已写，记账/归档待补） |
+
+体积能差这么多，是因为去掉了 Python 运行时：`libcrypto+libssl` 9.3 MB、`python313.dll + base_library` 7.3 MB、`pydantic_core` 5.0 MB —— 这几项占 PyInstaller 包的一半以上，跟业务代码毫无关系。
+
+> ⚠️ **必须用 `npm run build`（即 `tauri build`），不要直接 `cargo build --release`。**
+> 后者**不内嵌前端**，而是去连 `tauri.conf.json` 里的 `devUrl`（5273）—— 它照样起窗口、
+> 进程照样活着，用"进程存活"判断会得到全绿，而屏幕上其实是 WebView 的"无法访问"错误页。
+> 这个假绿有专门护栏：`.tools/probe-tauri-render.mjs` 会断言页面 URL 必须是
+> `http://tauri.localhost/`、标题必须是「蓝笔申论 · 三师圆桌阅卷」。
 
 ### 关掉页面就退出（免得留下"幽灵进程"）
 
@@ -910,10 +943,10 @@ node .tools/exams/issue.mjs --new-batch "2026秋-1班" --note "第一批试发"
 
 # 4) 发放：封装成加密+签名包，同时记进发放台账（自带回读自检）
 node .tools/exams/issue.mjs --user "张三/zhangsan@qq.com" --batch "2026秋-1班" \
-  --in "release/私有题库/…-明文.bpq"
+  --in "私有题库/…-明文.bpq"
 
 # 5) 发出前复核（模拟用户那边打开一遍）
-node .tools/verify-bpq.mjs "release/私有题库/…-加密.bpq" --passphrase "该批次的口令"
+node .tools/verify-bpq.mjs "私有题库/…-加密.bpq" --passphrase "该批次的口令"
 
 # 事后核对：谁拿了什么、文件有没有被改过
 node .tools/exams/issue.mjs --list

@@ -18,7 +18,7 @@
 //   · `…-加密.bpq`  ← 本脚本出的，发给同学的就是这个
 //
 // 用法（仓库根目录）：
-//   node .tools/exams/seal-bpq.mjs --in release/私有题库/xxx-明文.bpq --passphrase "口令"
+//   node .tools/exams/seal-bpq.mjs --in 私有题库/xxx-明文.bpq --passphrase "口令"
 //   node .tools/exams/seal-bpq.mjs --passphrase "口令"        # 自动取最新一份明文包
 //   node .tools/exams/seal-bpq.mjs --in ... --check <加密包>  # 只校验一份已有的加密包
 //

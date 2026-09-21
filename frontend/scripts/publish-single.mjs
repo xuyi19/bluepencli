@@ -4,8 +4,8 @@
 //   1. 版本号从仓库根的 CHANGELOG.md 解析（唯一真源），解析不到就报错停下，
 //      绝不静默出一个名字不对的产物；
 //   2. 产物名固定 `蓝笔申论-单文件版-vX.Y.Z.html`；
-// 3. 旧产物一律保留：release/ 根只放**最新一版**，历史版本由人工归入
-//    release/历史版本/ —— 多个版本的包平铺在一起时，光看文件名分不清哪个是最新，
+// 3. 旧产物一律保留：通道目录的根只放**最新一版**，往期由 .tools/archive-release.mjs
+//    归入同级的 历史版本/ —— 多个版本的包平铺在一起时，光看文件名分不清哪个是最新，
 //    随手解压一个就是旧版（真发生过）。
 //
 // 用法（在 frontend/ 目录）：
@@ -27,7 +27,9 @@ const ROOT = resolve(FRONTEND, '..')
 
 const LOCAL = process.argv.includes('--local')
 const SRC = join(FRONTEND, LOCAL ? 'dist-single-local' : 'dist-single', 'index.html')
-const RELEASE = join(ROOT, 'release')
+// 产物通道目录：release/单文件版/（2026-09-21 起按通道分目录，
+// 往期产物在同级的 历史版本/ 下，由一个 / 一条命令不再混在一起）
+const RELEASE = join(ROOT, 'release', '单文件版')
 const PREFIX = LOCAL ? '蓝笔申论-单文件版-本地全量' : '蓝笔申论-单文件版'
 
 function fail(msg) {
@@ -100,7 +102,7 @@ function countArchived(dir) {
 }
 const kept = countArchived(RELEASE)
 console.log(removed ? `✓ 已清掉无版本号的旧命名（归档共 ${kept} 个版本）`
-  : `✓ 历史版本已归档（release/ 与 release/历史版本/ 共 ${kept} 个单文件版）`)
+  : `✓ 历史版本已归档（release/单文件版/ 与其 历史版本/ 共 ${kept} 个单文件版）`)
 
 // 发完立刻把"这个包能不能给别人"讲清楚 —— 分层之后这是最容易出错的一步：
 // 产物看起来都一样，区别只在构建时有没有把私有卷打进去。

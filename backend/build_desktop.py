@@ -10,10 +10,12 @@
     .venv/Scripts/python.exe build_desktop.py
 
 产出（文件名一律带版本号，版本取自仓库根 CHANGELOG.md 最上面一版）：
-    release/蓝笔申论-桌面版-vX.Y.Z/       可直接运行或压缩转发的目录
-    release/蓝笔申论-桌面版-vX.Y.Z.zip    发给别人即可
+    release/桌面版/蓝笔申论-桌面版-vX.Y.Z/       可直接运行或压缩转发的目录
+    release/桌面版/蓝笔申论-桌面版-vX.Y.Z.zip    发给别人即可
 
-release/ 保留每一个版本的产物（只增不删），历史包用于回溯；同名版本重打会覆盖。
+每个产物通道有自己的目录（`release/桌面版/`、`release/单文件版/`），
+通道目录的**根只放最新一版**，往期由 `.tools/archive-release.mjs` 收进同级的
+`历史版本/`。产物只增不删，同名版本重打会覆盖。
 
 三个设计决定：
 
@@ -41,7 +43,9 @@ BACKEND = Path(__file__).resolve().parent
 ROOT = BACKEND.parent
 WEB_DIST = ROOT / "frontend" / "dist"
 ICON = BACKEND / "assets" / "icon.ico"
-RELEASE = ROOT / "release"
+# 产物通道目录：release/桌面版/（2026-09-21 起按通道分目录）。
+# 往期产物在同级的 历史版本/ 下，由 .tools/archive-release.mjs 归档。
+RELEASE = ROOT / "release" / "桌面版"
 CHANGELOG = ROOT / "CHANGELOG.md"
 APP_NAME = "BluePencil"
 PKG_PREFIX = "蓝笔申论-桌面版"
@@ -207,15 +211,17 @@ def _sweep_leftovers() -> None:
 
 
 def _archive_report() -> None:
-    """清点 release/ 里已归档的历史版本（**不删**）。
+    """清点桌面版通道里已归档的历史版本（**不删**）。
 
-    约定（2026-09-14 起）：
-      · `release/` 根 = **最新一版**的产物（随手拿到的一定是新的，不会解压错）
-      · `release/历史版本/` = 往期所有产物（回溯用）
+    约定（2026-09-21 起按通道分目录）：
+      · `release/桌面版/` 根 = **最新一版**的产物（随手拿到的一定是新的，不会解压错）
+      · `release/桌面版/历史版本/` = 往期所有产物（回溯用）
 
     这里**递归统计而不是只扫根目录**：历史版本归入子目录后，只扫根目录会显示
     "暂无历史版本产物"，看着像历史包丢了 —— 同一个"布局变了、扫描没跟上"的坑，
     在 publish-single.mjs 与 check_release_private.py 里各踩过一次。
+    2026-09-21 又一次布局调整（release/ 按通道分目录），同样只需改这里的常量，
+    递归扫描本身不用动 —— 这正是当初改成 rglob 的收益。
 
     保留而不是删除的理由：回溯"某个版本当时是什么样"时，历史包本身就是证据，
     重新构建出来的其实不是"当时那一版"（依赖版本、题库数据都可能已经变了）。
@@ -232,11 +238,11 @@ def _archive_report() -> None:
         others.append(str(p.relative_to(RELEASE)))
 
     if others:
-        print(f"release/ 已归档 {len(others)} 个历史版本产物（保留不删）：")
+        print(f"release/桌面版/ 已归档 {len(others)} 个历史版本产物（保留不删）：")
         for name in others:
             print(f"  · {name}")
     else:
-        print("release/ 暂无历史版本产物")
+        print("release/桌面版/ 暂无历史版本产物")
 
 
 def _clear_target() -> None:

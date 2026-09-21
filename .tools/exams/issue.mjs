@@ -47,12 +47,14 @@ const EXAMS_DIR = import.meta.dirname
 // 路径可用环境变量改写：测试要在临时目录里跑，绝不能把假数据写进真台账。
 // 顺带也方便作者另开一套"试验批次"而不污染正式台账。
 const BATCH_FILE = process.env.BPQ_BATCH_FILE || path.join(EXAMS_DIR, 'batches.json')
+// 发放台账跟着私有题库走（都在 `私有题库/` 里）：台账记着"发给谁、哪批口令、
+// 文件 sha256"，与它服务的 .bpq 放在一起最不容易散。
 const LEDGER_JSON = process.env.BPQ_LEDGER
-  || path.join(ROOT, 'release', '发放台账.json')
+  || path.join(ROOT, '私有题库', '发放台账.json')
 const LEDGER_MD = LEDGER_JSON.replace(/\.json$/i, '.md')
 const PRIVATE_KEY_FILE = process.env.BPQ_PRIVATE_KEY || PRIVATE_FILE
 const PUBKEYS = process.env.BPQ_PUBKEY ? [process.env.BPQ_PUBKEY] : readPubKeys()
-// 产出目录：测试写临时目录，免得往 release/私有题库/ 里丢测试包
+// 产出目录：测试写临时目录，免得往 私有题库/ 里丢测试包
 const OUT_DIR = process.env.BPQ_OUT_DIR || PRIVATE_DEST
 
 const argv = process.argv.slice(2)

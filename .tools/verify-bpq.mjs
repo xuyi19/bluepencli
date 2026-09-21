@@ -14,8 +14,8 @@
 // 加 --pubkey 也可以不给口令（签名的公钥在程序里，本机就能验）。
 //
 // 用法：
-//   node .tools/verify-bpq.mjs release/私有题库/xxx.bpq
-//   node .tools/verify-bpq.mjs release/私有题库/xxx-加密.bpq --passphrase "口令"
+//   node .tools/verify-bpq.mjs 私有题库/xxx.bpq
+//   node .tools/verify-bpq.mjs 私有题库/xxx-加密.bpq --passphrase "口令"
 
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'

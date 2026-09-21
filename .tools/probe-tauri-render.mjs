@@ -64,7 +64,9 @@ const CDP_URL = `http://127.0.0.1:${CDP_PORT}`
 /** 自动找一个可测的 exe（优先 release 根目录，那里是 tauri build 的产物） */
 function findExe() {
   if (EXE_ARG) return resolve(EXE_ARG)
-  const dir = join(ROOT, 'frontend', 'src-tauri', 'target', 'release')
+  // 桌面端在 desktop/ 下（v0.14.0 从 frontend/src-tauri 挪出，
+  // 理由见 .workbuddy/memory：Rust 项目不该住在前端目录里）
+  const dir = join(ROOT, 'desktop', 'src-tauri', 'target', 'release')
   if (!existsSync(dir)) return null
   const candidates = readdirSync(dir)
     .filter((f) => f.toLowerCase().endsWith('.exe'))

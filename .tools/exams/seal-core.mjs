@@ -29,7 +29,12 @@ export const ROOT = path.resolve(import.meta.dirname, '..', '..')
 export const KEYS_DIR = path.join(import.meta.dirname, 'keys')
 export const PRIVATE_FILE = path.join(KEYS_DIR, 'bpq-private.pkcs8.b64')
 export const PUBKEY_FILE = path.join(ROOT, 'frontend', 'src', 'bpq', 'pubkey.js')
-export const PRIVATE_DEST = path.join(ROOT, 'release', '私有题库')
+// 私有题库包的落地区（导出 / 封包 / 发放都往这里写）。
+// 2026-09-21：从 `release/私有题库/` 挪到**项目根 `私有题库/`**。
+// 理由：它原先只是顺带被 `release/` 整目录规则忽略的 —— 私密数据靠别人的规则
+// 顺带挡住，是一条随时会断的防线（有人为了提交某个说明文件把 `release/` 改成
+// 逐个列，它就静静漏出去了）。挪出来后 `.gitignore` 里有**显式**规则 `私有题库/`。
+export const PRIVATE_DEST = path.join(ROOT, '私有题库')
 
 /** 读出内置的验签公钥（数组：轮换密钥时只追加，老包也得能验） */
 export function readPubKeys(src = PUBKEY_FILE) {

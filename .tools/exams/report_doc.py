@@ -107,7 +107,7 @@ def main():
     L.append(f'| 前端·公开真题索引与正文 | `frontend/src/data/real-exams/` |')
     L.append(f'| 前端·私有真题（自动生成，**已 gitignore**） | `frontend/src/data/real-exams-private/` |')
     L.append('| 私有卷空实现（别人 clone 后构建走它） | `frontend/src/data/real-exams-private-stub/` |')
-    L.append('| 题库包导出（作者专用） | `.tools/exams/export_bpq.py` → `release/私有题库/` |')
+    L.append('| 题库包导出（作者专用） | `.tools/exams/export_bpq.py` → `私有题库/` |')
     L.append('| 统一题库入口 | `frontend/src/data/questions.js` |')
     L.append('')
     L.append('## 流水线')

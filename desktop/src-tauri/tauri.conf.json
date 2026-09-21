@@ -1,13 +1,13 @@
 {
-  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+  "$schema": "../../frontend/node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "蓝笔申论",
   "version": "0.13.7",
   "identifier": "com.xuyi.bluepencil",
   "build": {
-    "frontendDist": "../dist",
+    "frontendDist": "../../frontend/dist",
     "devUrl": "http://localhost:5273",
-    "beforeDevCommand": "npm run dev",
-    "beforeBuildCommand": "npm run build"
+    "beforeDevCommand": "npm --prefix ../frontend run dev",
+    "beforeBuildCommand": "npm --prefix ../frontend run build"
   },
   "app": {
     "windows": [
