@@ -30,6 +30,18 @@ log = "0.4"
 tauri = { version = "2.11.6", features = [] }
 tauri-plugin-log = "2"
 
+# ── 本地 LLM 网关（见 src/server.rs / src/llm.rs）──
+# 桌面版必须自己转发 LLM 请求：Tauri 的页面跑在 WebView2 里，直接 fetch 各厂商
+# API 是跨域，而那些接口面向服务端、不给浏览器发 CORS 头。
+axum = "0.8"
+tokio = { version = "1", features = ["net", "rt-multi-thread", "macros", "sync", "time"] }
+tower-http = { version = "0.6", features = ["cors"] }
+futures-util = "0.3"
+# ⚠️ 关掉默认 feature 再显式要 native-tls：默认那条会连 rustls 一起拉进来，
+#    而 Windows 上系统自带的 SChannel 就够用（native-tls 走它），能省几 MB。
+#    这个项目的目标就是「小包」，每个 MB 都值得挑一下。
+reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "native-tls"] }
+
 # 发布版体积优化 —— 这个项目的目标就是「小包」，所以值得多花编译时间。
 # codegen-units=1 + lto 让跨 crate 内联充分，opt-level="s" 优先体积，
 # strip 去掉调试符号。

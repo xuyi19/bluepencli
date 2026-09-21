@@ -39,9 +39,33 @@ function resetProbe() {
   state = { checked: false, available: false, info: null }
 }
 
+/**
+ * 运行时注入的后端地址 —— Tauri 桌面版专用（Rust 侧起的本地服务）。
+ *
+ * ⚠️ 与 `setBackendUrl` 的关键区别：**这个不写 localStorage**。
+ * 桌面版的端口是每次启动由系统分配的（绑 `127.0.0.1:0`，避免和残留实例抢端口），
+ * 存下来只会在下次启动时指向一个**错误的端口**。而端口探测失败后前端会静默退回
+ * 「浏览器直连」—— 在 Tauri 里那条路会被 CORS 拦死，表现成"批改突然不能用了"，
+ * 而且**不会报任何错**。所以它只是内存里的运行时状态。
+ */
+let runtimeBase = ''
+
+export function setRuntimeBase(url) {
+  runtimeBase = String(url || '').trim().replace(/\/+$/, '')
+  resetProbe()
+}
+
+/**
+ * 后端地址。优先级：
+ *   ① 用户在设置页手填的（想连自己部署的服务，就尊重他）
+ *   ② 运行时注入的（桌面版内置的本地服务）
+ *   ③ 相对路径（网站版与后端同源）
+ */
 export function apiBase() {
   const custom = getBackendUrl()
-  return custom ? `${custom}/api/v1` : '/api/v1'
+  if (custom) return `${custom}/api/v1`
+  if (runtimeBase) return `${runtimeBase}/api/v1`
+  return '/api/v1'
 }
 
 export function backendInfo() {
