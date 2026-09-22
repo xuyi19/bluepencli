@@ -214,6 +214,17 @@
           </div>
         </div>
 
+        <!-- 材料预览：折叠，点开看「这道题要读的那几则」（按题裁剪，与练习页同口径） -->
+        <details v-if="q.needLoad || q.material" class="mt-3 pt-3 border-t border-c-line"
+          @toggle="onToggleMat($event, q)">
+          <summary class="text-xs text-c-muted cursor-pointer hover:text-c-bark list-none">
+            ▸ 材料预览<span v-if="q.materialUsed?.length" class="text-c-bark">· 本题用给定资料{{ q.materialUsed.join('、') }}</span><span v-else-if="q.materialView" class="text-c-muted">· 整卷</span>
+          </summary>
+          <div v-if="!q.materialView" class="mt-2.5 text-xs text-c-muted">载入中…</div>
+          <div v-else class="mt-2.5 text-xs text-c-body leading-7 whitespace-pre-wrap
+            max-h-72 overflow-y-auto pr-1">{{ q.materialView }}</div>
+        </details>
+
         <!-- 参考答案：折叠，做完再看。真题按需载入 -->
         <details v-if="q.needLoad || q.reference" class="mt-3 pt-3 border-t border-c-line"
           @toggle="onToggleRef($event, q)">
@@ -247,6 +258,7 @@ import {
   loadFullQuestion,
 } from '../data/questions'
 import { pickDaily } from '../data/daily'
+import { trimMaterial } from '../utils/grading/materialTrim'
 import { AUTHOR } from '../data/author'
 import { readPackFile, importPack, openSealedPack } from '../bpq/importer'
 import { useFileDrop } from '../utils/fileDrop'
@@ -314,6 +326,32 @@ async function onToggleRef(e, q) {
   q.material = full.material
   q.materialChars = full.material.length
   q.needLoad = false
+  applyMatView(q)
+}
+
+/**
+ * 材料预览（v0.17.0）：与练习页同一套裁剪口径 —— 展示的是「这道题要读的那几则」，
+ * 不是整卷。评分细则 / 采分点在这里永远不出现（标准分层：写出采分点＝泄题）。
+ */
+function applyMatView(q) {
+  if (!q.material) return
+  const stem = [q.title, q.requirement].filter(Boolean).join(' ')
+  const t = trimMaterial(q.material, stem)
+  q.materialView = t.trimmed ? t.text : q.material
+  q.materialUsed = t.trimmed ? t.used : []
+}
+
+async function onToggleMat(e, q) {
+  if (!e.target.open) return
+  if (q.needLoad && !q.material) {
+    const full = await loadFullQuestion(q.id)
+    if (!full) return
+    q.reference = full.reference
+    q.material = full.material
+    q.materialChars = full.material.length
+    q.needLoad = false
+  }
+  if (q.material && q.materialView === undefined) applyMatView(q)
 }
 
 const SOURCES = [

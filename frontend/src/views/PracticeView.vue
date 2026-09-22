@@ -91,10 +91,10 @@
         <details v-else class="mt-3 pt-3 border-t border-c-line group">
           <summary class="text-xs text-c-muted cursor-pointer hover:text-c-bark transition-colors list-none">
             <span class="transition-transform duration-300 group-open:rotate-90 inline-block mr-1">▸</span>
-            先读材料（{{ materialBlocks(todayQ.material).length }} 则）
+            先读材料（{{ materialBlocks(todayMaterialText).length }} 则）<span v-if="todayTrim" class="text-c-bark">· 本题用第 {{ todayTrim.used.join('、') }} 则</span>
           </summary>
           <div class="mt-3 max-h-72 overflow-y-auto space-y-3 pr-1">
-            <div v-for="(b, i) in materialBlocks(todayQ.material)" :key="i">
+            <div v-for="(b, i) in materialBlocks(todayMaterialText)" :key="i">
               <div v-if="b.label" class="text-xs font-medium text-c-bark mb-1">{{ b.label }}</div>
               <p class="text-xs text-c-body leading-7 whitespace-pre-wrap">{{ b.body }}</p>
             </div>
@@ -195,6 +195,17 @@
 
           <!-- 有材料：阅读态（默认）/ 编辑态 -->
           <div v-else-if="form.material" class="flex-1 min-h-0">
+            <div v-if="trimState.trimmed"
+              class="flex flex-wrap items-center gap-x-2 gap-y-0.5 mb-3 text-xs leading-5">
+              <span class="font-medium text-c-bark">本题用给定资料{{ trimState.used.join('、') }}</span>
+              <span class="text-c-muted tnum">
+                整卷共 {{ trimState.dropped + trimState.used.length }} 则，已省去其余 {{ trimState.dropped }} 则（材料 {{ trimState.before }} → {{ trimState.after }} 字，省 {{ trimState.savedPct }}%）
+              </span>
+              <button @click="toggleTrim"
+                class="underline underline-offset-2 text-c-muted hover:text-c-bark transition-colors">
+                {{ trimState.active ? '查看整卷材料' : '只用本题材料' }}
+              </button>
+            </div>
             <textarea v-if="materialEdit" v-model="form.material" rows="14"
               placeholder="把材料原样粘进来（材料 1、材料 2……）"
               class="w-full h-full px-3.5 py-2.5 rounded-xl text-xs neu-inset outline-none resize-none
@@ -738,6 +749,7 @@ import { TEACHERS, TEACHER_LIST, MODE_LABEL, PRESETS, detectMode } from '../agen
 import { runGrading } from '../agents/orchestrator'
 import { resolveStandard } from '../agents/grading/standardResolver'
 import { mergeKeyPoints, summarizeKeyPoints } from '../utils/grading/keyPoints'
+import { trimMaterial } from '../utils/grading/materialTrim'
 import { buildRecord, archiveRecord, countChars, fmtDateTime, listAllRecords } from '../utils/record'
 import { getAll, STORES } from '../store/db'
 import { DIFFICULTY_LABEL } from '../data/builtin-questions'
@@ -763,6 +775,51 @@ const form = reactive({
   questionType: '',
 })
 
+// 按题裁材料（v0.17.0 起**默认启用**，用户拍板）：
+// 真题 material 存的是整卷，小题只问其中一两则 —— 展示与批改都用裁后材料，
+// 材料区给一行说明 + 「查看整卷材料」开关。裁剪规矩见 utils/grading/materialTrim.js：
+// 解析不出资料号不裁、大作文不裁、引用的号找不到不裁 —— 三种情况都整卷原样。
+const trimState = reactive({
+  trimmed: false,   // 这次题目有没有真的裁掉东西
+  active: false,    // 当前展示/提交的是裁后材料吗
+  used: [],         // 题干引用的资料号
+  dropped: 0,       // 裁掉几则
+  before: 0, after: 0, savedPct: 0,
+  text: '',         // 裁后材料（切回来用）
+  full: '',         // 整卷材料
+})
+
+/** 裁后 ⇄ 整卷 手动切换。切换会覆盖对材料的手工编辑——这是显式动作，不算误伤。 */
+function toggleTrim() {
+  if (!trimState.trimmed) return
+  trimState.active = !trimState.active
+  form.material = trimState.active ? trimState.text : trimState.full
+}
+
+/** 载入题目后按题裁材料；裁不动的（大作文/无分则/解析不出）整卷原样 */
+function applyTrim(q) {
+  const fullMat = q.material || ''
+  const stem = [q.title, q.requirement].filter(Boolean).join(' ')
+  const t = trimMaterial(fullMat, stem)
+  trimState.full = fullMat
+  trimState.text = t.text
+  trimState.used = t.used || []
+  trimState.dropped = t.dropped || 0
+  trimState.before = t.before || fullMat.length
+  trimState.after = t.after || fullMat.length
+  trimState.savedPct = t.savedPct || 0
+  trimState.trimmed = !!t.trimmed
+  trimState.active = !!t.trimmed
+  form.material = t.trimmed ? t.text : fullMat
+}
+
+function resetTrim() {
+  Object.assign(trimState, {
+    trimmed: false, active: false, used: [], dropped: 0,
+    before: 0, after: 0, savedPct: 0, text: '', full: '',
+  })
+}
+
 const selected = ref(['yuandong', 'zhoutairan', 'bailu'])
 const deep = ref(false)
 const stage = ref('')
@@ -783,6 +840,18 @@ const builtin = BUILTIN_POOL
 const mine = ref([])
 const todayQ = ref(null)
 const doneToday = ref(false)
+
+// 今日一练卡片的材料速览：同样按题裁 —— 卡片展示的就是作答时真正要读的那几则。
+const todayTrim = computed(() => {
+  const q = todayQ.value
+  if (!q || q.needLoad || !q.material) return null
+  const t = trimMaterial(q.material, [q.title, q.requirement].filter(Boolean).join(' '))
+  return t.trimmed ? t : null
+})
+const todayMaterialText = computed(() =>
+  todayTrim.value ? todayTrim.value.text : todayQ.value?.material || ''
+)
+
 const loadedId = ref('')
 const loadedMeta = reactive({ type: '', exam: '', difficulty: 0, kind: '', topics: [] })
 const showPicker = ref(false)
@@ -966,7 +1035,7 @@ async function applyQuestion(q, { resetAnswer = true } = {}) {
   }
   q = full
   form.title = q.title || ''
-  form.material = q.material || ''
+  applyTrim(q)
   form.requirement = q.requirement || ''
   form.maxScore = Number(q.maxScore) || 40
   form.wordLimit = Number(q.wordLimit) || null
@@ -1004,6 +1073,7 @@ function togglePicker() {
 function startBlank() {
   form.title = ''
   form.material = ''
+  resetTrim()
   form.requirement = ''
   form.maxScore = 40
   form.wordLimit = null
