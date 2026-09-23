@@ -131,6 +131,23 @@ async def build_stats(db: AsyncSession) -> StatsOut:
 
     llm_calls, ptokens, ctokens, avg_rate = totals
 
+    # ⚠️ token 只能从**调用日志**求：任务表那两列是历史遗留（reportTask 不写），
+    # 求和恒为 0 —— 实测真实批改（glm-4-flash：3422/986）时发现统计接口报 0 成本，
+    # 而日志里明明有数。以日志为准，任务表那两列留着不动（桌面版记账还读它）。
+    log_totals = (
+        await db.execute(
+            select(
+                func.coalesce(func.count(LLMCallLog.id), 0),
+                func.coalesce(func.sum(LLMCallLog.prompt_tokens), 0),
+                func.coalesce(func.sum(LLMCallLog.completion_tokens), 0),
+            )
+        )
+    ).one()
+    log_calls, log_ptokens, log_ctokens = log_totals
+    llm_calls = max(int(llm_calls or 0), int(log_calls or 0))
+    ptokens = int(ptokens or 0) or int(log_ptokens or 0)
+    ctokens = int(ctokens or 0) or int(log_ctokens or 0)
+
     by_mode_rows = (
         await db.execute(
             select(GradingTask.mode, func.count(GradingTask.id)).group_by(GradingTask.mode)

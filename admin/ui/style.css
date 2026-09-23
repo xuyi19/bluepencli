@@ -121,3 +121,19 @@ footer {
   color: var(--muted);
   border-top: 1px solid var(--line);
 }
+
+/* 工具按钮：主标题 + 一行说明 */
+button.run {
+  display: block;
+  width: 100%;
+  text-align: left;
+  margin: 6px 0;
+  padding: 8px 12px;
+}
+button.run .desc {
+  display: block;
+  font-size: 11px;
+  opacity: 0.65;
+  margin-top: 2px;
+}
+fieldset.params .row > label { width: 62px; }

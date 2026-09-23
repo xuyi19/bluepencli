@@ -124,35 +124,47 @@ fn save_root(root: String) -> Result<(), String> {
     std::fs::write(&cfg, json.to_string()).map_err(|e| format!("写配置失败（{}）：{}", cfg.display(), e))
 }
 
-/// 跑一条 admin-bank 子命令。整条流程在后台线程，逐行 emit admin-log，
-/// 结束 emit admin-exit。返回前先给 running 原子标志，防止并发双跑。
+/// 通用工具执行器：把仓库里的 node / python 脚本当成一条命令跑起来。
+///
+/// 为什么泛化而不是每加一个工具就加一个 command：管理员端要整合的是**一整套**
+/// 工具链（PDF 提取 / 编入前端 / 打包验包 / 汇编 / 标准校准 / 回归测试……），
+/// 每加一个就在 Rust 侧加一个函数是纯重复劳动。这里只保留"执行器"职责：
+/// 定程序、传参、注入环境变量（**口令只走 env，不进 argv**）、逐行回显。
+///
+/// 注意：这里**不做**命令白名单校验——管理端是作者自用的本机工具，
+/// 而且它需要能跑将来新加的任何脚本；安全边界在于它与分发版物理隔离。
 #[tauri::command]
-fn run_admin(
+fn run_tool(
     app: tauri::AppHandle,
     running: tauri::State<'_, Arc<AtomicBool>>,
     root: String,
-    sub: String,
+    program: String,
     args: Vec<String>,
-    passphrase: Option<String>,
+    envs: Option<std::collections::HashMap<String, String>>,
 ) -> Result<(), String> {
     if running.swap(true, Ordering::SeqCst) {
         return Err("已有任务在跑，等它结束再点。".into());
     }
-    let node = find_node()?;
     let root_dir = detect_root(Some(&root))?;
+    // program 传 "node" 时走 PATH 探测（顺带找常见安装位置）
+    let prog = if program == "node" {
+        find_node()?
+    } else {
+        program
+    };
 
-    let mut cmd = Command::new(&node);
-    cmd.arg(".tools/admin-bank.mjs")
-        .arg(&sub)
-        .args(&args)
+    let mut cmd = Command::new(&prog);
+    cmd.args(&args)
         .current_dir(&root_dir)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .stdin(Stdio::null());
-    // 口令只走环境变量，不进 argv（进程列表不可见）
-    if let Some(p) = passphrase {
-        if !p.is_empty() {
-            cmd.env("BPQ_PASSPHRASE", p);
+    // 口令/密钥一律走环境变量，不进 argv（进程列表里看不见）
+    if let Some(map) = envs {
+        for (k, v) in map {
+            if !k.is_empty() {
+                cmd.env(k, v);
+            }
         }
     }
 
@@ -205,7 +217,7 @@ fn run_admin(
 fn main() {
     tauri::Builder::default()
         .manage(Arc::new(AtomicBool::new(false)))
-        .invoke_handler(tauri::generate_handler![find_root, save_root, run_admin])
+        .invoke_handler(tauri::generate_handler![find_root, save_root, run_tool])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

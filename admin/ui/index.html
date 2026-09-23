@@ -19,56 +19,37 @@
   </section>
 
   <main>
-    <div class="grid">
-      <fieldset>
-        <legend>① 盘点</legend>
-        <p class="hint">公开卷源 / 私有卷源 / 采分点标准 / 分发包 一览。无需参数。</p>
-        <button class="run" data-sub="list">盘点题库</button>
-      </fieldset>
+    <!-- 常用参数：只有需要的工具才会用到 -->
+    <fieldset class="params">
+      <legend>参数（按需填写）</legend>
+      <div class="row">
+        <label>收件人</label>
+        <input id="pack-user" type="text" placeholder="姓名&lt;邮箱&gt;（打包用）" />
+      </div>
+      <div class="row">
+        <label>年份</label>
+        <input id="year-from" type="number" placeholder="2022" min="2000" max="2100" />
+        <span>—</span>
+        <input id="year-to" type="number" placeholder="2024" min="2000" max="2100" />
+      </div>
+      <div class="row">
+        <label>包文件</label>
+        <input id="verify-file" type="text" placeholder="私有题库/xxx.bpq（相对仓库根，验包用）" spellcheck="false" />
+      </div>
+      <div class="row">
+        <label>口令</label>
+        <input id="pass" type="password" placeholder="打包/验包用 · 只经环境变量传递，不进命令行" autocomplete="new-password" />
+      </div>
+      <div class="row">
+        <label>卷 id</label>
+        <input id="exam-ids" type="text" placeholder="2024-hebei-a 2023-hebei-a（留空=全量，PDF 提取用）" spellcheck="false" />
+      </div>
+      <div class="row">
+        <label class="chk"><input id="with-private" type="checkbox" /> 含私有卷（汇编/打包）</label>
+      </div>
+    </fieldset>
 
-      <fieldset>
-        <legend>② 打包（加密分发）</legend>
-        <div class="row">
-          <label>接收人</label>
-          <input id="pack-user" type="text" placeholder="姓名&lt;邮箱&gt;" />
-        </div>
-        <div class="row">
-          <label>年份范围</label>
-          <input id="year-from" type="number" placeholder="2022" min="2000" max="2100" />
-          <span>—</span>
-          <input id="year-to" type="number" placeholder="2024" min="2000" max="2100" />
-        </div>
-        <div class="row">
-          <label>口令</label>
-          <input id="pack-pass" type="password" placeholder="必填 · 只经环境变量传递，不进命令行" autocomplete="new-password" />
-        </div>
-        <p class="hint">源 JSON → 明文包 → 加密签名包（含自检）。口令不给就拒跑。</p>
-        <button class="run primary" data-sub="pack">打包</button>
-      </fieldset>
-
-      <fieldset>
-        <legend>③ 验包（发出前最后一道检查）</legend>
-        <div class="row">
-          <label>包文件</label>
-          <input id="verify-file" type="text" placeholder="私有题库/蓝笔申论-私有题库-xxx.bpq（相对仓库根）" spellcheck="false" />
-        </div>
-        <div class="row">
-          <label>口令</label>
-          <input id="verify-pass" type="password" placeholder="验签 + 解密自检" autocomplete="new-password" />
-        </div>
-        <p class="hint">包与口令分两条路发；口令批次登记走 .tools/exams/issue.mjs。</p>
-        <button class="run" data-sub="verify">验包</button>
-      </fieldset>
-
-      <fieldset>
-        <legend>④ 题库汇编文档</legend>
-        <div class="row">
-          <label class="chk"><input id="docs-private" type="checkbox" /> 含私有卷（写入 私有题库/汇编/，gitignored）</label>
-        </div>
-        <p class="hint">按 体系/年份/卷别 生成目录树，每卷 材料.md + 参考答案.md。采分点永不导出。</p>
-        <button class="run" data-sub="docs">生成汇编</button>
-      </fieldset>
-    </div>
+    <div id="tools"></div>
   </main>
 
   <section class="console-wrap">
