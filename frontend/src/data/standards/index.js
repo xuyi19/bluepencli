@@ -19,17 +19,21 @@
 import { PUBLIC_STANDARDS } from './public'
 import { GENERATED_STANDARDS } from './generated'
 import { PRIVATE_STANDARDS } from '@private-standards'
+// 校准工作台产出的人工精校（.tools/standards/calibrate.mjs 写这里，不动手写文件）
+import MANUAL_STANDARDS from './manual.json'
 
 /**
  * 全量标准表：questionId -> standard
  *
  * 覆盖优先级（后者覆盖前者）：
- *   generated（工具批量产出）< public（人工精校）< private（私有卷）
+ *   generated（工具批量产出）< public（仓库内人工精校）< manual（校准工作台产出）
+ *   < private（私有卷）
  * 人工精校永远压过机器生成——质量判断上，人的判断更靠得住。
  */
 export const ALL_STANDARDS = {
   ...GENERATED_STANDARDS,
   ...PUBLIC_STANDARDS,
+  ...MANUAL_STANDARDS,
   ...PRIVATE_STANDARDS,
 }
 
