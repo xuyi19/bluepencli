@@ -23,7 +23,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
-const DOC_DIR = path.join(ROOT, 'docs/题库汇编')
+const DOC_DIR = path.join(ROOT, 'docs/题库/汇编')
 const STANDARDS_DIR = path.join(ROOT, 'frontend/src/data/standards')
 const PRIVATE_DIR = path.join(ROOT, 'frontend/src/data/real-exams-private')
 

@@ -8,11 +8,11 @@
 // 不再是几个大 md 平铺，而是按「考试体系 → 年份 → 卷别」分目录，
 // 每套卷独立两个文档（材料.md / 参考答案.md），以后加省考卷不挤在一个文件里。
 //
-//   node .tools/export-bank-docs.mjs                 # 公开卷（2010–2021）→ docs/题库汇编/
+//   node .tools/export-bank-docs.mjs                 # 公开卷（2010–2021）→ docs/题库/汇编/
 //   node .tools/export-bank-docs.mjs --private       # 追加私有卷（2022+）→ 私有题库/汇编/
 //
 // 产出结构（示例）：
-//   docs/题库汇编/
+//   docs/题库/汇编/
 //   ├── README.md                    # 总索引（全卷表格 + 链接）
 //   └── 国考/
 //       ├── 2010/
@@ -33,7 +33,7 @@ import { fileURLToPath } from 'node:url'
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const PUBLIC_DIR = path.join(ROOT, 'frontend/src/data/real-exams')
 const PRIVATE_DIR = path.join(ROOT, 'frontend/src/data/real-exams-private')
-const PUBLIC_OUT = path.join(ROOT, 'docs/题库汇编')
+const PUBLIC_OUT = path.join(ROOT, 'docs/题库/汇编')
 const PRIVATE_OUT = path.join(ROOT, '私有题库/汇编')
 
 const { splitMaterialBlocks } = await import('../frontend/src/utils/grading/materialTrim.js')

@@ -1,10 +1,10 @@
-// 把内置文章库导出为可读的 Markdown，放进 docs/ 方便查阅与维护。
+// 把内置文章库导出为可读的 Markdown，放进 docs/题库/文章库/ 方便查阅与维护。
 //
 // 用法：node scripts/export-articles-to-docs.mjs
 //
 //   输入：src/data/builtin-articles.json   ← 程序实际加载的数据
-//   输出：../../docs/articles/*.md          ← 人读的镜像
-//         ../../docs/articles/README.md     ← 按主题分组的索引
+//   输出：../../docs/题库/文章库/*.md          ← 人读的镜像
+//         ../../docs/题库/文章库/README.md     ← 按主题分组的索引
 //
 // 为什么要多这一层：JSON 是给程序读的，人要翻阅、校对、增补都不方便；
 // 但文章又必须存在于 src/data/ 下才能被打包进单文件版。
@@ -17,7 +17,7 @@ import { fileURLToPath } from 'node:url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const SRC_FILE = path.resolve(__dirname, '../src/data/builtin-articles.json')
-const OUT_DIR = path.resolve(__dirname, '../../docs/articles')
+const OUT_DIR = path.resolve(__dirname, '../../docs/题库/文章库')
 
 // Windows 文件名不允许的字符
 const ILLEGAL = /[\\/:*?"<>|]/g

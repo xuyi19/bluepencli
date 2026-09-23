@@ -5,7 +5,7 @@
 # Gitee : https://gitee.com/xuyi_19/bluepencil
 # 许可: AGPL-3.0 · 转发或修改请保留本署名
 # ──────────────────────────────────────────────────────────────
-"""生成 docs/真题数据说明.md —— 给人看的真题库说明书。
+"""生成 docs/题库/真题数据说明.md —— 给人看的真题库说明书。
 
 数据全部从 .tools/exams/out/*.json 现算，避免文档里的数字与产物脱节。
 用法：python .tools/exams/report_doc.py
@@ -21,7 +21,7 @@ sys.stdout.reconfigure(encoding='utf-8')
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, 'out')
-DEST = os.path.abspath(os.path.join(HERE, '..', '..', 'docs', '真题数据说明.md'))
+DEST = os.path.abspath(os.path.join(HERE, '..', '..', 'docs', '题库', '真题数据说明.md'))
 
 PAPER_ORDER = {'副省级': 0, '地市级': 1, '省部级': 2, '省级': 3, '行政执法卷': 3}
 
