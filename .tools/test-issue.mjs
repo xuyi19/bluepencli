@@ -25,7 +25,7 @@ import { decryptPayload, signText, signingText, toB64, verifyText } from '../fro
 
 const ROOT = path.resolve(import.meta.dirname, '..')
 const ISSUE = path.join(ROOT, '.tools', 'exams', 'issue.mjs')
-const SANDBOX = path.join(ROOT, '.smoke', 'issue-test')
+let SANDBOX = path.join(ROOT, '.smoke', 'issue-test')
 
 const results = []
 const check = (name, ok, detail = '') => {
@@ -33,7 +33,16 @@ const check = (name, ok, detail = '') => {
   console.log(`${ok ? '✓' : '✗'} ${name}${detail ? `   —— ${detail}` : ''}`)
 }
 
-rmSync(SANDBOX, { recursive: true, force: true })
+// 旧沙箱清不掉就换新目录名，绝不在旧垃圾上纠缠：上次跑挂留下的现场可能
+// 有几百个文件，rmSync 会触发批量删除护栏抛异常 —— 模块加载阶段崩掉，
+// 24 项检查一项都没机会跑（曾把"全过的测试"搞成编排里的红）。
+try {
+  rmSync(SANDBOX, { recursive: true, force: true })
+} catch {
+  const alt = path.join(ROOT, '.smoke', `issue-test-${Date.now()}`)
+  console.log(`⚠ 旧沙箱 .smoke/issue-test 清理被拦（残留过多），本次换用 ${path.relative(ROOT, alt)}`)
+  SANDBOX = alt
+}
 mkdirSync(SANDBOX, { recursive: true })
 
 // ── 临时密钥 + 一份明文包（都不碰本机真私钥） ────────────────
@@ -211,6 +220,13 @@ if (failed.length) console.log('未通过：' + failed.map((f) => f.name).join('
 if (failed.length) {
   console.log(`\n现场保留在 ${path.relative(ROOT, SANDBOX)}（含批次表与台账），便于排查。`)
 } else {
-  rmSync(SANDBOX, { recursive: true, force: true })
+  // 清理与检查解耦：检查全过就该绿。沙箱残留多时（比如上次跑挂留下的现场）
+  // rmSync 会触发批量删除护栏抛异常 —— 那是清理问题，不是测试问题，
+  // 不能让 24 项全过的测试因为"垃圾没倒成"标红。
+  try {
+    rmSync(SANDBOX, { recursive: true, force: true })
+  } catch (e) {
+    console.log(`\n⚠ 清理沙箱失败（检查结果不受影响），现场留在 ${path.relative(ROOT, SANDBOX)}：${String(e.message).slice(0, 120)}`)
+  }
 }
 process.exit(failed.length ? 1 : 0)

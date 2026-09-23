@@ -303,6 +303,22 @@ console.log(`  ✓ 全字段样本渲染 ${pyFull.length} 字符`)
 console.log(`  ✓ 极简样本渲染 ${pyMin.length} 字符`)
 
 console.log('\n【Rust 侧（经真实接口）】')
+// spawn 前先查残留：桌面版有单实例锁 —— 如果已有 bluepencil.exe 活着，
+// 新 spawn 的会立刻退出，而 CDP 探测可能连上旧实例 → 测的不是自己起的那个
+// （假绿家族：它能过，但过的是别人的账）。宁可直接拒跑，也不测错对象。
+{
+  const { execFileSync } = await import('node:child_process')
+  let existing = ''
+  try {
+    existing = execFileSync('tasklist', ['/FI', 'IMAGENAME eq bluepencil.exe'], { encoding: 'utf8' })
+  } catch {}
+  if (/bluepencil\.exe/i.test(existing)) {
+    console.log('✗ 检测到残留的 bluepencil.exe（上一轮测试没杀干净）。')
+    console.log('  单实例锁会让本次 spawn 立即退出、探测可能连上旧实例 —— 测错对象比测不成更糟。')
+    console.log('  先清进程再跑：taskkill /F /IM bluepencil.exe')
+    process.exit(1)
+  }
+}
 const child = spawn(exe, [], {
   env: {
     ...process.env,
