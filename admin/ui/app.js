@@ -10,8 +10,13 @@ const statusEl = $('status')
 let busy = false
 
 // ── 工具清单：程序 / 参数 / 需要哪些输入 ──
-// python 走仓库内的 backend/.venv（与测试、提取管线同一个解释器）
-const PY = 'backend/.venv/Scripts/python.exe'
+// 程序名用语义名交给 Rust 解析：
+//   "node"   → PATH / 常见安装位置
+//   "python" → **仓库内 venv 优先**（管线依赖装在 backend/.venv 里；PATH 上那个
+//              可能是完全无关的解释器，随手用了会 ModuleNotFoundError）
+// 这里**不要**写相对路径（如 backend/.venv/Scripts/python.exe）：Windows 上
+// Command::new 的相对路径按父进程 CWD 解析、不是 current_dir，会 os error 3。
+const PY = 'python'
 const TOOLS = [
   {
     group: '题库（PDF → 前端数据）',
@@ -113,11 +118,14 @@ const TOOLS = [
 
 function log(text, cls = '') {
   gotOutput = true
+  // 占位符要在 appendChild **之前**清：先 append 再判断的话，
+  // textContent 已包含刚加的内容 → startsWith 命中 → 把新行一起删掉
+  // （表现为「仓库根：xxx」这类启动即打印的行永远看不到）
+  if (consoleEl.textContent === '（等待操作）') consoleEl.textContent = ''
   const line = document.createElement('span')
   if (cls) line.className = cls
   line.textContent = text + '\n'
   consoleEl.appendChild(line)
-  if (consoleEl.textContent.startsWith('（等待操作）')) consoleEl.textContent = ''
   consoleEl.scrollTop = consoleEl.scrollHeight
 }
 
@@ -176,7 +184,8 @@ async function runTool(t) {
   }
   consoleEl.textContent = ''
   const shown = args.join(' ').replace(/--passphrase\s+\S+/g, '--passphrase ***')
-  log(`$ ${t.cmd === 'node' ? 'node' : 'python'} ${shown}`, 'sys')
+  // 回显用**语义名**（node / python），真身绝对路径由 Rust 解析后带在报错里
+  log(`$ ${t.cmd} ${shown}`, 'sys')
   if (t.needPass) log('（口令经环境变量传入，不显示在命令行）', 'sys')
   setBusy(true, `运行中：${t.name} …`)
   try {

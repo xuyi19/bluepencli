@@ -15,6 +15,13 @@
 //     （进程列表里看不见）；UI 侧永不回显、不写日志。
 //   · 仓库根自动向上探测（找 .tools/admin-bank.mjs），找不到允许手动指定，
 //     存在 exe 同级 admin-config.json。
+//   · 全程**无控制台窗口**：主程序以 windows 子系统编译，子进程一律 CREATE_NO_WINDOW。
+//     否则每跑一次工具就闪一个黑窗，工具链一跑十几步就满屏黑框。
+
+// 发布版按 GUI 子系统编译：不弹控制台窗口。
+// （debug 版保留控制台，方便看 panic 与 println；发布版排查走 admin-run.log）
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -31,36 +38,121 @@ struct LogLine {
     text: String,
 }
 
-/// 找 node：先 PATH，再几个常见安装位置（作者机器实测过的）。
-fn find_node() -> Result<String, String> {
-    // 1) `where node` 拿**绝对路径**：PATH 里若只有 node.cmd 之类的 shim，
-    //    CreateProcess 直接找不到可执行文件（spawn 失败，界面却可能看不出原因）。
-    if let Ok(out) = Command::new("cmd").args(["/C", "where", "node"]).output() {
-        if out.status.success() {
-            let text = String::from_utf8_lossy(&out.stdout);
-            if let Some(first) = text
-                .lines()
-                .map(|l| l.trim())
-                .find(|l| !l.is_empty() && l.to_lowercase().ends_with(".exe"))
-            {
-                if Path::new(first).exists() {
-                    return Ok(first.to_string());
-                }
-            }
-        }
+/// 子进程静默标志：不给子进程分配控制台窗口。
+/// 主程序已经是 GUI 子系统（无控制台），此时 Windows 默认会给每个子进程**新建**一个
+/// 控制台 —— 表现就是每跑一步工具闪一个黑窗。
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
+/// 统一的"静默启动"入口：所有 spawn 都必须过这里，漏一个就闪一次黑窗。
+#[cfg(windows)]
+fn quiet(cmd: &mut Command) -> &mut Command {
+    use std::os::windows::process::CommandExt;
+    cmd.creation_flags(CREATE_NO_WINDOW)
+}
+#[cfg(not(windows))]
+fn quiet(cmd: &mut Command) -> &mut Command {
+    cmd
+}
+
+/// 按 `where <name>` 找可执行文件，返回第一个真实存在的绝对路径。
+///
+/// 为什么要绝对路径：PATH 里若只有 `.cmd`/`.bat` 桩（nvm、scoop 常见），
+/// `Command::new("node")` 在 Windows 上会直接找不到可执行文件。
+fn which(name: &str) -> Option<String> {
+    let mut c = Command::new("cmd");
+    c.args(["/C", "where", name]);
+    let out = quiet(&mut c).output().ok()?;
+    if !out.status.success() {
+        return None;
     }
-    // 2) 常见安装位置
-    let candidates = [
+    String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .map(|l| l.trim())
+        .filter(|l| !l.is_empty() && l.to_lowercase().ends_with(".exe"))
+        .find(|l| Path::new(l).exists())
+        .map(String::from)
+}
+
+fn find_node() -> Result<String, String> {
+    if let Some(p) = which("node") {
+        return Ok(p);
+    }
+    for c in [
         r"C:\Program Files\nodejs\node.exe",
         r"C:\Program Files (x86)\nodejs\node.exe",
         r"E:\develop\node-js\node.exe",
-    ];
-    for c in candidates {
+    ] {
         if Path::new(c).exists() {
             return Ok(c.into());
         }
     }
     Err("找不到 node.exe。本工具依赖仓库工具链，请先安装 Node.js 或把它加入 PATH。".into())
+}
+
+/// 找 python：**仓库内 venv 优先**。
+///
+/// PDF 提取/编入那几条管线要 pdfplumber 等依赖，只有仓库 venv 里装了；
+/// PATH 上的 python 可能是完全无关的解释器（实测 `where python` 第一条就是别的工具带的），
+/// 随手取了它 → 脚本报 ModuleNotFoundError，看起来像"脚本坏了"。
+fn find_python(root: &Path) -> Result<String, String> {
+    let local = [
+        root.join("backend/.venv/Scripts/python.exe"),
+        root.join(".venv/Scripts/python.exe"),
+    ];
+    for c in &local {
+        if c.exists() {
+            return Ok(c.display().to_string());
+        }
+    }
+    if let Some(p) = which("python") {
+        return Ok(p);
+    }
+    for c in [
+        r"E:\develop\Anaconda\python.exe",
+        r"C:\Python313\python.exe",
+        r"C:\Python312\python.exe",
+    ] {
+        if Path::new(c).exists() {
+            return Ok(c.into());
+        }
+    }
+    Err(format!(
+        "找不到 python.exe。管线依赖仓库自带的 {}（里面装了 pdfplumber 等），请先建好 venv。",
+        root.join("backend/.venv").display()
+    ))
+}
+
+/// 把 UI 传来的 program 解析成真正能 CreateProcess 的路径。
+///
+/// ⚠️ 关键坑：Windows 上 `Command::new("backend/.venv/Scripts/python.exe")` 里的
+/// **相对路径是按父进程的当前目录解析的，不是 current_dir()**。哪怕设了 current_dir，
+/// 也会立刻 os error 3（系统找不到指定的路径）—— 而错误信息只会说"启动失败"，
+/// 极容易误判成"venv 没装"。所以相对路径一律先按 root 拼成绝对路径。
+fn resolve_program(program: &str, root: &Path) -> Result<String, String> {
+    match program {
+        "node" => find_node(),
+        "python" => find_python(root),
+        other => {
+            let p = Path::new(other);
+            if p.is_absolute() {
+                return Ok(other.to_string());
+            }
+            let joined = root.join(other);
+            if joined.exists() {
+                return Ok(joined.display().to_string());
+            }
+            // 裸命令名（如 git）交给系统按 PATH 搜索；其余情况给明确报错
+            if !other.contains('/') && !other.contains('\\') {
+                return Ok(other.to_string());
+            }
+            Err(format!(
+                "找不到 {}（已按仓库根找过 {}）",
+                other,
+                joined.display()
+            ))
+        }
+    }
 }
 
 /// 探测仓库根：含 `.tools/admin-bank.mjs` 的目录。
@@ -151,12 +243,11 @@ fn run_tool(
         return Err("已有任务在跑，等它结束再点。".into());
     }
     let root_dir = detect_root(Some(&root))?;
-    // program 传 "node" 时走 PATH 探测（顺带找常见安装位置）
-    let prog = if program == "node" {
-        find_node()?
-    } else {
-        program
-    };
+    // "node"/"python" 等语义名与相对路径都在这里解析成绝对路径
+    let prog = resolve_program(&program, &root_dir).map_err(|e| {
+        running.store(false, Ordering::SeqCst);
+        e
+    })?;
 
     let mut cmd = Command::new(&prog);
     cmd.args(&args)
@@ -164,6 +255,7 @@ fn run_tool(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .stdin(Stdio::null());
+    quiet(&mut cmd); // 无控制台窗口（漏了这行子进程会闪黑窗）
     // 口令/密钥一律走环境变量，不进 argv（进程列表里看不见）
     if let Some(map) = envs {
         for (k, v) in map {
@@ -175,7 +267,8 @@ fn run_tool(
 
     let mut child = cmd.spawn().map_err(|e| {
         running.store(false, Ordering::SeqCst);
-        format!("启动 node 失败：{}", e)
+        // 报出**实际用的那个程序路径**：写死"启动 node 失败"曾在跑 python 时误导排查
+        format!("启动失败：{}（{}）", prog, e)
     })?;
     let mut out = child.stdout.take().expect("stdout");
     let mut err = child.stderr.take().expect("stderr");

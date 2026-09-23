@@ -24,9 +24,9 @@ header {
   display: flex;
   align-items: baseline;
   gap: 12px;
-  padding: 14px 18px 8px;
+  padding: 10px 18px 7px;
 }
-header h1 { font-size: 17px; margin: 0; }
+header h1 { font-size: 16px; margin: 0; }
 .tag {
   font-size: 12px;
   color: #92400e;
@@ -39,7 +39,7 @@ header h1 { font-size: 17px; margin: 0; }
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 0 18px 12px;
+  padding: 0 18px 9px;
 }
 .root-bar label { color: var(--muted); white-space: nowrap; }
 .root-bar input { flex: 1; }
@@ -65,32 +65,34 @@ button:hover { border-color: var(--accent); color: var(--accent); }
 button:disabled { opacity: 0.5; cursor: not-allowed; }
 button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 button.primary:hover { background: #1e40af; color: var(--accent-ink); }
-main { padding: 0 18px; overflow: auto; }
-.grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
+main {
+  padding: 0 18px;
+  overflow: auto;
+  flex: 1 1 auto;
+  min-height: 0; /* flex 子项要能收缩，否则 overflow 不生效（内容把整页撑高） */
 }
 fieldset {
   border: 1px solid var(--line);
   border-radius: 10px;
   background: var(--card);
   margin: 0;
-  padding: 12px 14px 14px;
+  padding: 9px 13px 11px;
 }
 legend { font-weight: 600; padding: 0 6px; }
-.row { display: flex; align-items: center; gap: 8px; margin: 8px 0; }
-.row > label { width: 60px; color: var(--muted); flex: none; }
-.row input[type="text"], .row input[type="password"] { flex: 1; }
-.row input[type="number"] { width: 90px; }
+.row { display: flex; align-items: center; gap: 8px; margin: 8px 0; min-width: 0; }
+/* 标签不换行：窄列里「含私有卷」这类中文标签会被逐字折成 4 行，很难看 */
+.row > label { width: 60px; color: var(--muted); flex: none; white-space: nowrap; }
+.row input[type="text"], .row input[type="password"] { flex: 1; min-width: 0; }
+.row input[type="number"] { width: 86px; }
 .chk { display: flex; align-items: center; gap: 6px; color: var(--ink); }
-.hint { color: var(--muted); font-size: 12px; margin: 6px 0 10px; }
+.hint { color: var(--muted); font-size: 12px; margin: 5px 0 8px; }
 .console-wrap {
-  flex: 1;
+  /* 固定高度：输出区高度稳定，工具区承担滚动。
+     之前用 flex:1 时，参数区一高就把输出区压到只剩两行，看不到东西。 */
+  flex: 0 0 220px;
   display: flex;
   flex-direction: column;
   padding: 12px 18px 0;
-  min-height: 160px;
 }
 .console-head {
   display: flex;
@@ -127,8 +129,8 @@ button.run {
   display: block;
   width: 100%;
   text-align: left;
-  margin: 6px 0;
-  padding: 8px 12px;
+  margin: 5px 0;
+  padding: 7px 12px;
 }
 button.run .desc {
   display: block;
@@ -136,4 +138,37 @@ button.run .desc {
   opacity: 0.65;
   margin-top: 2px;
 }
-fieldset.params .row > label { width: 62px; }
+/* ── 参数区：双列网格，卷 id 与复选框各占整行 ── */
+fieldset.params .rows {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 22px;
+}
+fieldset.params .row { margin: 0; }
+fieldset.params .row > label { width: 56px; }
+fieldset.params .row.wide { grid-column: 1 / -1; }
+/* 复选框并进「卷 id」那一行的右侧：独立占一行会白吃掉 ~30px 高度 */
+fieldset.params .chk-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+}
+
+/* ── 工具区：两列卡片，一屏看全四组 ── */
+#tools {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  align-items: start;
+  margin: 12px 0 14px;
+}
+#tools fieldset { margin: 0; }
+
+/* 窄窗口退回单列，别把按钮挤成两字一行 */
+@media (max-width: 780px) {
+  #tools, fieldset.params .rows { grid-template-columns: 1fr; }
+}

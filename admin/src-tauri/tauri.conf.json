@@ -12,9 +12,9 @@
       {
         "title": "蓝笔申论 · 题库管理员端",
         "width": 960,
-        "height": 780,
+        "height": 860,
         "minWidth": 820,
-        "minHeight": 600,
+        "minHeight": 640,
         "resizable": true,
         "center": true
       }

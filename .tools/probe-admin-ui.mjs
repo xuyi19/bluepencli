@@ -10,7 +10,8 @@
 // 做法：给 WebView2 开 CDP，点按钮 → 等输出 → 读 #console/#status 的真实文本。
 
 import { spawn } from 'node:child_process'
-import { existsSync, readdirSync, statSync } from 'node:fs'
+import { closeSync, existsSync, openSync, readdirSync, readFileSync, readSync, statSync, writeFileSync } from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -40,8 +41,17 @@ if (!exe) {
 const CDP_PORT = 9500 + Math.floor(Math.random() * 300)
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
+// 独立的 WebView2 数据目录：否则会复用残留实例的 browser process，
+// 而**调试端口只在创建 browser process 那次生效** → 新实例的端口参数被忽略、
+// CDP 连不上，看起来像"exe 起不来"（其实是连错了对象）。
+const USER_DATA = path.join(os.tmpdir(), `bp-admin-probe-${Date.now()}`)
+
 const child = spawn(exe, [], {
-  env: { ...process.env, WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${CDP_PORT}` },
+  env: {
+    ...process.env,
+    WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${CDP_PORT}`,
+    WEBVIEW2_USER_DATA_FOLDER: USER_DATA,
+  },
   stdio: 'ignore',
   detached: false,
 })
@@ -121,8 +131,14 @@ const base = await evaluate(`(function(){
 ok('仓库根已探测', !!(base.root && base.root.length > 3), base.root)
 ok('工具按钮已渲染', base.btns.length >= 10, `${base.btns.length} 个：${base.btns.slice(0, 4).join(' / ')}…`)
 
-// ② 功能：点一个轻量工具（默认盘点题库，1 秒内应出结果）
+// ② 功能：点一个工具（默认盘点题库，1 秒内应出结果）
 const toolName = arg('tool') || '盘点题库'
+// 可选：先把「卷 id」填上再点（PDF 提取用它圈定范围，留空=全量跑很久）
+if (arg('exam-id')) {
+  await evaluate(
+    `(function(){ const el = document.getElementById('exam-ids'); el.value = ${JSON.stringify(arg('exam-id'))}; return el.value })()`
+  )
+}
 const clicked = await evaluate(`(function(){
   gotOutput = false;
   const btn = [...document.querySelectorAll('button.run')].find(b => (b.querySelector('span')?.textContent || '').includes(${JSON.stringify(toolName)}));
@@ -147,10 +163,69 @@ for (let i = 0; i < 25; i++) {
 ok('输出有回显（不是"点了没反应"）', consoleText.length > 40 && !/^（等待操作）/.test(consoleText.trim()), `${consoleText.length} 字`)
 ok('命令跑到了完成', /✓ 完成（exit 0）/.test(consoleText), statusText)
 ok('状态回到就绪', /就绪/.test(statusText), statusText)
-// 内容级判据（不是"有字就行"）：盘点输出必须带这些关键词
-ok('输出是真实业务内容', /公开卷源|私有卷源|分发包/.test(consoleText))
+// 内容级判据（不是"有字就行"）：换工具时用 --expect 指定关键词
+const expectRe = arg('expect') ? new RegExp(arg('expect')) : /公开卷源|私有卷源|分发包/
+ok('输出是真实业务内容', expectRe.test(consoleText))
 ok('没有输出通道错误', !/输出通道注册失败/.test(consoleText))
 
-console.log(`\n控制台尾部：\n${consoleText.split('\n').slice(-6).join('\n')}`)
+// ④ python 解析：必须解析到**仓库内 venv**，不是 PATH 上随便一个解释器
+// （旧版传相对路径 backend/.venv/Scripts/python.exe → Windows 按父进程 CWD 解析 →
+//   os error 3；PATH 第一条又是别的工具带的 python，管线依赖根本没装）
+let pyText = ''
+const invoked = await evaluate(`(async function(){
+  const root = document.getElementById('root').value;
+  document.getElementById('console').textContent = '';
+  gotOutput = false;
+  try {
+    await window.__TAURI__.core.invoke('run_tool', {
+      root, program: 'python',
+      args: ['-c', 'import sys; print("PYEXE=" + sys.executable)'],
+      envs: {}
+    });
+    return 'invoked';
+  } catch (e) { return 'invoke-fail: ' + e }
+})()`)
+for (let i = 0; i < 30; i++) {
+  await sleep(1000)
+  pyText = await evaluate(`document.getElementById('console').innerText`)
+  if (/PYEXE=|启动失败|✗ 失败|✓ 完成/.test(pyText)) break
+}
+ok('python 命令能启动（不再 os error 3）', invoked === 'invoked' && !/启动失败/.test(pyText), pyText.split('\n')[0])
+ok(
+  'python 解析到仓库 venv（不是 PATH 上那个）',
+  /PYEXE=[^\n]*[\\/]backend[\\/]\.venv[\\/]/.test(pyText),
+  (pyText.match(/PYEXE=\S+/) || [''])[0]
+)
+
+// ⑤ GUI 子系统：console 子系统编译的 exe 每次运行都会弹一个黑窗（用户明确不要）
+function peSubsystem(file) {
+  const buf = Buffer.alloc(1024)
+  const fd = openSync(file, 'r')
+  readSync(fd, buf, 0, 1024, 0)
+  closeSync(fd)
+  if (buf.toString('ascii', 0, 2) !== 'MZ') return -1
+  const lf = buf.readUInt32LE(0x3c)
+  if (buf.toString('ascii', lf, lf + 4) !== 'PE\0\0') return -1
+  return buf.readUInt16LE(lf + 24 + 68) // Optional Header +68 = Subsystem
+}
+const sub = peSubsystem(exe)
+ok('exe 是 GUI 子系统（不弹控制台窗口）', sub === 2, `Subsystem=${sub}（2=GUI / 3=Console）`)
+
+// ⑥ 源码级护栏：spawn 前必须过 quiet()（漏一行就每跑一步闪一次黑窗）
+const rsSrc = readFileSync(path.join(ROOT, 'admin/src-tauri/src/main.rs'), 'utf8')
+ok(
+  '启动子进程前有静默标志',
+  /quiet\(&mut cmd\)/.test(rsSrc) && /CREATE_NO_WINDOW/.test(rsSrc)
+)
+
+// 截图：界面改动光靠文字断言不够，留一张图人工复核布局
+if (arg('shot')) {
+  const { data } = await send('Page.captureScreenshot', { format: 'png' })
+  writeFileSync(arg('shot'), Buffer.from(data, 'base64'))
+  console.log(`\n截图：${arg('shot')}`)
+}
+
+console.log(`\n② 控制台尾部：\n${consoleText.split('\n').slice(-5).join('\n')}`)
+console.log(`\n④ python 解析：${(pyText.match(/PYEXE=\S+/) || ['(无)'])[0]}`)
 console.log(`\n管理员端功能探针：${pass} passed, ${fail} failed`)
 cleanup(fail ? 1 : 0)
