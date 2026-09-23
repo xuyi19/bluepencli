@@ -33,18 +33,23 @@ struct LogLine {
 
 /// 找 node：先 PATH，再几个常见安装位置（作者机器实测过的）。
 fn find_node() -> Result<String, String> {
-    let probe = |program: &str| -> bool {
-        Command::new(program)
-            .arg("--version")
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .stdin(Stdio::null())
-            .status()
-            .is_ok()
-    };
-    if probe("node") {
-        return Ok("node".into());
+    // 1) `where node` 拿**绝对路径**：PATH 里若只有 node.cmd 之类的 shim，
+    //    CreateProcess 直接找不到可执行文件（spawn 失败，界面却可能看不出原因）。
+    if let Ok(out) = Command::new("cmd").args(["/C", "where", "node"]).output() {
+        if out.status.success() {
+            let text = String::from_utf8_lossy(&out.stdout);
+            if let Some(first) = text
+                .lines()
+                .map(|l| l.trim())
+                .find(|l| !l.is_empty() && l.to_lowercase().ends_with(".exe"))
+            {
+                if Path::new(first).exists() {
+                    return Ok(first.to_string());
+                }
+            }
+        }
     }
+    // 2) 常见安装位置
     let candidates = [
         r"C:\Program Files\nodejs\node.exe",
         r"C:\Program Files (x86)\nodejs\node.exe",
@@ -180,7 +185,22 @@ fn run_tool(
     let app_end = app.clone();
     let flag = Arc::clone(&*running);
     thread::spawn(move || {
+        // 每行同时**追加到日志文件**（exe 同级 admin-run.log）：
+        // 事件通道万一不通（权限/前端问题），输出仍然落在磁盘上，可自查。
+        //
+        // ⚠️ 这个闭包必须**零捕获**：它要被两个读取线程各自 move 一份，
+        // 捕获了外部变量（如提前算好的 log_path）就只剩一份、编译直接报
+        // E0373（闭包生命周期）。所以日志路径在闭包内部现算 —— current_exe() 足够便宜。
         let emit = |app: &tauri::AppHandle, stream: &str, text: String| {
+            if let Some(lp) = std::env::current_exe()
+                .ok()
+                .and_then(|p| p.parent().map(|d| d.join("admin-run.log")))
+            {
+                if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(lp) {
+                    use std::io::Write;
+                    let _ = writeln!(f, "[{}] {}", stream, text);
+                }
+            }
             let _ = app.emit("admin-log", LogLine { stream: stream.into(), text });
         };
         let t1 = {

@@ -112,6 +112,7 @@ const TOOLS = [
 ]
 
 function log(text, cls = '') {
+  gotOutput = true
   const line = document.createElement('span')
   if (cls) line.className = cls
   line.textContent = text + '\n'
@@ -120,11 +121,27 @@ function log(text, cls = '') {
   consoleEl.scrollTop = consoleEl.scrollHeight
 }
 
+let heartbeat = null
 function setBusy(on, label) {
   busy = on
   for (const b of document.querySelectorAll('button.run, #btn-detect, #btn-save-root')) b.disabled = on
-  statusEl.textContent = on ? label : '就绪'
+  if (heartbeat) { clearInterval(heartbeat); heartbeat = null }
+  if (on) {
+    const t0 = Date.now()
+    statusEl.textContent = label
+    // 心跳：让"卡住了 / 还在跑"一眼可辨；超 8 秒无输出再补一句提示
+    heartbeat = setInterval(() => {
+      const s = Math.round((Date.now() - t0) / 1000)
+      statusEl.textContent = `${label}（已运行 ${s}s）`
+      if (s === 8 && !gotOutput) {
+        log('（8 秒没有输出。可能是脚本本身较慢，也可能卡住了 —— 详细输出也会写进 exe 同级 admin-run.log）', 'sys')
+      }
+    }, 1000)
+  } else {
+    statusEl.textContent = '就绪'
+  }
 }
+let gotOutput = false
 
 // ── 渲染工具面板 ──
 const wrap = $('tools')
@@ -176,16 +193,30 @@ async function runTool(t) {
 }
 
 // ── 后端事件 → 控制台 ──
-listen('admin-log', (e) => {
-  const { stream, text } = e.payload
-  log(text, stream === 'err' ? 'err' : '')
-})
-listen('admin-exit', (e) => {
-  const code = e.payload
-  if (code === 0) log('✓ 完成（exit 0）', 'sys')
-  else log(`✗ 失败（exit ${code}）—— 别把半成品发出去。`, 'err')
-  setBusy(false, '就绪')
-})
+try {
+  listen('admin-log', (e) => {
+    const { stream, text } = e.payload
+    log(text, stream === 'err' ? 'err' : '')
+  })
+  listen('admin-exit', (e) => {
+    const code = e.payload
+    if (code === 0) log('✓ 完成（exit 0）', 'sys')
+    else log(`✗ 失败（exit ${code}）—— 别把半成品发出去。`, 'err')
+    setBusy(false, '就绪')
+  })
+} catch (err) {
+  // 事件通道注册失败必须喊出来：否则按钮点了像"没反应"（子进程在跑，输出到不了界面）
+  document.addEventListener('DOMContentLoaded', () => {})
+  setTimeout(() => {
+    const c = document.getElementById('console')
+    if (c) {
+      const s = document.createElement('span')
+      s.className = 'err'
+      s.textContent = `⚠ 输出通道注册失败：${err}\n   命令仍会执行，输出会写进 exe 同级 admin-run.log。\n`
+      c.appendChild(s)
+    }
+  }, 600)
+}
 
 // ── 仓库根 ──
 async function detectRoot() {

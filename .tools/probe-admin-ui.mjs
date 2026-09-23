@@ -1,0 +1,156 @@
+// ──────────────────────────────────────────────────────────────
+// 蓝笔申论 · 管理员端功能验证探针
+//   node .tools/probe-admin-ui.mjs [--exe <路径>] [--tool "盘点题库"]
+//
+// 为什么需要它：管理员端过去只做过**启动冒烟**（进程活着就算过）——
+// 而"按钮点了没反应"恰恰是启动正常、功能全废的那种失败（实测踩到：
+// 事件通道权限没声明，子进程在跑但输出到不了界面，界面看着像卡住）。
+// 所以这里必须验到**输出回显**与**状态回到就绪**，不能只看进程在不在。
+//
+// 做法：给 WebView2 开 CDP，点按钮 → 等输出 → 读 #console/#status 的真实文本。
+
+import { spawn } from 'node:child_process'
+import { existsSync, readdirSync, statSync } from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
+const argv = process.argv.slice(2)
+const arg = (n) => {
+  const i = argv.indexOf('--' + n)
+  return i >= 0 ? argv[i + 1] : undefined
+}
+
+function findExe() {
+  if (arg('exe')) return arg('exe')
+  const dir = path.join(ROOT, 'admin/src-tauri/target/release')
+  if (!existsSync(dir)) return null
+  return readdirSync(dir)
+    .filter((f) => f.toLowerCase().endsWith('.exe'))
+    .map((f) => path.join(dir, f))
+    .find((p) => statSync(p).isFile())
+}
+
+const exe = findExe()
+if (!exe) {
+  console.error('✗ 找不到管理员端 exe（先 cd admin/src-tauri && cargo build --release）')
+  process.exit(1)
+}
+
+const CDP_PORT = 9500 + Math.floor(Math.random() * 300)
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+
+const child = spawn(exe, [], {
+  env: { ...process.env, WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${CDP_PORT}` },
+  stdio: 'ignore',
+  detached: false,
+})
+
+let pass = 0
+let fail = 0
+const ok = (name, cond, extra = '') => {
+  if (cond) {
+    pass++
+    console.log(`  ✓ ${name}${extra ? ' —— ' + extra : ''}`)
+  } else {
+    fail++
+    console.log(`  ✗ ${name}${extra ? ' —— ' + extra : ''}`)
+  }
+}
+
+function cleanup(code) {
+  try {
+    child.kill('SIGKILL')
+  } catch {}
+  process.exit(code)
+}
+
+// 连 CDP
+let wsUrl = ''
+for (let i = 0; i < 60; i++) {
+  try {
+    const list = await (await fetch(`http://127.0.0.1:${CDP_PORT}/json/list`)).json()
+    const page = list.find((t) => t.type === 'page' && t.url && t.url !== 'about:blank')
+    if (page?.webSocketDebuggerUrl) {
+      wsUrl = page.webSocketDebuggerUrl
+      break
+    }
+  } catch {}
+  await sleep(500)
+}
+if (!wsUrl) {
+  console.log('✗ CDP 连不上（窗口没起来？）')
+  cleanup(1)
+}
+
+const ws = new WebSocket(wsUrl)
+await new Promise((r) => (ws.onopen = r))
+let id = 0
+const pending = new Map()
+ws.onmessage = (ev) => {
+  const m = JSON.parse(ev.data)
+  if (m.id && pending.has(m.id)) {
+    pending.get(m.id)(m.result)
+    pending.delete(m.id)
+  }
+}
+const send = (method, params = {}) =>
+  new Promise((resolve) => {
+    const myId = ++id
+    pending.set(myId, resolve)
+    ws.send(JSON.stringify({ id: myId, method, params }))
+  })
+const evaluate = async (expression) => {
+  const { result, exceptionDetails } = await send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true })
+  if (exceptionDetails) throw new Error(exceptionDetails.text + ' :: ' + (exceptionDetails.exception?.description || ''))
+  return result?.value
+}
+
+await send('Page.enable')
+await send('Runtime.enable')
+await sleep(2500) // 等 Vue 渲染完成
+
+console.log(`被测产物：${exe}\n`)
+
+// ① 基础：仓库根探测 + 按钮渲染
+const base = await evaluate(`(function(){
+  const root = document.getElementById('root').value || '';
+  const btns = [...document.querySelectorAll('button.run')].map(b => b.querySelector('span')?.textContent || b.textContent.trim());
+  return { root, btns };
+})()`)
+ok('仓库根已探测', !!(base.root && base.root.length > 3), base.root)
+ok('工具按钮已渲染', base.btns.length >= 10, `${base.btns.length} 个：${base.btns.slice(0, 4).join(' / ')}…`)
+
+// ② 功能：点一个轻量工具（默认盘点题库，1 秒内应出结果）
+const toolName = arg('tool') || '盘点题库'
+const clicked = await evaluate(`(function(){
+  gotOutput = false;
+  const btn = [...document.querySelectorAll('button.run')].find(b => (b.querySelector('span')?.textContent || '').includes(${JSON.stringify(toolName)}));
+  if (!btn) return 'no-btn';
+  btn.click(); return 'clicked';
+})()`)
+ok(`点「${toolName}」`, clicked === 'clicked', clicked)
+
+// ③ 等输出回显（最多 25 秒）
+let consoleText = ''
+let statusText = ''
+for (let i = 0; i < 25; i++) {
+  await sleep(1000)
+  const st = await evaluate(`(function(){
+    return { c: document.getElementById('console').innerText, s: document.getElementById('status').innerText };
+  })()`)
+  consoleText = st.c
+  statusText = st.s
+  if (/✓ 完成（exit 0）|✗ 失败/.test(consoleText)) break
+}
+
+ok('输出有回显（不是"点了没反应"）', consoleText.length > 40 && !/^（等待操作）/.test(consoleText.trim()), `${consoleText.length} 字`)
+ok('命令跑到了完成', /✓ 完成（exit 0）/.test(consoleText), statusText)
+ok('状态回到就绪', /就绪/.test(statusText), statusText)
+// 内容级判据（不是"有字就行"）：盘点输出必须带这些关键词
+ok('输出是真实业务内容', /公开卷源|私有卷源|分发包/.test(consoleText))
+ok('没有输出通道错误', !/输出通道注册失败/.test(consoleText))
+
+console.log(`\n控制台尾部：\n${consoleText.split('\n').slice(-6).join('\n')}`)
+console.log(`\n管理员端功能探针：${pass} passed, ${fail} failed`)
+cleanup(fail ? 1 : 0)

@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "管理员端默认权限：自定义命令（invoke）+ 事件系统（listen 输出流）",
+  "windows": ["main"],
+  "permissions": ["core:default", "core:event:default"]
+}
