@@ -329,7 +329,7 @@ const child = spawn(exe, [], {
 })
 
 let page = null
-const deadline = Date.now() + 40000
+const deadline = Date.now() + 90000   // 编排环境（test-all）负载重时 WebView2 启动慢，40s 不够用
 while (Date.now() < deadline) {
   const targets = await fetchTargets()
   const ready = (targets || []).find((t) => t.type === 'page' && t.url && t.url !== 'about:blank')

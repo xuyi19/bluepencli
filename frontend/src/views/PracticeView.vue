@@ -437,7 +437,7 @@
             <div class="text-base font-medium text-c-ink">{{ report.final.level }}</div>
             <div class="text-xs text-c-muted mt-1.5 tnum">
               {{ report.final.finalScore }} / {{ report.final.maxScore || form.maxScore }} 分
-              · 耗时 {{ (report.elapsed / 1000).toFixed(1) }}s
+              · 耗时 {{ (report.elapsed / 1000).toFixed(1) }}s<template v-if="answerSeconds > 0"> · 考试作答 {{ Math.round(answerSeconds / 60) }} 分钟</template>
               · {{ countChars(form.answer) }} 字
             </div>
             <div class="text-xs text-c-muted mt-2.5 leading-5">{{ report.final.roundtableNote }}</div>
@@ -953,6 +953,7 @@ const examRunning = ref(false)
 const confirmSubmit = ref(false)
 let examTimer = null
 let examDeadline = 0
+const answerSeconds = ref(0)   // 考场模式作答用时（交卷时定格），结果页与记录展示
 
 const examClock = computed(() => {
   const s = examRemain.value
@@ -1252,6 +1253,9 @@ async function start() {
   }
 
   stopExamTimer()
+  answerSeconds.value = isExamMode.value
+    ? Math.max(0, examMinutes.value * 60 - examRemain.value)
+    : 0
   clearRun()
   step.value = 'grading'
   elapsed.value = 0
