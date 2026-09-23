@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>蓝笔申论 · 题库管理员端</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <h1>蓝笔申论 · 题库管理员端</h1>
+    <span class="tag">作者专用 · 永不随软件分发</span>
+  </header>
+
+  <section class="root-bar">
+    <label>仓库根</label>
+    <input id="root" type="text" placeholder="自动探测中…" spellcheck="false" />
+    <button id="btn-detect">重新探测</button>
+    <button id="btn-save-root" title="保存到 exe 同级 admin-config.json">保存</button>
+  </section>
+
+  <main>
+    <div class="grid">
+      <fieldset>
+        <legend>① 盘点</legend>
+        <p class="hint">公开卷源 / 私有卷源 / 采分点标准 / 分发包 一览。无需参数。</p>
+        <button class="run" data-sub="list">盘点题库</button>
+      </fieldset>
+
+      <fieldset>
+        <legend>② 打包（加密分发）</legend>
+        <div class="row">
+          <label>接收人</label>
+          <input id="pack-user" type="text" placeholder="姓名&lt;邮箱&gt;" />
+        </div>
+        <div class="row">
+          <label>年份范围</label>
+          <input id="year-from" type="number" placeholder="2022" min="2000" max="2100" />
+          <span>—</span>
+          <input id="year-to" type="number" placeholder="2024" min="2000" max="2100" />
+        </div>
+        <div class="row">
+          <label>口令</label>
+          <input id="pack-pass" type="password" placeholder="必填 · 只经环境变量传递，不进命令行" autocomplete="new-password" />
+        </div>
+        <p class="hint">源 JSON → 明文包 → 加密签名包（含自检）。口令不给就拒跑。</p>
+        <button class="run primary" data-sub="pack">打包</button>
+      </fieldset>
+
+      <fieldset>
+        <legend>③ 验包（发出前最后一道检查）</legend>
+        <div class="row">
+          <label>包文件</label>
+          <input id="verify-file" type="text" placeholder="私有题库/蓝笔申论-私有题库-xxx.bpq（相对仓库根）" spellcheck="false" />
+        </div>
+        <div class="row">
+          <label>口令</label>
+          <input id="verify-pass" type="password" placeholder="验签 + 解密自检" autocomplete="new-password" />
+        </div>
+        <p class="hint">包与口令分两条路发；口令批次登记走 .tools/exams/issue.mjs。</p>
+        <button class="run" data-sub="verify">验包</button>
+      </fieldset>
+
+      <fieldset>
+        <legend>④ 题库汇编文档</legend>
+        <div class="row">
+          <label class="chk"><input id="docs-private" type="checkbox" /> 含私有卷（写入 私有题库/汇编/，gitignored）</label>
+        </div>
+        <p class="hint">按 体系/年份/卷别 生成目录树，每卷 材料.md + 参考答案.md。采分点永不导出。</p>
+        <button class="run" data-sub="docs">生成汇编</button>
+      </fieldset>
+    </div>
+  </main>
+
+  <section class="console-wrap">
+    <div class="console-head">
+      <span>输出</span>
+      <button id="btn-clear">清空</button>
+    </div>
+    <pre id="console" aria-live="polite">（等待操作）</pre>
+  </section>
+
+  <footer>
+    <span id="status">就绪</span>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -33,6 +33,8 @@ import { runHardRules, formatRulesForPrompt } from '../utils/grading/rules'
 import { assessCredibility } from '../utils/grading/credibility'
 // 多老师采分点归并：必须去重并对齐标准，不能直接 flatMap（会把同一采分点拼 N 次）
 import { mergeKeyPoints } from '../utils/grading/keyPoints'
+// 最终分钳制：不信任 LLM 输出的最后一道闸（实测合议在 20 分题上输出过 66 分）
+import { clampFinalScore, clampDimensions } from '../utils/grading/scoreGuard'
 
 // 分歧阈值：最高分与最低分得分率差值超过此值即触发复核
 export const DISPUTE_THRESHOLD = 0.15
@@ -316,6 +318,22 @@ export async function runGrading({ paper: paperInput, teacherIds, deep = false, 
   // 三个月后回看一份存档，也要能知道"当时这个分数有多少依据"。
   const finish = () => {
     output.elapsed = Date.now() - startedAt
+    // ---------- 最终分钳制（必须在可信度评估之前，可信度基于钳后分数） ----------
+    // 单人/双人/圆桌三条路径的 finalScore 最终都来自 LLM 输出，谁都可能越界；
+    // 统一在出口钳到 [0, paperInput.maxScore]，满分一律以本地构建的 paper 为权威。
+    if (output.final) {
+      const clamped = clampFinalScore(output.final, paperInput.maxScore)
+      if (clamped.clamped) {
+        console.warn(
+          `[orchestrator] finalScore 越界：${output.final.finalScore} → ${clamped.finalScore}（满分 ${clamped.maxScore}），已钳制`
+        )
+        output.final.clamped = true
+      }
+      output.final.finalScore = clamped.finalScore
+      output.final.maxScore = clamped.maxScore
+      // 分项维度分数同口径钳制（合议的 dimensions 也出自 LLM）
+      if (clampDimensions(output.final.dimensions)) output.final.clamped = true
+    }
     output.credibility = assessCredibility({
       results,
       final: output.final,

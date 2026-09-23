@@ -19,9 +19,20 @@ import {
   fetchRecordMarkdown,
 } from '../api/backend'
 import { TEACHERS } from '../agents/teachers'
+// 读档归一化：历史脏记录（LLM 越界分，实测合议在 20 分题输出 66）读取时钳回满分内
+import { clampFinalScore } from './grading/scoreGuard'
 
 export function countChars(s) {
   return String(s || '').replace(/\s/g, '').length
+}
+
+/** 读档兜底：finalScore 钳到 [0, maxScore]，满分缺失回退 40（与写入口径一致）。 */
+function sanitizeScore(rec) {
+  if (!rec) return rec
+  const { finalScore, maxScore } = clampFinalScore(rec, Number(rec.maxScore) || 40)
+  rec.finalScore = finalScore
+  rec.maxScore = maxScore
+  return rec
 }
 
 function teacherMeta(id) {
@@ -68,6 +79,9 @@ function parseDateTime(text) {
  */
 export function buildRecord({ form, report, elapsedMs }) {
   const teacherIds = report.teacherIds || []
+  const maxScore = form.maxScore || 40
+  // 双保险：orchestrator 出口已钳，写档前再钳一次（历史教训：合议 20 分题输 66 分）
+  const finalScore = clampFinalScore({ finalScore: report.final?.finalScore ?? 0, maxScore }, maxScore).finalScore
   return {
     id: report.taskId,
     createdAt: Date.now(),
@@ -78,11 +92,11 @@ export function buildRecord({ form, report, elapsedMs }) {
     answer: form.answer || '',
     wordLimit: form.wordLimit ?? null,
     wordCount: countChars(form.answer),
-    maxScore: form.maxScore || 40,
+    maxScore,
     mode: report.mode || 'solo',
     teacherIds,
     teachers: teacherIds.map(teacherMeta),
-    finalScore: report.final?.finalScore ?? 0,
+    finalScore,
     level: report.final?.level || '',
     roundtableNote: report.final?.roundtableNote || '',
     summary: report.final?.summary || '',
@@ -152,7 +166,7 @@ function toBackend(rec) {
 function fromBackend(data) {
   const teacherIds = data.teacher_ids || []
   const meta = data.teachers?.length ? data.teachers : teacherIds.map(teacherMeta)
-  return {
+  return sanitizeScore({
     id: data.id,
     createdAt: parseDateTime(data.created_at),
     title: data.title || '未命名练习',
@@ -184,12 +198,12 @@ function fromBackend(data) {
     })),
     elapsed: data.elapsed_ms || 0,
     source: 'docs',
-  }
+  })
 }
 
 function summaryToCanonical(s) {
   const teacherIds = s.teacher_ids || []
-  return {
+  return sanitizeScore({
     id: s.id,
     createdAt: parseDateTime(s.created_at),
     title: s.title || '未命名练习',
@@ -203,18 +217,18 @@ function summaryToCanonical(s) {
     summary: s.preview || '',
     source: 'docs',
     partial: true, // 摘要，详情需要再拉一次
-  }
+  })
 }
 
 /** 把任意来源的记录统一成规范形态（含旧版字段兼容）。 */
 export function ensureCanonical(r) {
   if (!r) return null
   if (r.results || r.finalScore != null) {
-    return { ...r, createdAt: Number(r.createdAt) || 0, source: r.source || 'local' }
+    return sanitizeScore({ ...r, createdAt: Number(r.createdAt) || 0, source: r.source || 'local' })
   }
   // 旧版形态：total / teacherResults / deductions
   const teacherIds = r.teacherIds || []
-  return {
+  return sanitizeScore({
     id: r.id,
     createdAt: Number(r.createdAt) || 0,
     title: r.title || '未命名练习',
@@ -247,7 +261,7 @@ export function ensureCanonical(r) {
     })),
     elapsed: r.elapsed || 0,
     source: 'local',
-  }
+  })
 }
 
 // ---------------- 对外读写 ----------------

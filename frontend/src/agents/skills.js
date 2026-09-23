@@ -188,16 +188,17 @@ export const FUSION_SYSTEM = `你是申论阅卷组组长，负责把几位老�
 
 【输出要求】
 - finalScore 是加权合议分，不是简单平均；权重高、裁定被采纳的老师影响更大
+- 分数红线：finalScore 和每个分项分都必须落在 [0, 满分] 区间内，满分以题干中「该题满分」为准，绝不允许超出
 - criticalIssues 只放真正致命的（致命到会掉档位的），按影响从大到小，最多 5 条
 - minorIssues 放次要问题，可以多
 - suggestions 按优先级，要可操作
 - roundtableNote 要用一两句话说明合议过程（如：三人对要点覆盖率判断一致，但对结构规范性存在分歧，经复核采纳 X）
 - 严格输出 JSON，不要 markdown 标记`
 
-export const FUSION_SCHEMA = `JSON 结构：
+export const FUSION_SCHEMA = `JSON 结构（finalScore 与各分项分必须 ≤ 该题满分、≥ 0）：
 {
-  "finalScore": 数字,
-  "maxScore": 数字,
+  "finalScore": 数字（0 到该题满分之间）,
+  "maxScore": 数字（必须等于题干中的该题满分）,
   "level": "档位",
   "roundtableNote": "合议过程说明，1-2 句",
   "criticalIssues": [{ "issue": "致命问题", "fix": "怎么改", "source": "来自哪位老师" }],

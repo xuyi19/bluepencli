@@ -43,6 +43,13 @@ frontend/src/data/standards-private/
 # 桌面版打包产物（用 backend/build_desktop.py 一键重建）
 backend/build/
 
+# 管理员端（admin/）的本机产物：Rust 构建目录与复制出来的 exe 副本。
+# 源码（Cargo.toml / src/ / ui/ / .cargo/config.toml）进库；
+# 管理工具含私钥/口令操作入口，**永不进分发产物，也不进版本库的产物区**。
+admin/src-tauri/target/
+admin/*.exe
+admin-config.json
+
 # release/ 是**本机归档区**，整个目录都不进版本库。
 # 里面装的是：分发包（zip / 单文件 HTML）与分发台账 版本说明.md。
 #

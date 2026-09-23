@@ -1,0 +1,9 @@
+# cargo 的 crates.io 镜像（与 desktop/.cargo/config.toml 同一份，理由见那边的注释：
+# 选镜像要看 config.json 的 dl 字段指哪儿；config 放在 admin/ 而不是 admin/src-tauri/，
+# 因为 cargo 从当前工作目录向上找 .cargo/config.toml）
+
+[source.crates-io]
+replace-with = "rsproxy"
+
+[source.rsproxy]
+registry = "sparse+https://rsproxy.cn/index/"
