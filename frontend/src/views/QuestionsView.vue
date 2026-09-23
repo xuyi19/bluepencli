@@ -47,11 +47,11 @@
       标注「真题」；<strong>仿真</strong>为按真题风格自编的材料，用于快速专项练。
       真题的「给定资料」是整卷共用的，练一题即载入该卷全部材料。
       <template v-if="privateExamCount">
-        <br />另有 <strong>{{ privateExamCount }} 套私有真题</strong>（{{ PUBLIC_MAX_YEAR + 1 }} 年起）已通过题库包导入，
+        <br />另有 <strong>{{ privateExamCount }} 套私有真题</strong>（{{ PUBLIC_MAX_YEAR + 1 }} 年起国考卷及省考卷）已通过题库包导入，
         标为「私有」——这些卷不随软件分发，请勿对外转发。
       </template>
       <template v-else>
-        <br />{{ PUBLIC_MAX_YEAR + 1 }} 年起的国考卷为<strong>私有题库</strong>，不在软件本体里 ——
+        <br />{{ PUBLIC_MAX_YEAR + 1 }} 年起的国考卷与省考卷为<strong>私有题库</strong>，不在软件本体里 ——
         向作者索取题库包后，把 <code>.bpq</code> 文件<strong>拖进本页任意位置</strong>，
         或用右上角「导入题库包」选文件，加入即可。
         <button @click="showGetPack = !showGetPack"
@@ -355,8 +355,8 @@ async function onToggleMat(e, q) {
 }
 
 const SOURCES = [
-  { key: '真题', hint: `2010–${PUBLIC_MAX_YEAR} 国考，随软件内置，含整卷材料与参考答案` },
-  { key: '私有', hint: `${PUBLIC_MAX_YEAR + 1} 年起国考，题库包导入，请勿转发` },
+  { key: '真题', hint: `2010–${PUBLIC_MAX_YEAR} 国考，随软件内置，含整卷材料与参考答案` },  // 省考卷(≥2022)走私有通道，见「私有」
+  { key: '私有', hint: `${PUBLIC_MAX_YEAR + 1} 年起的国考卷与省考卷，题库包导入，请勿转发` },
   { key: '仿真', hint: '按真题风格自编，适合快速专项练' },
   { key: '自建', hint: '你自己录入的题目' },
 ]

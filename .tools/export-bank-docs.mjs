@@ -28,7 +28,7 @@
 
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const PUBLIC_DIR = path.join(ROOT, 'frontend/src/data/real-exams')
@@ -37,26 +37,13 @@ const PUBLIC_OUT = path.join(ROOT, 'docs/题库/汇编')
 const PRIVATE_OUT = path.join(ROOT, '私有题库/汇编')
 
 const { splitMaterialBlocks } = await import('../frontend/src/utils/grading/materialTrim.js')
+// 体系识别/卷别排序的单一真源在 data/examSystem.js（题库 UI 与导出脚本共用，别再本地造表）
+const { examSystemOf, paperRank } = await import(
+  pathToFileURL(path.join(ROOT, 'frontend/src/data/examSystem.js')).href
+)
 
 const argv = process.argv.slice(2)
 const withPrivate = argv.includes('--private')
-
-/** 卷别排序：地市级 → 省部级/省级 → 行政执法 → 其余垫底 */
-const PAPER_ORDER = { 地市级: 0, 省部级: 1, 省级: 1, 行政执法: 2 }
-function paperRank(p) {
-  return PAPER_ORDER[String(p || '')] ?? 9
-}
-
-/**
- * 考试体系归类（目录第一层）。现在题库里只有国考；
- * 以后导省考卷时在这里扩展：按 title 中的省份名归到 `省考-XX`。
- */
-function examSystem(p) {
-  const t = String(p.title || '')
-  if (/国家|国考/.test(t)) return '国考'
-  // 预留：if (/广东/.test(t)) return '省考-广东'
-  return '其他'
-}
 
 /** 解析一份 exam-*.js（`export default {…JSON…}`）成对象 */
 function parsePaper(file) {
@@ -84,7 +71,7 @@ const HEAD_NOTE =
  * 返回 { matRel, refRel } 相对 outDir 的路径（供总索引链接）。
  */
 function exportOnePaper(p, outDir) {
-  const sys = examSystem(p)
+  const sys = examSystemOf(p)
   const dir = path.join(outDir, sys, String(p.year), String(p.paper || '未分卷'))
   mkdirSync(dir, { recursive: true })
 
@@ -133,10 +120,10 @@ function writeIndex(papers, entries, outDir, { tierLabel }) {
     `**采分点 / 评分细则**。它们属于"标准层"，写出采分点等于泄题，只随批改过程注入，不落任何导出文档。\n\n`
 
   // 按体系 → 年份分组列表
-  const systems = [...new Set(papers.map((p) => examSystem(p)))]
+  const systems = [...new Set(papers.map((p) => examSystemOf(p)))]
   for (const sys of systems) {
     idx += `## ${sys}\n\n`
-    const sysPapers = papers.filter((p) => examSystem(p) === sys)
+    const sysPapers = papers.filter((p) => examSystemOf(p) === sys)
     const sysYears = [...new Set(sysPapers.map((p) => p.year))].sort((a, b) => a - b)
     for (const y of sysYears) {
       idx += `### ${y} 年\n\n| 卷别 | 题数 | 材料字数 | 材料 | 参考答案 |\n|---|---|---|---|---|\n`
@@ -180,7 +167,7 @@ function exportBatch(papers, outDir, label) {
     qCount += p.questions.length
   }
   const idx = writeIndex(papers, entries, outDir, { tierLabel: label })
-  const sysCount = new Set(papers.map((p) => examSystem(p))).size
+  const sysCount = new Set(papers.map((p) => examSystemOf(p))).size
   console.log(`✓ ${papers.length} 套 / ${qCount} 题 → ${path.relative(ROOT, outDir)}/（${sysCount} 个体系，每卷 材料.md + 参考答案.md，README 总索引 ${idx.length} 字符）`)
   return { count: papers.length, qCount }
 }
