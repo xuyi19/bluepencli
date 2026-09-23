@@ -103,6 +103,23 @@
           <span class="tnum opacity-60">{{ countBySource(s.key) }}</span>
         </button>
       </div>
+      <template v-if="systems.length > 1">
+        <div class="text-xs text-c-muted mb-2.5">按体系</div>
+        <div class="flex flex-wrap gap-1.5 mb-4">
+          <button @click="systemFilter = ''"
+            class="px-3 py-1.5 rounded-lg text-xs transition-all duration-200"
+            :class="!systemFilter ? 'neu-inset text-c-bark font-medium' : 'neu-sm text-c-body'">
+            全部
+            <span class="tnum opacity-60">{{ filteredSource.length }}</span>
+          </button>
+          <button v-for="sys in systems" :key="sys" @click="systemFilter = sys"
+            class="px-3 py-1.5 rounded-lg text-xs transition-all duration-200"
+            :class="systemFilter === sys ? 'neu-inset text-c-bark font-medium' : 'neu-sm text-c-body'">
+            {{ sys }}
+            <span class="tnum opacity-60">{{ countBySystem(sys) }}</span>
+          </button>
+        </div>
+      </template>
       <div class="text-xs text-c-muted mb-2.5">按题型</div>
       <div class="flex flex-wrap gap-1.5">
         <button @click="typeFilter = ''"
@@ -271,6 +288,7 @@ const builtin = ref(BUILTIN_POOL)
 const mine = ref([])
 const keyword = ref('')
 const typeFilter = ref('')
+const systemFilter = ref('')   // 体系筛选（国考 / 省考-河北…），动态枚举
 // 来源筛选：真题 / 私有 / 仿真 / 自建。真题一进来，光靠题型分不出该练哪个，
 // 而这个项目最有价值的部分正是这些真题，必须在第一屏能筛出来。
 const sourceFilter = ref('')
@@ -365,15 +383,30 @@ function countBySource(s) {
   return pool.value.filter((q) => kindOf(q) === s).length
 }
 
-/** 只按「来源」过滤后的池子：题型那一排的计数跟着它走，两个筛选器才是联动的 */
+/** 只按「来源」过滤后的池子：体系那一排的计数跟着它走 */
 const filteredSource = computed(() =>
   sourceFilter.value ? pool.value.filter((q) => kindOf(q) === sourceFilter.value) : pool.value
 )
 
+/** 体系动态枚举（国考 / 省考-河北…）——有第二种体系才显示这排筛选 */
+const systems = computed(() =>
+  [...new Set(filteredSource.value.map((q) => q.system).filter(Boolean))].sort()
+)
+
+const filteredSystem = computed(() =>
+  systemFilter.value
+    ? filteredSource.value.filter((q) => (q.system || '国考') === systemFilter.value)
+    : filteredSource.value
+)
+
+function countBySystem(sys) {
+  return filteredSource.value.filter((q) => (q.system || '国考') === sys).length
+}
+
 const filtered = computed(() => {
   const k = keyword.value.trim().toLowerCase()
-  return pool.value.filter((q) => {
-    if (sourceFilter.value && kindOf(q) !== sourceFilter.value) return false
+  return filteredSystem.value.filter((q) => {
+    if (systemFilter.value && (q.system || '国考') !== systemFilter.value) return false
     if (typeFilter.value && q.type !== typeFilter.value) return false
     if (!k) return true
     return (
@@ -389,7 +422,7 @@ const coveredTypes = computed(
 )
 
 function countByType(t) {
-  return filteredSource.value.filter((q) => q.type === t).length
+  return filteredSystem.value.filter((q) => q.type === t).length
 }
 
 async function load() {

@@ -61,8 +61,13 @@ export const REAL_QUESTIONS = ALL_EXAMS.flatMap((e) =>
     no: q.no,
     year: e.year,
     paper: e.paper,
-    // 「2024 年国考 · 行政执法卷」比单写卷名更能认出来是哪套
-    exam: `${e.year} 年国考 · ${e.paper}`,
+    system: e.system || '国考', // 考试体系（'省考-河北' 等），题库页据此筛选与标识
+    // 「2024 年国考 · 行政执法卷」比单写卷名更能认出来是哪套；
+    // 省考卷「2019 省考-河北 · 县级卷」——别再硬编码国考（河北卷曾因此显示成国考）
+    exam:
+      !e.system || e.system === '国考'
+        ? `${e.year} 年国考 · ${e.paper}`
+        : `${e.year} ${e.system} · ${e.paper}卷`,
     title: q.stem,
     type: q.type,
     requirement: q.requirement,
