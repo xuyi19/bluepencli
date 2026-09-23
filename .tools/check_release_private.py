@@ -36,7 +36,12 @@ from pathlib import Path
 
 # 私有卷的年份。改分层策略时只改这里。
 PRIVATE_YEARS = ("2022", "2023", "2024")
-PUBLIC_CHUNK_TOTAL = 24  # 2010–2021 各两套
+# 公开卷数从 exams_config 动态算：河北等省考卷 ≤2021 也进公开区（2026-09-23 起），
+# 手写死数每次加卷都要改，且忘了改就会把合法发布误报成泄密 —— 让清单自己回答。
+import sys as _sys, os as _os
+_sys.path.insert(0, _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), 'exams'))
+from exams_config import EXAMS as _EXAMS  # noqa: E402
+PUBLIC_CHUNK_TOTAL = sum(1 for _s in _EXAMS if _s['year'] <= 2021 and not _s.get('skip'))
 
 ROOT = Path(__file__).resolve().parent.parent
 

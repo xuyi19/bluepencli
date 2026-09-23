@@ -130,6 +130,8 @@ def write_set(dest, exams, tier, desc):
                 'paper': d['paper'],
                 'title': d['title'],
                 'tier': tier,
+                # 省考卷带体系（'省考-河北'），前端 examSystemOf() 显式声明优先
+                'system': d.get('system', ''),
                 'material': material,
                 'questions': questions,
             }) + '\n')
@@ -141,6 +143,7 @@ def write_set(dest, exams, tier, desc):
             'paper': d['paper'],
             'title': d['title'],
             'tier': tier,
+            'system': d.get('system', ''),
             'materialChars': len(material),
             'questions': [
                 {

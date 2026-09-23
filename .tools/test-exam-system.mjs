@@ -43,21 +43,26 @@ t('历史漂移卷别「省级」与「省部级」同级', paperRank('省级') 
 t('未知卷别垫底', paperRank('随便') === 9)
 t('省考卷别白名单：乡镇级 ✓ / 副省级 ✗', isProvincePaper('乡镇级') && !isProvincePaper('副省级'))
 
-console.log('\n③ 真实题库全量过识别（公开卷必须全判国考）')
+console.log('\n③ 真实题库全量过识别（国考卷判国考、河北卷判省考-河北）')
 const dir = path.join(ROOT, 'frontend/src/data/real-exams')
 const files = readdirSync(dir).filter((f) => /^exam-\d+.*\.js$/.test(f))
 let bad = 0
+let hebei = 0
 for (const f of files) {
   const s = readFileSync(path.join(dir, f), 'utf8')
   const i = s.indexOf('export default')
   const exam = JSON.parse(s.slice(i + 14).trim())
-  if (examSystemOf(exam) !== '国考') {
+  const sys = examSystemOf(exam)
+  if (String(exam.id).includes('hebei')) {
+    hebei++
+    if (sys !== '省考-河北') { bad++; console.log(`  ✗ ${f} 河北卷被判成 ${sys}`); break }
+  } else if (sys !== '国考') {
     bad++
-    console.log(`  ✗ ${f} 被判成 ${examSystemOf(exam)} —— title 应含「国家」`)
+    console.log(`  ✗ ${f} 被判成 ${sys} —— title 应含「国家」`)
     break
   }
 }
-if (!bad) t(`全部 ${files.length} 套公开卷都识别为国考`, true)
+if (!bad) t(`${files.length} 套公开卷识别正确（含河北 ${hebei} 套 → 省考-河北）`, true)
 
 console.log('\n④ 题型白名单（五大类）')
 t('五大类齐全', JSON.stringify(QUESTION_TYPES) === JSON.stringify(['归纳概括', '综合分析', '提出对策', '贯彻执行', '大作文']))

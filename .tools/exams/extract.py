@@ -51,6 +51,10 @@ def is_noise(t: str) -> bool:
         return True
     if re.match(r'^\d{1,3}$', t):
         return True
+    if re.match(r'^\d+\s*/\s*\d+$', t):        # 河北联考卷页码「1 / 8」
+        return True
+    if re.match(r'^\d{4}\s*年.*《申论》.*$', t):  # 河北联考卷页眉/答案标题行（含卷名）
+        return True
     if re.match(rf'^[-—–\s]*\d+[-—–\s]*$', t):
         return True
     return False
@@ -107,13 +111,19 @@ def split_glued(rows):
 
 # ---------------- 区段锚点 ----------------
 
-RE_SEC_MAT = re.compile(rf'^([一二三四五六七八九十]+\s*[、.]\s*)?(给定材料|给定资料|材料部分)(\s*[（(].*[）)])?$')
-RE_SEC_REQ = re.compile(rf'^([一二三四五六七八九十]+\s*[、.]\s*)?(作答要求|申论要求|作答要求部分)(\s*[（(].*[）)])?$')
+RE_SEC_MAT = re.compile(
+    rf'^([一二三四五六七八九十]+\s*[、.]\s*)?(给定材料|给定资料|材料部分)(\s*[（(].*[）)])?$'
+    rf'|^【?\s*材料\s*[一二三四五六七八九十\d]+\s*】?\s*[:：]?$'   # 河北卷无总标题，首个【材料一】即起点
+)
+RE_SEC_REQ = re.compile(
+    rf'^([一二三四五六七八九十]+\s*[、.]\s*)?(作答要求|申论要求|作答要求部分)(\s*[（(].*[）)])?$'
+    rf'|^【?\s*问题\s*[一二三四五六七八九十\d]+\s*】?\s*[:：]?$'   # 河北卷首个【问题一】即起点
+)
 RE_SEC_ANS = re.compile(
     rf'^([一二三四五六七八九十]+\s*[、.]\s*)?(参考答案与?解析|参考答案|答案要点|答案|解析|评分标准)$'
     rf'|^.*[（(]解析[）)].*$'
 )
-RE_MATN = re.compile(r'^材料\s*([0-9一二三四五六七八九十]+)\s*[:：]?$')
+RE_MATN = re.compile(r'^[【\[]?\s*材料\s*([0-9一二三四五六七八九十]+)\s*[】\]]?\s*[:：]?$')  # 河北卷【材料一】
 RE_ANS_ANCHOR = re.compile(
     r'^【?\s*(参考)?答案\s*】?\s*[:：]?$'
     r'|^参考答案\s*[（(]\s*[A-Za-z0-9]{1,2}\s*[）)]\s*[:：]?$'
@@ -121,6 +131,9 @@ RE_ANS_ANCHOR = re.compile(
     r'|^[（(]\s*(\d+|[一二三四五六七八九十]+)\s*[）)]\s*参考答案\s*[:：]?$'
     r'|^第[一二三四五六七八九十]+问\s*参考答案\s*[:：]?$'
     r'|^【试题\s*(\d+|[一二三四五六七八九十]+)\s*】\s*(参考)?答案\s*[:：]?$'
+    r'|^【?\s*问题\s*([一二三四五六七八九十\d]+)\s*参考答案\s*】?\s*[:：]?$'   # 河北联考新卷
+    r'|^第\s*([一二三四五六七八九十\d]+)\s*题\s*[:：]\s*参考答案\s*[:：]?$'   # 2013 河北：题号+参考答案同行
+    r'|^题目\s*([一二三四五六七八九十\d]+)\s*[:：]?$'                        # 2021 河北乡镇：题目1：
 )
 # 同一道题的多套答案（如【参考答案一】【参考答案二】）→ 不开新块
 RE_ANS_SUB = re.compile(r'^【\s*参考答案\s*[一二三四五六七八九十\d\-—~～]+\s*】$')
@@ -130,6 +143,7 @@ RE_SCORE = re.compile(rf'[（(]\s*(\d+)\s*分\s*[）)]')
 # 字数要求是每道题的最后一条 → 用它当题目的真正终点
 RE_WL = re.compile(
     rf'不超过\s*\d+\s*字'
+    rf'|不少于\s*\d+\s*字'
     rf'|(?:总)?字数\s*\d+\s*[{DASHES}]{{1,3}}\s*\d+\s*字'   # 有的是 400～500，有的是 800——1000
     rf'|\d+\s*[{DASHES}]{{1,3}}\s*\d+\s*字'                 # 裸区间：2013 副省级「800～1000字」
     rf'|\d+\s*字左右'
@@ -138,6 +152,7 @@ RE_WL_RANGE = re.compile(rf'(?:总)?字数\s*(\d+)\s*[{DASHES}]{{1,3}}\s*(\d+)\s
 RE_WL_RANGE2 = re.compile(rf'(\d+)\s*[{DASHES}]{{1,3}}\s*(\d+)\s*字')   # 无「字数」前缀
 RE_WL_MAX = re.compile(r'不超过\s*(\d+)\s*字')
 RE_WL_ONLY = re.compile(r'(\d+)\s*字左右')
+RE_WL_MIN = re.compile(r'不少于\s*(\d+)\s*字')   # 河北卷大作文「不少于1000字」
 
 
 RE_NEXT_Q = re.compile(rf'[一二三四五六七八九十]+\s*[、.][^）)]{{0,220}}?[（(]\s*\d+\s*分\s*[）)]')
@@ -302,7 +317,8 @@ def _paras(rows, base_x):
 
 
 RE_QHEAD = re.compile(
-    rf'^(第\s*[一二三四五六七八九十\d]+\s*题\s*[:：]?'
+    rf'^(【\s*问题\s*[一二三四五六七八九十\d]+\s*】'
+    rf'|第\s*[一二三四五六七八九十\d]+\s*题\s*[:：]?'
     rf'|[（(]\s*[一二三四五六七八九十\d]+\s*[）)]'
     rf'|\d+\s*[.．、]'
     rf'|[一二三四五六七八九十]+\s*[、.])'
@@ -323,7 +339,8 @@ def _is_qstart(p, mode):
 # 块首的题号。必须**循环**清理：有的卷把「第四题：」单列一行、下一行又写「第四题:…」，
 # 一次替换清不净（最多清 4 轮）。
 RE_QLABEL = re.compile(
-    r'^(第\s*[一二三四五六七八九十\d]+\s*题\s*[:：、.．]?\s*'
+    r'^(【\s*问题\s*[一二三四五六七八九十\d]+\s*】\s*'
+    r'|第\s*[一二三四五六七八九十\d]+\s*题\s*[:：、.．]?\s*'
     r'|问题\s*[一二三四五六七八九十\d]+\s*[:：、.．]?\s*'      # 2022 行政执法卷：问题一：…
     r'|[（(]\s*[一二三四五六七八九十\d]+\s*[）)]\s*'
     r'|\d+\s*[.．、]\s*'
@@ -371,7 +388,7 @@ def _wl_of(text):
     m = RE_WL_RANGE.search(text) or RE_WL_RANGE2.search(text)
     if m:
         return int(m.group(2))
-    m = RE_WL_MAX.search(text) or RE_WL_ONLY.search(text)
+    m = RE_WL_MAX.search(text) or RE_WL_ONLY.search(text) or RE_WL_MIN.search(text)
     return int(m.group(1)) if m else None
 
 
@@ -565,7 +582,8 @@ def parse_exam(spec):
     qs_all, ans_all, mats_all = [], [], []
 
     for f in spec['q']:
-        path = os.path.join(PDF_DIR, f)
+        # spec 可带 dir 覆盖 PDF 目录（省考卷在 D:\考公\真题\申论\ 各省目录下，与国考不同库）
+        path = os.path.join(spec.get('dir', PDF_DIR), f)
         rows = read_rows(path)
         if not rows:
             warnings.append(f'无文本层：{f}')
@@ -574,12 +592,15 @@ def parse_exam(spec):
         m, rq, _ = section_bounds(rows)
         # 有些卷没有「给定材料」这一行（2022 行政执法卷直接从「材料一」开始），
         # 此时把作答要求之前的部分整体当材料区，build_materials 会丢掉首个材料标记前的内容。
+        # 河北卷等【材料N】直开式：m 行本身就是首个材料锚点（RE_MATN 命中），
+        # **不能跳过** —— 跳了它，材料一正文落在锚点之前、label=None 被归并逻辑丢弃。
+        m_is_anchor = m >= 0 and RE_MATN.match(clean(rows[m]['t']))
         if m >= 0 and rq > m:
-            mat_rows = rows[m + 1:rq]
+            mat_rows = rows[m:rq] if m_is_anchor else rows[m + 1:rq]
         elif rq > 0:
             mat_rows = rows[:rq]
         else:
-            mat_rows = rows[m + 1:] if m >= 0 else rows
+            mat_rows = rows[m:] if (m >= 0 and m_is_anchor) else (rows[m + 1:] if m >= 0 else rows)
         body = rows[rq + 1:] if rq >= 0 else rows
         cut_at = find_ans_start(body)
         q_rows = body[:cut_at] if cut_at >= 0 else body
@@ -596,7 +617,7 @@ def parse_exam(spec):
         ans_all += build_answers(body, base_x, [q['stem'] for q in qs])
 
     for f in spec['a']:
-        path = os.path.join(PDF_DIR, f)
+        path = os.path.join(spec.get('dir', PDF_DIR), f)
         rows = read_rows(path)
         if not rows:
             warnings.append(f'无文本层（需 OCR）：{f}')
@@ -647,6 +668,9 @@ def parse_exam(spec):
         'title': spec['title'],
         'year': spec['year'],
         'paper': spec['paper'],
+        # 省考卷强制私有（开源演示库只放国考卷，且发布检查锁公开 24 套）
+        'force_private': spec.get('force_private', False),
+        'system': spec.get('system', ''),
         'materials': mats_all,
         'questions': qs_all,
         'warnings': warnings,
@@ -656,7 +680,7 @@ def parse_exam(spec):
 def main():
     ids = sys.argv[1:] or None
     os.makedirs(OUT_DIR, exist_ok=True)
-    specs = [s for s in EXAMS if (not ids or s['id'] in ids)]
+    specs = [s for s in EXAMS if (not ids or s['id'] in ids) and not s.get('skip')]
     if not specs:
         print('没有匹配的卷 id：', ids)
         return

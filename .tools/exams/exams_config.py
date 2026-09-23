@@ -140,3 +140,80 @@ EXAMS = [
 
 # 单元素卷（run.py 不传参时用）
 DEFAULT = ['2024-xingzheng']
+
+
+# ---------- 省考卷（2026-09 起）：河北试点 ----------
+# 分层与国考一致：按时间 ≤2021 公开、≥2022 私有（用户 2026-09-23 拍板）。
+# dir 覆盖 PDF 目录；paper 按真实卷别（未分卷的早期卷写「未分卷」）。
+HEBEI_DIR = r'D:////考公////真题////申论////河北公务员考试真题——申论04-24'
+
+EXAMS += [
+    dict(id='2024-hebei-a', year=2024, paper='A卷', system='省考-河北',
+         title='2024年河北省公务员考试《申论》（A卷）',
+         dir=HEBEI_DIR,
+         q=['2024年公务员多省联考《申论》题（河北A卷）题及参考答案.pdf'], a=[]),
+]
+
+HEBEI = [
+    # 2004-2016：河北自主命题，不分卷别
+    * [dict(id=f'{y}-hebei', year=y, paper='未分卷', system='省考-河北', skip=(y <= 2007),  # 2004-2007 老版式/扫描版，提取失败待人工
+            title=f'{y}年河北省公务员考试《申论》真题及参考答案',
+            dir=HEBEI_DIR,
+            q=[f'{y}年河北公务员考试《申论》真题及参考答案.pdf'], a=[])
+       for y in range(2004, 2015)],
+    dict(id='2016-hebei', year=2016, paper='未分卷', system='省考-河北',
+         title='2016年河北公务员考试《申论》真题及参考答案',
+         dir=HEBEI_DIR,
+         q=['2016年河北公务员考试《申论》真题及参考答案.pdf'], a=[]),
+    # 2015 文件名多一个「省」字（河北省公务员考试），单独列
+    dict(id='2015-hebei', year=2015, paper='未分卷', system='省考-河北',
+         title='2015年河北省公务员考试《申论》真题及参考答案',
+         dir=HEBEI_DIR,
+         q=['2015年河北省公务员考试《申论》真题及参考答案.pdf'], a=[]),
+    # 2015-2024 联考卷（2015 政法干警卷单独考试类型，暂不入库）
+    dict(id='2017-hebei', year=2017, paper='未分卷', system='省考-河北',
+         title='2017年公务员联考《申论》（河北卷）',
+         dir=HEBEI_DIR,
+         q=['2017年422公务员联考《申论》（河北卷）真题答案及解析.pdf'], a=[]),
+    dict(id='2018-hebei', year=2018, paper='未分卷', system='省考-河北',
+         title='2018年公务员联考《申论》（河北卷）',
+         dir=HEBEI_DIR,
+         q=['2018年421联考《申论》真题（河北卷）及参考答案.pdf'], a=[]),
+    dict(id='2019-hebei-xianji', year=2019, paper='县级', system='省考-河北',
+         title='2019年公务员联考《申论》（河北县级卷）',
+         dir=HEBEI_DIR,
+         q=['2019年420联考《申论》真题（河北县级卷）及答案.pdf'], a=[]),
+    dict(id='2019-hebei-xiangzhen', year=2019, paper='乡镇', system='省考-河北',
+         title='2019年公务员联考《申论》（河北乡镇卷）',
+         dir=HEBEI_DIR,
+         q=['2019年420联考《申论》真题（河北乡镇卷）及答案.pdf'], a=[]),
+    dict(id='2020-hebei-xianji', year=2020, paper='县级', system='省考-河北',
+         title='2020年公务员多省联考《申论》（河北县级卷）',
+         dir=HEBEI_DIR,
+         q=['2020年0822公务员多省联考《申论》题（河北县级卷）及参考答案.pdf'], a=[]),
+    dict(id='2020-hebei-xiangzhen', year=2020, paper='乡镇', system='省考-河北',
+         title='2020年公务员多省联考《申论》（河北乡镇卷）',
+         dir=HEBEI_DIR,
+         q=['2020年0822公务员多省联考《申论》题（河北乡镇卷）及参考答案.pdf'], a=[]),
+    dict(id='2021-hebei-xianji', year=2021, paper='县级', system='省考-河北', skip=True,  # 无文本层，OCR 待办
+         title='2021年公务员多省联考《申论》（河北县级卷）',
+         dir=HEBEI_DIR,
+         q=['2021年公务员多省联考《申论》题（河北县级卷）及参考答案.pdf'], a=[]),
+    dict(id='2021-hebei-xiangzhen', year=2021, paper='乡镇', system='省考-河北',
+         title='2021年公务员多省联考《申论》（河北乡镇卷）',
+         dir=HEBEI_DIR,
+         q=['2021年公务员多省联考《申论》题（河北乡镇卷）及参考答案.pdf'], a=[]),
+    dict(id='2022-hebei-xianji', year=2022, paper='县级', system='省考-河北',
+         title='2022年公务员多省联考《申论》（河北县级卷）',
+         dir=HEBEI_DIR,
+         q=['2022年公务员多省联考《申论》题（河北县级卷）及参考答案.pdf'], a=[]),
+    dict(id='2023-hebei-a', year=2023, paper='A卷', system='省考-河北',
+         title='2023年公务员多省联考《申论》（河北A卷）',
+         dir=HEBEI_DIR,
+         q=['2023年公务员多省联考《申论》真题（河北A卷）及参考答案.pdf'], a=[]),
+    dict(id='2024-hebei-b', year=2024, paper='B卷', system='省考-河北',
+         title='2024年公务员多省联考《申论》（河北B卷）',
+         dir=HEBEI_DIR,
+         q=['2024年公务员多省联考《申论》题（河北B卷）题及参考答案.pdf'], a=[]),
+]
+EXAMS += HEBEI

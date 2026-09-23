@@ -347,13 +347,23 @@ if (!page) {
   process.exit(1)
 }
 
-const got = await evaluate(page.webSocketDebuggerUrl, `(async () => await window.__TAURI_INTERNALS__.invoke('api_base'))()`)
-const BASE = got.ok ? got.value : ''
+// api_base 探测带重试：页面 URL 就绪 ≠ Tauri SDK 已注入。
+// 系统负载重时 __TAURI_INTERNALS__ 注入晚于首次 evaluate，直接读会假失败
+// （实测：发布探针全绿、md-parity 稳定红，就是这条竞态）。
+let BASE = ''
+for (let i = 0; i < 15 && !BASE; i++) {
+  const got = await evaluate(
+    page.webSocketDebuggerUrl,
+    `(async () => window.__TAURI_INTERNALS__ ? await window.__TAURI_INTERNALS__.invoke('api_base') : '')()`
+  )
+  if (got.ok && got.value) BASE = got.value
+  else await sleep(1000)
+}
 if (!BASE) {
   try {
     child.kill('SIGKILL')
   } catch {}
-  console.log('✗ 拿不到本地服务地址')
+  console.log('✗ 拿不到本地服务地址（等了 15 秒）')
   process.exit(1)
 }
 console.log(`  ✓ 本地服务 ${BASE}`)
