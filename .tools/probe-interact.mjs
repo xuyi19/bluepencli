@@ -36,10 +36,11 @@ if (!CHROME) {
 
 const proc = spawn(CHROME, [
   '--headless=new',
+  '--no-proxy-server',   // localhost 探测绝不能走系统代理（代理 502 会伪装成页面故障）
   '--disable-gpu',
   '--no-sandbox',
   `--remote-debugging-port=${PORT}`,
-  '--user-data-dir=' + (process.env.TEMP || '/tmp') + '/cdp-probe-interact',
+  '--user-data-dir=' + (process.env.TEMP || '/tmp') + '/cdp-probe-interact-' + Date.now(),   // 随机目录：固定 profile 会缓存早前的失败响应（502 时代的动态 import 报错复活）
   '--window-size=1440,1000',
   'about:blank',
 ])

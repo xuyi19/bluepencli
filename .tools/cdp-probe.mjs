@@ -28,6 +28,7 @@ if (!CHROME) {
 
 const proc = spawn(CHROME, [
   '--headless=new',
+  '--no-proxy-server',   // localhost 探测绝不能走系统代理（代理 502 会伪装成页面故障）
   '--disable-gpu',
   '--no-sandbox',
   `--remote-debugging-port=${PORT}`,

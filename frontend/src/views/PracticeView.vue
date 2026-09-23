@@ -39,6 +39,50 @@
     <!-- ==================== 第一步：答题 ==================== -->
     <template v-if="step === 'answer'">
 
+      <!-- 练习模式：训练（现状，随时批改）/ 考场（倒计时，时间到自动交卷） -->
+      <div class="flex flex-wrap items-center gap-2 mb-5">
+        <div class="flex rounded-xl p-1 neu-sm">
+          <button @click="switchMode('train')"
+            class="px-4 py-1.5 rounded-lg text-xs font-medium transition-all duration-200"
+            :class="!isExamMode ? 'neu-inset text-c-bark' : 'text-c-muted'">
+            训练模式
+          </button>
+          <button @click="switchMode('exam')"
+            class="px-4 py-1.5 rounded-lg text-xs font-medium transition-all duration-200"
+            :class="isExamMode ? 'neu-inset text-c-bark' : 'text-c-muted'">
+            考场模式
+          </button>
+        </div>
+        <span class="text-xs text-c-muted">
+          {{ isExamMode ? '落笔即计时，时间到自动交卷 —— 按真实考场练节奏' : '随时批改、随时看参考答案，适合日常消化' }}
+        </span>
+        <div v-if="isExamMode" class="flex items-center gap-2 ml-auto">
+          <label class="text-xs text-c-muted">时长</label>
+          <select v-model.number="examMinutes" @change="resetExamTimer"
+            class="px-2 py-1 rounded-lg text-xs neu-inset outline-none text-c-body">
+            <option v-for="m in [15, 20, 30, 40, 60, 90]" :key="m" :value="m">{{ m }} 分钟</option>
+          </select>
+        </div>
+      </div>
+      <!-- 考场倒计时条：落笔（首次输入）即开始 -->
+      <div v-if="isExamMode"
+        class="rounded-2xl px-5 py-3.5 mb-5 neu flex items-center justify-between"
+        :style="examUrgent ? 'background:#fdecea' : ''">
+        <div class="flex items-center gap-3">
+          <span class="text-sm font-medium" :style="examUrgent ? 'color:#b91c1c' : 'color:#1f2430'">
+            {{ examRunning ? '剩余时间' : '待开始' }}
+          </span>
+          <span class="tnum text-2xl font-semibold" :style="examUrgent ? 'color:#b91c1c' : 'color:#1f2430'">
+            {{ examClock }}
+          </span>
+        </div>
+        <div class="text-xs text-c-muted">
+          {{ examRunning
+            ? (examUrgent ? '最后 5 分钟，抓紧组织答案' : '作答中——交卷前可以继续修改')
+            : '开始输入后自动计时' }}
+        </div>
+      </div>
+
       <!-- 今日一练：进页面就有题有材料，不用自己找。做成扁条，别把材料挤到折线以下 -->
       <section v-if="todayQ" class="rounded-2xl px-5 py-4 neu mb-5">
         <div class="flex flex-wrap items-center justify-between gap-x-5 gap-y-3">
@@ -302,7 +346,19 @@
       <div class="sticky bottom-4 z-10">
         <div class="rounded-2xl p-3 neu backdrop-blur">
           <div class="flex items-center gap-3">
-            <button @click="start" :disabled="!canGrade"
+            <!-- 考场模式：交卷两段确认（防误触）；超时自动交卷不走这里 -->
+            <button v-if="isExamMode && confirmSubmit" @click="startExam"
+              class="flex-1 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300
+                text-white" style="background:#b91c1c">
+              确认交卷？计时将停止，交给 {{ selected.length }} 位老师批改
+            </button>
+            <button v-else-if="isExamMode" @click="startExam" :disabled="!canGrade"
+              class="flex-1 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300
+                disabled:opacity-40 disabled:cursor-not-allowed neu-sm"
+              :class="canGrade ? 'text-c-bark hover:translate-y-px' : 'text-c-muted'">
+              交卷（{{ examClock }}）
+            </button>
+            <button v-else @click="start" :disabled="!canGrade"
               class="flex-1 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300
                 disabled:opacity-40 disabled:cursor-not-allowed neu-sm"
               :class="canGrade ? 'text-c-bark hover:translate-y-px' : 'text-c-muted'">
@@ -735,7 +791,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, reactive, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { toast } from '../utils/toast'
 import ScoreRing from '../components/ScoreRing.vue'
@@ -877,6 +933,86 @@ const mode = computed(() => detectMode(selected.value))
 const overLimit = computed(() => form.wordLimit && countChars(form.answer) > form.wordLimit)
 const canGrade = computed(
   () => hasKey.value && selected.value.length > 0 && form.answer.trim().length > 20
+)
+
+// ── 考场模式：倒计时 + 交卷确认 + 超时自动交卷 ──
+// 设计取舍：落笔（首次输入）才计时，贴真实考场的「发卷后开始」；
+// 训练模式一条代码路径都不动，两个模式互不干扰。
+const practiceMode = ref(localStorage.getItem('practice_mode') || 'train')
+const isExamMode = computed(() => practiceMode.value === 'exam')
+function switchMode(m) {
+  practiceMode.value = m
+  localStorage.setItem('practice_mode', m)
+  resetExamTimer()
+  confirmSubmit.value = false
+}
+
+const examMinutes = ref(30)
+const examRemain = ref(30 * 60)
+const examRunning = ref(false)
+const confirmSubmit = ref(false)
+let examTimer = null
+let examDeadline = 0
+
+const examClock = computed(() => {
+  const s = examRemain.value
+  return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
+})
+const examUrgent = computed(() => isExamMode.value && examRunning.value && examRemain.value <= 300)
+
+/** 按题型给默认时长：大作文 60、贯彻执行 40、其余 30 */
+function defaultMinutes() {
+  if (form.questionType === '大作文') return 60
+  if (form.questionType === '贯彻执行') return 40
+  return 30
+}
+
+function resetExamTimer() {
+  stopExamTimer()
+  examMinutes.value = defaultMinutes()
+  examRemain.value = examMinutes.value * 60
+  examRunning.value = false
+  confirmSubmit.value = false
+}
+
+function startExamTimer() {
+  if (!isExamMode.value || examRunning.value) return
+  examRunning.value = true
+  examDeadline = Date.now() + examRemain.value * 1000
+  examTimer = setInterval(() => {
+    examRemain.value = Math.max(0, Math.round((examDeadline - Date.now()) / 1000))
+    if (examRemain.value <= 0) {
+      stopExamTimer()
+      toast.warning('考试时间到，自动交卷')
+      start()   // 超时自动交卷（不经过二次确认）
+    }
+  }, 500)
+}
+
+function stopExamTimer() {
+  if (examTimer) {
+    clearInterval(examTimer)
+    examTimer = null
+  }
+}
+
+/** 考场交卷（两段确认的第二段） */
+async function startExam() {
+  if (!confirmSubmit.value) {
+    confirmSubmit.value = true
+    return
+  }
+  confirmSubmit.value = false
+  stopExamTimer()
+  await start()
+}
+
+// 落笔即计时：训练模式无感，考场模式首次输入触发
+watch(
+  () => form.answer,
+  (v, ov) => {
+    if (isExamMode.value && !examRunning.value && v && v.length > 0 && !ov) startExamTimer()
+  }
 )
 
 const todayLabel = computed(() => {
@@ -1053,6 +1189,7 @@ async function applyQuestion(q, { resetAnswer = true } = {}) {
 
   showPicker.value = false
   materialEdit.value = false
+  resetExamTimer()   // 换题 = 换卷，考场计时重置
   nextTick(() => window.scrollTo({ top: 0, behavior: 'smooth' }))
 }
 
@@ -1071,6 +1208,7 @@ function togglePicker() {
 
 /** 空白作答：清掉题目，只留输入框，方便粘贴自己的材料 */
 function startBlank() {
+  resetExamTimer()
   form.title = ''
   form.material = ''
   resetTrim()
@@ -1113,6 +1251,7 @@ async function start() {
     return
   }
 
+  stopExamTimer()
   clearRun()
   step.value = 'grading'
   elapsed.value = 0
@@ -1247,6 +1386,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   clearInterval(timer)
+  stopExamTimer()
   controller?.abort()
 })
 </script>
