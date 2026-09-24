@@ -13,7 +13,7 @@ const ROUTES = [
   ['teachers', 'teachers', ['老师']],
   ['questions', 'questions', ['题库']],
   ['articles', 'articles', ['文章库']],
-  ['practice', 'practice', ['练习批改', '谁来批改']],
+  ['practice', 'practice', ['练习批改', '我的作答']],
   ['records', 'records', ['历史批改']],
   ['stats', 'stats', ['统计']],
   ['settings', 'settings', ['API']],

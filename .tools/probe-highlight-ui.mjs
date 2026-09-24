@@ -306,6 +306,13 @@ if (canGrade) {
     const btn = [...document.querySelectorAll('button')].find((b) => /开始批改/.test(b.textContent))
     btn?.click()
   })
+  // 选老师挪到「批改时」了：点完上面那个按钮先弹选人弹窗，默认已选 3 位 → 直接确认。
+  // ⚠️ 少了这一步，探针会一直等结果页直到超时（假红），或者更糟：等到别的字样误判通过。
+  await new Promise((r) => setTimeout(r, 600))
+  await page.evaluate(() => {
+    const btn = [...document.querySelectorAll('button')].find((b) => /^开始批改（/.test(b.textContent.trim()))
+    btn?.click()
+  })
   try {
     await page.waitForFunction(
       () => document.body.textContent.includes('我的标注') || document.body.textContent.includes('批注'),

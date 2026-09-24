@@ -119,17 +119,9 @@ await send('Page.reload', { ignoreCache: true })
 await sleep(5000)
 console.log(`① 真配置已注入：${REAL_BASE} / ${REAL_MODEL} ｜ 老师 ${TEACHER_N} 位`)
 
-// ── 2) 选老师：1 位点「东哥」，3 位以上点「三师圆桌」 ──
+// ── 2) 选老师：挪到批改时弹窗里选（先记下目标预设，提交后在弹窗里点） ──
 const presetLabel = TEACHER_N <= 1 ? '东哥' : '三师圆桌'
-const picked = await evaluate(`
-(() => {
-  const btn = [...document.querySelectorAll('button')].find(b => b.textContent.trim() === ${JSON.stringify(presetLabel)})
-  if (!btn) return { ok: false, labels: [...document.querySelectorAll('button')].map(b => b.textContent.trim()).slice(0, 14) }
-  btn.click(); return { ok: true }
-})()
-`)
-console.log('② 选老师', JSON.stringify(picked))
-await sleep(800)
+console.log('② 选老师：将在提交后的弹窗里点「' + presetLabel + '」')
 
 // ── 3) 填表（Vue v-model 需要原生 setter + input 事件）──
 const filled = await evaluate(`
@@ -164,9 +156,34 @@ const clicked = await evaluate(`
   btn.click(); return { clicked: true, text: btn.textContent.trim() }
 })()
 `)
-console.log('④ 提交', JSON.stringify(clicked))
+console.log('④ 提交（弹选老师弹窗）', JSON.stringify(clicked))
 if (!clicked.clicked) {
   console.log('   ✗ 没能提交（按钮禁用或没找到）—— 检查 Key/老师/作答字数')
+  ws.close(); proc.kill(); process.exit(1)
+}
+
+// ── 4b) 弹窗里：点预设 → 确认开始批改 ──
+await sleep(800)
+const picked = await evaluate(`
+(() => {
+  const preset = [...document.querySelectorAll('button')].find(b => b.textContent.trim() === ${JSON.stringify(presetLabel)})
+  if (!preset) return { ok: false, buttons: [...document.querySelectorAll('button')].map(b => b.textContent.trim()).slice(0, 16) }
+  preset.click()
+  return { ok: true }
+})()
+`)
+console.log('④b 弹窗选预设', JSON.stringify(picked))
+await sleep(400)
+const confirmed = await evaluate(`
+(() => {
+  const btn = [...document.querySelectorAll('button')].find(b => /^开始批改（/.test(b.textContent.trim()))
+  if (!btn) return { confirmed: false }
+  btn.click(); return { confirmed: true, text: btn.textContent.trim() }
+})()
+`)
+console.log('④c 确认开始批改', JSON.stringify(confirmed))
+if (!confirmed.confirmed) {
+  console.log('   ✗ 弹窗里没能确认开始批改')
   ws.close(); proc.kill(); process.exit(1)
 }
 

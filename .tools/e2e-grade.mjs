@@ -146,6 +146,17 @@ const clicked = await evaluate(`
 `)
 console.log('③ 点击开始批改：', JSON.stringify(clicked))
 
+// 3b) 选老师弹窗（批改时才选人）：默认已选 3 位，直接点确认
+await sleep(600)
+const confirmed = await evaluate(`
+(() => {
+  const btn = [...document.querySelectorAll('button')].find(b => /^开始批改（/.test(b.textContent.trim()))
+  if (!btn) return { confirmed: false }
+  btn.click(); return { confirmed: true, text: btn.textContent.trim() }
+})()
+`)
+console.log('③b 弹窗确认：', JSON.stringify(confirmed))
+
 // 4) 真实等待批改跑完（三师圆桌 = 3 次阅卷 + 可能的辩论 + 合议）
 for (let i = 1; i <= 8; i++) {
   await sleep(4000)

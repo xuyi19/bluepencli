@@ -1,50 +1,47 @@
 <template>
   <div class="h-full flex flex-col">
 
-    <!-- Logo 区：印章 + 纸背层次，撑起"这是一支写申论的笔"的辨识度 -->
-    <RouterLink to="/" class="block px-4 pt-6 pb-5 shrink-0 border-b border-c-line group">
-      <div class="flex items-center gap-3">
+    <!-- Logo 区：印章 + 纸背层次，撑起"这是一支写申论的笔"的辨识度。
+         高度压紧——侧栏要在常规视口里一屏放下全部入口，不让导航滚动 -->
+    <RouterLink to="/" class="block px-4 pt-4 pb-3 shrink-0 border-b border-c-line group">
+      <div class="flex items-center gap-2.5">
         <!-- 印章：后面垫一张微旋的纸，做出叠纸的厚度感 -->
-        <div class="relative w-12 h-12 shrink-0">
-          <div class="absolute inset-0 rounded-[1.1rem] bg-c-barkSoft rotate-6
+        <div class="relative w-10 h-10 shrink-0">
+          <div class="absolute inset-0 rounded-[0.95rem] bg-c-barkSoft rotate-6
             transition-transform duration-500 ease-in-out group-hover:rotate-12" />
-          <div class="relative w-12 h-12 rounded-[1.1rem] bg-c-bark
+          <div class="relative w-10 h-10 rounded-[0.95rem] bg-c-bark
             flex items-center justify-center text-c-cream
-            font-serif text-xl leading-none ring-1 ring-white/20
+            font-serif text-lg leading-none ring-1 ring-white/20
             shadow-[0_3px_10px_rgba(92,64,51,0.22)]">
             笔
           </div>
         </div>
 
         <div class="min-w-0 flex-1">
-          <div class="font-serif font-semibold text-lg text-c-ink leading-tight tracking-tight">
+          <div class="font-serif font-semibold text-base text-c-ink leading-tight tracking-tight">
             蓝笔申论
           </div>
-          <div class="text-xs text-c-muted mt-1">申论 AI 批改</div>
+          <div class="text-[11px] text-c-muted mt-0.5 flex items-center gap-1.5">
+            <span class="tnum px-1.5 rounded-full bg-c-barkSoft text-c-bark leading-4">v{{ version }}</span>
+            <span>本地存储 · 五位老师</span>
+          </div>
         </div>
-      </div>
-
-      <div class="flex items-center gap-2 mt-3.5">
-        <span class="text-[10px] tnum px-2 py-0.5 rounded-full bg-c-barkSoft text-c-bark leading-4">
-          v{{ version }}
-        </span>
-        <span class="text-[10px] text-c-muted leading-4">本地存储 · 五位老师</span>
       </div>
     </RouterLink>
 
     <!-- 分组导航：group 为空串的条目不带组头（首页是入口不是分类） -->
-    <nav class="flex-1 overflow-y-auto px-3 py-4 space-y-5">
+    <nav class="flex-1 overflow-y-auto px-3 py-3 space-y-3">
       <div v-for="g in groups" :key="g.title || '_top'">
-        <div v-if="g.title" class="px-3 mb-1.5 text-[11px] font-medium text-c-muted tracking-widest">{{ g.title }}</div>
+        <div v-if="g.title" class="px-3 mb-1 text-[11px] font-medium text-c-muted tracking-widest">{{ g.title }}</div>
         <div class="space-y-0.5">
           <RouterLink v-for="item in g.items" :key="item.path" :to="item.path"
             @click="emit('navigate')"
-            class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm
+            class="flex items-center gap-2 px-3 py-1.5 rounded-xl text-[13px]
               transition-colors duration-300 ease-in-out"
             :class="isActive(item.path)
               ? 'bg-c-barkSoft text-c-bark font-medium'
               : 'text-c-body hover:bg-c-barkSoft/60'">
-            <svg class="w-4 h-4 shrink-0 opacity-70" viewBox="0 0 24 24" fill="none"
+            <svg class="w-[15px] h-[15px] shrink-0 opacity-70" viewBox="0 0 24 24" fill="none"
               stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"
               aria-hidden="true" v-html="iconOf(item.path)" />
             <span>{{ item.label }}</span>
@@ -54,7 +51,7 @@
     </nav>
 
     <!-- 底部：开源入口 + 设置 + 作者水印 -->
-    <div class="px-3 py-4 border-t border-c-line space-y-2 shrink-0">
+    <div class="px-3 py-2.5 border-t border-c-line space-y-1.5 shrink-0">
 
       <!-- 微信入口：单占一行。四个胶囊并排的话每个只剩 ~45px，
            "GitHub" 都塞不下，所以它自己一行、用整行按钮。
@@ -101,7 +98,7 @@
 
       <RouterLink to="/settings"
         @click="emit('navigate')"
-        class="flex items-center gap-3 px-3.5 py-2.5 rounded-full text-sm
+        class="flex items-center gap-3 px-3 py-2 rounded-xl text-[13px]
           transition-colors duration-300 ease-in-out"
         :class="route.path.startsWith('/settings')
           ? 'bg-c-barkSoft text-c-bark font-medium'
@@ -115,7 +112,7 @@
       </RouterLink>
 
       <!-- 作者水印：小、但一直在。title 里给全量信息（邮箱 + 两个仓库）。 -->
-      <div class="px-3.5 pt-0.5 text-[10px] leading-4 text-c-muted truncate cursor-default"
+      <div class="px-3 pt-0.5 text-[10px] leading-3.5 text-c-muted truncate cursor-default"
         :title="AUTHOR_LINE">
         {{ AUTHOR_SHORT }}
       </div>

@@ -146,50 +146,6 @@
         </details>
       </section>
 
-      <!-- 阅卷老师：压成两行，把纵向空间让给题目与材料 -->
-      <section class="rounded-2xl px-5 py-4 neu mb-5">
-        <div class="flex flex-wrap items-center gap-x-3 gap-y-2 mb-3">
-          <span class="text-sm font-medium text-c-body">谁来批改</span>
-          <span class="text-xs text-c-muted">
-            {{ MODE_LABEL[mode] }}<span v-if="selected.length" class="text-c-bark"> · {{ selected.length }} 位</span>
-          </span>
-
-          <div class="ml-auto flex flex-wrap items-center gap-1.5">
-            <button v-for="p in PRESETS" :key="p.key" @click="selected = [...p.ids]"
-              class="px-2.5 py-1 rounded-lg text-xs transition-all duration-200"
-              :class="samePreset(p.ids)
-                ? 'neu-inset text-c-bark font-medium'
-                : 'text-c-muted hover:text-c-bark'"
-              :title="p.hint">
-              {{ p.label }}
-            </button>
-            <span class="w-px h-4 bg-c-line mx-1 hidden sm:block" />
-            <button @click="deep = !deep"
-              title="深度模式：注入老师方法论全文，判断更贴原始标准；代价是更慢更贵。日常练习建议关闭。"
-              class="px-2.5 py-1 rounded-lg text-xs transition-all duration-200"
-              :class="deep ? 'neu-inset text-c-bark font-medium' : 'text-c-muted hover:text-c-bark'">
-              深度模式{{ deep ? ' · 开' : '' }}
-            </button>
-          </div>
-        </div>
-
-        <div class="flex flex-wrap gap-2">
-          <button v-for="t in TEACHER_LIST" :key="t.id" @click="toggle(t.id)"
-            class="flex items-center gap-2 pl-1.5 pr-3 py-1.5 rounded-full text-xs transition-all duration-200"
-            :class="selected.includes(t.id) ? 'neu-inset' : 'neu-sm hover:opacity-90'"
-            :title="`${t.name}｜${t.title}\n侧重：${t.focus}\n${t.desc}`">
-            <span class="w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium shrink-0"
-              :style="selected.includes(t.id)
-                ? { background: t.color, color: '#fffdfb' }
-                : { background: t.color + '1f', color: t.color }">
-              {{ t.avatar }}
-            </span>
-            <span :style="{ color: selected.includes(t.id) ? t.color : '#78716c' }"
-              :class="selected.includes(t.id) ? 'font-medium' : ''">{{ t.name }}</span>
-          </button>
-        </div>
-      </section>
-
       <!-- 给定资料 + 题目：并排，仿考场卷面 -->
       <!-- 上排定高：材料在面板内滚、作答区位置就稳定不动（材料长度变化不再顶跑下方内容）；
            高度吃掉视口剩余空间——空地铺满，而不是留一截白 -->
@@ -414,12 +370,63 @@
               class="flex-1 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300
                 disabled:opacity-40 disabled:cursor-not-allowed neu-sm"
               :class="canGrade ? 'text-c-bark hover:translate-y-px' : 'text-c-muted'">
-              答完了，开始批改（{{ selected.length }} 位老师）
+              答完了，开始批改{{ selected.length ? `（${selected.length} 位老师）` : '' }}
             </button>
           </div>
           <div v-if="!canGrade" class="text-xs text-c-muted text-center mt-2">
-            {{ !selected.length ? '先选至少一位阅卷老师' : !hasKey ? '先到设置页配置 API' : '作答至少 20 字才能提交' }}
+            {{ !hasKey ? '先到设置页配置 API' : '作答至少 20 字才能提交' }}
           </div>
+        </div>
+      </div>
+
+      <!-- 选老师弹窗：批改时才选人，页面顶部不再给一张常驻卡——进页面直接是材料+作答的大工作区 -->
+      <div v-if="showTeacherPicker" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30"
+        @click.self="showTeacherPicker = false">
+        <div class="w-full max-w-md rounded-2xl p-5 bg-c-paper shadow-[0_18px_50px_rgba(92,64,51,0.25)]">
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-sm font-medium text-c-body">谁来批改这份作答</span>
+            <button @click="showTeacherPicker = false" class="text-c-muted hover:text-c-bark text-xs leading-none">✕</button>
+          </div>
+
+          <div class="space-y-1.5 mb-3">
+            <button v-for="t in TEACHER_LIST" :key="t.id" @click="toggle(t.id)"
+              class="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-left transition-all duration-200"
+              :class="selected.includes(t.id) ? 'neu-inset' : 'hover:bg-c-barkSoft/50'"
+              :title="`${t.name}｜${t.title}\n侧重：${t.focus}\n${t.desc}`">
+              <span class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium shrink-0"
+                :style="selected.includes(t.id)
+                  ? { background: t.color, color: '#fffdfb' }
+                  : { background: t.color + '1f', color: t.color }">{{ t.avatar }}</span>
+              <span class="min-w-0 flex-1">
+                <span class="block text-xs font-medium leading-4"
+                  :style="{ color: selected.includes(t.id) ? t.color : '#44403c' }">{{ t.name }}</span>
+                <span class="block text-[11px] text-c-muted truncate leading-4">{{ t.focus }}</span>
+              </span>
+              <span v-if="selected.includes(t.id)" class="text-xs shrink-0 font-medium" :style="{ color: t.color }">✓</span>
+            </button>
+          </div>
+
+          <div class="flex flex-wrap items-center gap-1.5 mb-4">
+            <button v-for="p in PRESETS" :key="p.key" @click="selected = [...p.ids]"
+              class="px-2.5 py-1 rounded-lg text-xs transition-all duration-200"
+              :class="samePreset(p.ids) ? 'neu-inset text-c-bark font-medium' : 'text-c-muted hover:text-c-bark'"
+              :title="p.hint">{{ p.label }}</button>
+            <span class="w-px h-4 bg-c-line mx-1" />
+            <button @click="deep = !deep"
+              title="深度模式：注入老师方法论全文，判断更贴原始标准；代价是更慢更贵"
+              class="px-2.5 py-1 rounded-lg text-xs transition-all duration-200"
+              :class="deep ? 'neu-inset text-c-bark font-medium' : 'text-c-muted hover:text-c-bark'">
+              深度模式{{ deep ? ' · 开' : '' }}
+            </button>
+          </div>
+
+          <!-- 不 disabled：禁用了就点不出提示，用户只看到"点了没反应"。
+               选不满也让点，点了明确告诉他为什么走不了。 -->
+          <button @click="selected.length ? startGrade() : toast.warning('请至少选择一位阅卷老师')"
+            class="w-full px-4 py-2.5 rounded-xl text-sm font-medium neu-sm text-c-bark
+              hover:translate-y-px transition-all duration-300">
+            开始批改{{ selected.length ? `（${selected.length} 位老师${deep ? ' · 深度' : ''}）` : '' }}
+          </button>
         </div>
       </div>
     </template>
@@ -944,8 +951,13 @@ function resetTrim() {
   })
 }
 
-const selected = ref(['yuandong', 'zhoutairan', 'bailu'])
+/** 默认老师组合：袁东 / 周泰然 / 白鹭（三师圆桌） */
+const DEFAULT_TEACHERS = ['yuandong', 'zhoutairan', 'bailu']
+const selected = ref([...DEFAULT_TEACHERS])
 const deep = ref(false)
+// 选老师挪到批改时：点「开始批改」弹窗选人，不再占页面顶部一张卡——
+// 进页面直接是材料 + 作答的大工作区。超时自动交卷不走弹窗（不能拦自动流程）。
+const showTeacherPicker = ref(false)
 const stage = ref('')
 const stageText2 = ref('')
 const elapsed = ref(0)
@@ -1075,9 +1087,10 @@ const kindBadgeStyle = computed(() => {
 const pool = computed(() => [...mine.value, ...builtin])
 const mode = computed(() => detectMode(selected.value))
 const overLimit = computed(() => form.wordLimit && countChars(form.answer) > form.wordLimit)
-const canGrade = computed(
-  () => hasKey.value && selected.value.length > 0 && form.answer.trim().length > 20
-)
+// ⚠️ 这里**不能**再要求 selected.length > 0：老师只在「开始批改」的弹窗里选，
+// 若按钮因"没选老师"而禁用，用户就再也点不开那个弹窗 —— 选人的入口被自己锁死。
+// 老师的校验下沉到弹窗的确认按钮（选不满就点不动、点了也有明确提示）。
+const canGrade = computed(() => hasKey.value && form.answer.trim().length > 20)
 
 // ── 考场模式：倒计时 + 交卷确认 + 超时自动交卷 ──
 // 设计取舍：落笔（首次输入）才计时，贴真实考场的「发卷后开始」；
@@ -1140,7 +1153,7 @@ function startExamTimer() {
     if (examRemain.value <= 0) {
       stopExamTimer()
       toast.warning('考试时间到，自动交卷')
-      start()   // 超时自动交卷（不经过二次确认）
+      startGrade()   // 超时自动交卷（不经过二次确认，也不弹选老师——不能拦自动流程）
     }
   }, 500)
 }
@@ -1159,8 +1172,9 @@ async function startExam() {
     return
   }
   confirmSubmit.value = false
-  stopExamTimer()
-  await start()
+  // 考场交卷**不弹选老师**：倒计时还在走/刚停，中途弹窗选人既打断节奏也不合考场语义。
+  // 用开考前就定好的老师组合直接批改（超时自动交卷同此路径）。
+  await startGrade()
 }
 
 // 落笔即计时：训练模式无感，考场模式首次输入触发
@@ -1406,12 +1420,27 @@ function backToAnswer() {
   step.value = 'answer'
 }
 
-async function start() {
-  if (!canGrade.value) {
-    if (!selected.value.length) toast.warning('请至少选择一位阅卷老师')
-    else if (!hasKey.value) toast.warning('请先到设置页配置 API Key')
-    else toast.warning('请先填写作答内容（至少 20 字）')
+/** 点「开始批改」：只做校验 + 弹选老师弹窗。真正的批改在弹窗确认后由 startGrade 发起 */
+function start() {
+  if (!hasKey.value) {
+    toast.warning('请先到设置页配置 API Key')
     return
+  }
+  if (form.answer.trim().length <= 20) {
+    toast.warning('请先填写作答内容（至少 20 字）')
+    return
+  }
+  showTeacherPicker.value = true
+}
+
+async function startGrade() {
+  showTeacherPicker.value = false
+
+  // 兜底：任何发起批改的路径（弹窗确认 / 考场交卷 / 超时自动交卷）都不允许 0 位老师。
+  // 真发生了要**让用户知道**是谁改的，不能静默换人 —— 静默换人等于结果页撒谎。
+  if (!selected.value.length) {
+    selected.value = [...DEFAULT_TEACHERS]
+    toast.warning('未选择老师，已按默认三位（袁东 / 周泰然 / 白鹭）批改')
   }
 
   stopExamTimer()
