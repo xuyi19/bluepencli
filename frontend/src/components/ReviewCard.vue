@@ -31,6 +31,26 @@
       </template>
     </div>
 
+    <!-- 做得好：复盘卡的另一半。只列老师**明确写出来**的肯定——
+         空数组时如实说"没有单独肯定"，不拿"没被批评"当"做得好"。 -->
+    <div v-if="card.strengths && card.strengths.length" class="rounded-xl p-3.5 mb-4"
+      style="background: #eef3e8">
+      <div class="text-[11px] mb-2" style="color: #4f7d5e">
+        ✓ 这次做得好的 {{ card.strengths.length }} 处（老师明确肯定的）
+      </div>
+      <div class="space-y-1.5">
+        <div v-for="(s, i) in card.strengths" :key="i" class="text-xs leading-5" style="color: #3f6349">
+          <span class="font-medium">{{ s.text }}</span>
+          <span v-if="s.why" class="opacity-80"> —— {{ s.why }}</span>
+          <span v-if="s.consensus" class="ml-1 text-[10px] px-1.5 py-0.5 rounded align-middle"
+            style="background: #dfe9d5; color: #4f7d5e">多位老师都提到</span>
+        </div>
+      </div>
+    </div>
+    <div v-else-if="card.strengths" class="text-[11px] text-c-muted leading-5 mb-4">
+      这次批改没有单独肯定的亮点 —— 老师没写，代表没有突出到需要单独点出，不代表写得差。
+    </div>
+
     <div v-if="!card.ok" class="text-xs text-c-muted">{{ card.reason }}</div>
 
     <div v-else class="space-y-3">

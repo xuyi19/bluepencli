@@ -38,8 +38,8 @@
           class="px-4 py-2.5 rounded-xl text-xs font-medium neu-sm text-c-bark">
           {{ showImport ? '收起录入' : '+ 录入题目' }}
         </button>
-        <!-- 一次只能选一个包：分开的包分别导入，避免一次误吞几个来源不明的文件 -->
-        <input ref="packInput" type="file" accept=".bpq,application/json,.json"
+        <!-- 可多选：一次导入多个包（批量）；回显按文件分组、逐个汇报 -->
+        <input ref="packInput" type="file" accept=".bpq,application/json,.json" multiple
           class="hidden" @change="onPackFile" />
       </div>
     </div>
@@ -366,7 +366,8 @@ const packInput = ref(null)
 // 拖拽导入：把 .bpq 拖进窗口任意位置即可，跟点「导入题库包」选文件走同一段逻辑。
 // 只认题库包扩展名——拖别的东西进来不吭声，免得用户以为随便丢个文件就能入库。
 const { dragging } = useFileDrop({
-  onFile: handlePack,
+  // 一次拖入多个包时收到数组（批量导入）
+  onFile: (f) => (Array.isArray(f) ? handlePacks(f) : handlePack(f)),
   accept: ['.bpq', '.json'],
 })
 const importing = ref(false)
@@ -567,20 +568,54 @@ async function load() {
  * 所以这里最多问 3 次，够用又不至于让人一直撞。
  */
 async function onPackFile(e) {
-  const file = e.target.files?.[0]
-  e.target.value = ''            // 清掉 value，同一个文件才能再次选择（重导/换包）
-  if (!file) return
-  await handlePack(file)
+  const files = Array.from(e.target.files || [])
+  e.target.value = ''            // 清掉 value，同一批文件才能再次选择（重导/换包）
+  if (!files.length) return
+  await handlePacks(files)
+}
+
+/**
+ * 批量导入：逐个走同一段逻辑，回显按文件分组。
+ * ⚠️ 一个包失败**不中断**后面的 —— 中途清空回显或直接 return，
+ *    会让已经导进去的前几个看起来像没导（这是最容易被误报成"批量导坏了"的写法）。
+ */
+async function handlePacks(files) {
+  const list = files.filter(Boolean)
+  if (!list.length) return
+  importSteps.value = []
+  let done = 0
+  let failed = 0
+  for (const f of list) {
+    if (list.length > 1) {
+      importSteps.value.push({
+        label: `── ${f.name} ──`,
+        state: 'doing',
+        detail: `第 ${done + failed + 1} / ${list.length} 个`,
+      })
+    }
+    const before = importSteps.value.length
+    await handlePack(f, { keepSteps: true })
+    // 以这一段回显里有没有 fail 判定成败 —— 不给 handlePack 加返回值也能如实汇报
+    const seg = importSteps.value.slice(before)
+    seg.some((s) => s.state === 'fail') ? failed++ : done++
+  }
+  if (list.length > 1) {
+    importSteps.value.push({
+      label: '批量导入结果',
+      state: failed ? 'fail' : 'ok',
+      detail: `成功 ${done} 个${failed ? `，失败 ${failed} 个` : ''}`,
+    })
+  }
 }
 
 /**
  * 导入一个 .bpq 包。文件选择与拖拽两个入口都走这里 —— 两条路各写一遍，
  * 迟早有一条忘了处理加密包的口令。
  */
-async function handlePack(file) {
+async function handlePack(file, { keepSteps = false } = {}) {
   if (importing.value) return    // 拖拽可能连发，导入中再丢进来直接忽略
   importing.value = true
-  importSteps.value = []         // 每次导入都从干净的回显开始
+  if (!keepSteps) importSteps.value = []   // 单包导入才清空回显；批量时按文件累加
   try {
     const iRead = pushStep('读取文件', 'doing', file.name)
     let r = await readPackFile(file)

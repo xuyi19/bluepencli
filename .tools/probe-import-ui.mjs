@@ -267,6 +267,31 @@ try {
   ok('导入的题已从 questions 表移除', r4.bpqLeft === 0, `剩余 ${r4.bpqLeft} 道`)
   ok('批次记录也已删除', r4.batches === 0, `剩余 ${r4.batches} 条`)
 
+  console.log('\n⑤ 批量导入两个包（C3）')
+  const pack2 = { ...pack, exams: [{ ...pack.exams[0], id: 'probe-2024-yi', paper: '乙级' }] }
+  pack2.checksum = packChecksum(pack2)
+  const r5 = await evaluate(`(async function(){
+    const P1 = ${JSON.stringify(packJson)};
+    const P2 = ${JSON.stringify(JSON.stringify(pack2))};
+    const dt = new DataTransfer();
+    dt.items.add(new File([P1], 'batch-a.bpq', { type: 'application/json' }));
+    dt.items.add(new File([P2], 'batch-b.bpq', { type: 'application/json' }));
+    window.dispatchEvent(new DragEvent('drop', { dataTransfer: dt, bubbles: true, cancelable: true }));
+    await new Promise(function(r){ setTimeout(r, 4500); });
+    const panel = Array.prototype.find.call(document.querySelectorAll('div'), function(d){
+      return d.textContent.indexOf('批量导入结果') >= 0;
+    });
+    const btn = document.getElementById('btn-my-lib');
+    return {
+      panel: panel ? panel.innerText.replace(/\\n+/g, ' | ') : 'MISSING',
+      libBtn: btn ? btn.textContent.replace(/\\s+/g, ' ').trim() : 'MISSING',
+    };
+  })()`)
+  ok('批量回显按文件分组', /batch-a\.bpq/.test(r5.panel) && /batch-b\.bpq/.test(r5.panel))
+  ok('批量结果如实汇报成功数', /成功 2 个/.test(r5.panel), r5.panel.slice(0, 120))
+  // 按钮文案会随面板开合在「我的题库 N」/「收起 N」之间变，只断言末尾的计数
+  ok('两个包各记一个批次（我的题库计数 2）', /2\s*$/.test(r5.libBtn.trim()), r5.libBtn)
+
   const real = errors.filter((l) => !/\[vite\]|websocket|Uncaught \(in promise\)|Failed to load resource/i.test(l))
   console.log(`\n页面报错：${real.length ? real.slice(0, 5).join(' | ') : '（无）'}`)
   console.log(`\n导入 UI 探针：${pass} passed, ${fail} failed`)

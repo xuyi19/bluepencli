@@ -60,6 +60,7 @@ export function buildReviewCard(record, { topN = 3 } = {}) {
     consensusMeaningful: results.length >= 2,
     annotationTotal: 0,
     deductionTotal: 0,
+    highlightTotal: 0,
     categories: [],
   }
 
@@ -71,6 +72,7 @@ export function buildReviewCard(record, { topN = 3 } = {}) {
         : '这份记录里没有批改结果',
       topFixes: [],
       checklist: [],
+      strengths: [],
       stats,
     }
   }
@@ -129,6 +131,53 @@ export function buildReviewCard(record, { topN = 3 } = {}) {
     }
   }
 
+  // ── 做得好：复盘卡的另一半 ──────────────────────────────────
+  // 两处来源，**按优先级取一处、不合并**：
+  //   ① 合议综合的 highlights（record.highlights）—— 已从各位老师那里综合过，最完整；
+  //   ② 老师个人写的 highlights（只有部分老师/模式下才输出这个字段，见 skills.js 的 hasHighlights）。
+  // 为什么不合并：合议那几条本就源自老师，两边都收会让同一条列两遍，
+  // 读者会当成两件不同的好事。
+  //
+  // ⚠️ 绝不从"没被批评"反推"做得好"（没测到 ≠ 测到了，本项目反复复发的病根）；
+  //    也不拿"得分率高的分项"充数：那是模型自评，不构成"具体做对了什么"。
+  const strengths = []
+  const addStrength = (text, why, teacher) => {
+    const txt = String(text || '').trim()
+    if (!txt) return
+    const hit = strengths.find((s) => s.text === txt)
+    if (hit) {
+      if (teacher && !hit.teachers.includes(teacher)) hit.teachers.push(teacher)
+      if (!hit.why && why) hit.why = String(why).trim()
+      return
+    }
+    strengths.push({ text: txt, why: String(why || '').trim(), teachers: teacher ? [teacher] : [] })
+  }
+
+  // ⚠️ 两种形态都要认（踩过，且不报错）：
+  //   · 结果页传的是 orchestrator 的 report  → highlights 在 **final** 里；
+  //   · 记录页/统计页传的是 buildRecord 的结果 → highlights 已被提到**顶层**。
+  //   只认一种，"做得好"在那一侧就永远是空的，还查不出原因。
+  const finalHighlights = record?.highlights || record?.final?.highlights || []
+  for (const h of finalHighlights) {
+    stats.highlightTotal += 1
+    addStrength(h?.point || h?.text, h?.why)
+  }
+  if (!strengths.length) {
+    for (const r of results) {
+      for (const h of r.highlights || []) {
+        stats.highlightTotal += 1
+        addStrength(h?.point || h?.text, h?.why, r?.teacherId)
+      }
+    }
+  }
+  const strengthList = strengths.map((s) => ({
+    text: s.text,
+    why: s.why,
+    teachers: s.teachers,
+    // 只有"老师各自独立写了同一条"才谈得上共识；合议综合来的没有归属，一律不标
+    consensus: stats.consensusMeaningful && s.teachers.length >= 2,
+  }))
+
   const all = [...bucket.values()].map((b) => ({
     ...b,
     teacherCount: b.teachers.size,
@@ -175,7 +224,14 @@ export function buildReviewCard(record, { topN = 3 } = {}) {
     .filter((f) => f.selfCheck)
     .map((f) => ({ categoryId: f.categoryId, label: f.label, hint: f.selfCheck }))
 
-  return { ok: topFixes.length > 0, reason: topFixes.length ? '' : '这次没批出可归类的具体问题', topFixes, checklist, stats }
+  return {
+    ok: topFixes.length > 0,
+    reason: topFixes.length ? '' : '这次没批出可归类的具体问题',
+    topFixes,
+    checklist,
+    strengths: strengthList,   // 「做得好」：只含老师明确写出的肯定，可能为空数组
+    stats,
+  }
 }
 
 /**

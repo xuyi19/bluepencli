@@ -233,6 +233,93 @@ const oneRecord = buildWeaknessProfile([mk('p1', ['要点遗漏'])])
 check('只有一份记录时 enough=false（不能就说"你的短板是…"）', oneRecord.enough === false)
 check('记录够时才敢下结论', profile.enough === true)
 
+// ── 六、做得好：只采信老师明确写出的肯定 ────────────────────
+// 这一节的要害是**不许无中生有**：
+//   · 老师没写 highlights 就是没有 —— 不许从"没被批评"反推"做得好"（没测到 ≠ 测到了）；
+//   · 也不许拿"得分率高的分项"充数：那是模型自评，不构成"具体做对了什么"。
+const recWithGood = {
+  id: 'r-good',
+  results: [
+    {
+      teacherId: 'yuandong',
+      annotations: [],
+      deductions: [],
+      highlights: [{ point: '开篇点题干脆', why: '阅卷人一眼就知道你要答什么' }],
+    },
+    {
+      teacherId: 'zhoutairan',
+      annotations: [],
+      deductions: [],
+      highlights: [{ point: '开篇点题干脆', why: '开门见山' }],
+    },
+  ],
+}
+const cardGood = buildReviewCard(recWithGood)
+check('老师写的亮点进了复盘卡', cardGood.strengths.length >= 1, cardGood.strengths.map((s) => s.text).join('；'))
+check('亮点带回「为什么好」', cardGood.strengths.every((s) => s.why), cardGood.strengths[0]?.why)
+check('多位老师写同一条 → 合并为一条并标共识',
+  cardGood.strengths.length === 1 && cardGood.strengths[0].consensus === true,
+  `条数=${cardGood.strengths.length} consensus=${cardGood.strengths[0]?.consensus}`)
+check('stats 记下亮点总数', cardGood.stats.highlightTotal === 2, String(cardGood.stats.highlightTotal))
+
+const cardNone = buildReviewCard({
+  id: 'r-none',
+  results: [
+    {
+      teacherId: 'yuandong',
+      annotations: [{ quote: '这一句写得比较空', type: 'empty-talk', comment: 'x', fix: 'y' }],
+      deductions: [{ point: '空话套话', score: 2 }],
+    },
+  ],
+})
+check('老师没写亮点 → strengths 是空数组（绝不从"没被批评"反推做得好）',
+  Array.isArray(cardNone.strengths) && cardNone.strengths.length === 0)
+check('没有亮点但有问题 → 复盘卡主体照常可用', cardNone.ok === true && cardNone.topFixes.length >= 1)
+
+const cardSolo = buildReviewCard({
+  id: 'r-solo',
+  results: [{ teacherId: 'yuandong', annotations: [], deductions: [], highlights: [{ point: '结构清晰', why: 'x' }] }],
+})
+check('单人模式下亮点不打「多位老师都提到」（不许谎称共识）',
+  cardSolo.strengths.length === 1 && cardSolo.strengths[0].consensus === false)
+
+check('脏数据（highlights 缺 point 或全空白）被跳过，不产生空白行',
+  buildReviewCard({
+    id: 'r-dirty',
+    results: [
+      { teacherId: 'a', annotations: [], deductions: [], highlights: [{ why: '没有 point' }, { point: '   ' }] },
+    ],
+  }).strengths.length === 0)
+
+check('没有批改结果时不崩，且 strengths 为空',
+  buildReviewCard({ id: 'r-empty', results: [] }).strengths.length === 0)
+
+// 合议综合的 highlights 是主来源：多数老师根本不输出这个字段（契约里是条件性的），
+// 只从老师那头取会得到"永远没有亮点"——这是第一版踩到的坑。
+check('合议综合的亮点能取到（老师个人没写时唯一的来源）',
+  buildReviewCard({
+    id: 'r-final',
+    results: [{ teacherId: 'a', annotations: [], deductions: [] }],
+    highlights: [{ point: '开头引用贴切', why: '入题自然' }],
+  }).strengths.length === 1)
+check('合议与老师都写了同一条时不重复列（合议本就综合自老师）',
+  buildReviewCard({
+    id: 'r-dedup',
+    results: [
+      { teacherId: 'a', annotations: [], deductions: [], highlights: [{ point: '开头引用贴切', why: 'x' }] },
+    ],
+    highlights: [{ point: '开头引用贴切', why: 'y' }],
+  }).strengths.length === 1)
+
+// 结果页传的是 orchestrator 的 report（highlights 在 final 里），记录页传的是 buildRecord
+// 的结果（highlights 在顶层）。只认一种，"做得好"在那一侧就永远是空的 —— 且不报错。
+check('结果页形态（highlights 在 final 里）也能取到',
+  buildReviewCard({
+    id: 'r-report',
+    results: [{ teacherId: 'a', annotations: [], deductions: [] }],
+    final: { highlights: [{ point: '分论点排布清楚', why: '一眼能跟上' }] },
+  }).strengths.length === 1)
+
 // ── 收尾 ─────────────────────────────────────────────────
 console.log('')
 const failed = results.filter((r) => !r.ok)

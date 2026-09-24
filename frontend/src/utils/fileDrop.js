@@ -26,7 +26,8 @@ import { onBeforeUnmount, onMounted, ref } from 'vue'
  * 把「拖文件到窗口」变成回调。返回的 dragging 可直接绑到提示层的显隐上。
  *
  * @param {object} opts
- * @param {(file: File) => void} opts.onFile 接住文件后的处理（只会在通过过滤时调用）
+ * @param {(file: File | File[]) => void} opts.onFile 接住文件后的处理（只会在通过过滤时调用；
+ *        一次拖入多个时收到数组）
  * @param {string[]} [opts.accept] 允许的扩展名（小写、带点），不传则不限制
  * @param {string} [opts.scope] 监听范围：'window'（默认）或具体元素的 ref
  * @returns {{ dragging: import('vue').Ref<boolean> }}
@@ -73,10 +74,11 @@ export function useFileDrop({ onFile, accept = null, scope = null } = {}) {
     e.preventDefault()                 // 阻止浏览器直接打开这个文件
     depth = 0
     dragging.value = false
-    const files = Array.from(e.dataTransfer?.files || [])
-    const hit = files.find(allowed)
-    // 拖了多个：只接第一个符合条件的。一次导一个包，避免一口气吞掉来源不明的文件。
-    if (hit) onFile(hit)
+    const files = Array.from(e.dataTransfer?.files || []).filter(allowed)
+    if (!files.length) return
+    // 支持一次拖入多个题库包（批量导入）；只接**符合扩展名**的，
+    // 混进来的其他文件一律忽略，免得用户以为随便丢个文件就能入库。
+    onFile(files.length === 1 ? files[0] : files)
   }
 
   function target() {
