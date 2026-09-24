@@ -303,9 +303,11 @@ console.log(`  ✓ 全字段样本渲染 ${pyFull.length} 字符`)
 console.log(`  ✓ 极简样本渲染 ${pyMin.length} 字符`)
 
 console.log('\n【Rust 侧（经真实接口）】')
-// spawn 前先查残留：桌面版有单实例锁 —— 如果已有 bluepencil.exe 活着，
-// 新 spawn 的会立刻退出，而 CDP 探测可能连上旧实例 → 测的不是自己起的那个
-// （假绿家族：它能过，但过的是别人的账）。宁可直接拒跑，也不测错对象。
+// spawn 前先查残留：桌面版有单实例锁（tauri_plugin_single_instance，按 identifier 互斥）。
+// ⚠️ 不能只查 bluepencil.exe 进程名：**发行版 exe 是中文名**（蓝笔申论-桌面版-vX.Y.Z.exe），
+//    作者本人开着软件时它就在跑——本测试照样会被单实例挡在门外。
+// 所以用**秒退检测**兜底（行为判据，不依赖进程名）：spawn 后 3 秒内 exit 0
+// = 单实例让路 = 有同 identifier 的实例在跑（多半是你自己开着软件）。
 {
   const { execFileSync } = await import('node:child_process')
   let existing = ''
@@ -327,6 +329,20 @@ const child = spawn(exe, [], {
   stdio: 'ignore',
   detached: false,
 })
+// 秒退检测：单实例互斥的第二实例会 exit 0 退出（实测被作者自己开着的软件坑过）
+const earlyExit = new Promise((resolve) => {
+  child.once('exit', (code) => resolve({ early: true, code }))
+  setTimeout(() => resolve({ early: false }), 3000)
+})
+const probe = await earlyExit
+if (probe.early) {
+  try {
+    child.kill('SIGKILL')
+  } catch {}
+  console.log('✗ 桌面版 exe 启动后 3 秒内退出（exit 0）—— 单实例锁让路：已有同 identifier 的实例在跑。')
+  console.log('  多半是你自己开着「蓝笔申论-桌面版」（或上次测试没杀干净）。关掉它再跑本测试。')
+  process.exit(1)
+}
 
 let page = null
 const deadline = Date.now() + 90000   // 编排环境（test-all）负载重时 WebView2 启动慢，40s 不够用

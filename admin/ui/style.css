@@ -90,6 +90,11 @@ legend { font-weight: 600; padding: 0 6px; }
   /* 固定高度：输出区高度稳定，工具区承担滚动。
      之前用 flex:1 时，参数区一高就把输出区压到只剩两行，看不到东西。 */
   flex: 0 0 220px;
+  /* ⚠️ 这两行是「输出一长控制台占满整屏」的修复：
+     flex item 默认 min-height:auto，长内容会把 220px 的 basis 撑爆
+     （且 shrink:0 不肯缩），把工具区挤到 0。打断它。 */
+  min-height: 0;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   padding: 12px 18px 0;
@@ -102,9 +107,11 @@ legend { font-weight: 600; padding: 0 6px; }
   margin-bottom: 6px;
 }
 .console-head button { padding: 2px 10px; font-size: 12px; }
+.console-btns { display: flex; gap: 6px; }
 #console {
   flex: 1;
   overflow: auto;
+  min-height: 0; /* console-wrap 里它也是 flex item，同样要能收缩 */
   margin: 0 0 10px;
   background: #10151d;
   color: #d7dde6;

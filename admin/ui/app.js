@@ -227,6 +227,21 @@ try {
   }, 600)
 }
 
+// ── 输出区高度切换：长输出（回归测试几十行）想多看就放大，选择持久化 ──
+const CONSOLE_SIZES = [220, 360, 560]
+let sizeIdx = CONSOLE_SIZES.indexOf(Number(localStorage.getItem('console_h')))
+if (sizeIdx < 0) sizeIdx = 0
+function applyConsoleSize() {
+  document.querySelector('.console-wrap').style.flexBasis = CONSOLE_SIZES[sizeIdx] + 'px'
+  localStorage.setItem('console_h', String(CONSOLE_SIZES[sizeIdx]))
+  $('btn-size').textContent = `高度 ${CONSOLE_SIZES[sizeIdx]}`
+}
+$('btn-size').onclick = () => {
+  sizeIdx = (sizeIdx + 1) % CONSOLE_SIZES.length
+  applyConsoleSize()
+}
+applyConsoleSize()
+
 // ── 仓库根 ──
 async function detectRoot() {
   try {

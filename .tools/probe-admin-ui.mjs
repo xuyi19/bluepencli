@@ -225,6 +225,25 @@ if (arg('shot')) {
   console.log(`\n截图：${arg('shot')}`)
 }
 
+// ⑦ 长输出压力测试：灌 3000 行后，输出区必须还锁在设定高度、工具区必须还可见
+// （曾因 flex item 缺 min-height:0，长输出把 220px 的输出区撑爆、工具区被挤到 0）
+if (arg('flood')) {
+  const m = await evaluate(`(function(){
+    const c = document.getElementById('console');
+    const lines = [];
+    for (let i = 1; i <= 3000; i++) lines.push('第 ' + i + ' 行：模拟一键回归测试的长输出内容，足够长足够长足够长足够长足够长');
+    c.textContent = lines.join('\\n');
+    const r = (el) => el.getBoundingClientRect().height;
+    return {
+      wrapH: r(document.querySelector('.console-wrap')),
+      mainH: r(document.querySelector('main')),
+      bodyH: r(document.body),
+    };
+  })()`)
+  ok('长输出不撑爆输出区', m.wrapH < 240, `输出区 ${Math.round(m.wrapH)}px（设定 220）`)
+  ok('长输出不挤没工具区', m.mainH > 150, `工具区 ${Math.round(m.mainH)}px`)
+}
+
 console.log(`\n② 控制台尾部：\n${consoleText.split('\n').slice(-5).join('\n')}`)
 console.log(`\n④ python 解析：${(pyText.match(/PYEXE=\S+/) || ['(无)'])[0]}`)
 console.log(`\n管理员端功能探针：${pass} passed, ${fail} failed`)

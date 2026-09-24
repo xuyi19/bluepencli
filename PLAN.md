@@ -190,6 +190,8 @@
             —— `--list` 覆盖盘点（196 题 / 有标准几道 / 缺哪些，按来源分）
             / `--check` 校验（权重合计 vs 题分、id 唯一、字段齐全）
             / `--wizard <题id>` 交互录入采分点（预填现有、写前备份）
+            / `--draft <题id>` 材料预解析草稿（纯本地启发式：做法句/问题句双信号词
+            打分排序，材料分块复用练习页的 splitMaterialBlocks 同源解析，不调 LLM）
             产出写 frontend/src/data/standards/manual.json，由 index.js 以人工最高优先级合并
             （不动 public.js/generated.js 源文件）；向导拒绝非交互终端（管道下会静默挂住）
 - [ ] 省考题型模板

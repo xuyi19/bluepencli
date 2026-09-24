@@ -9,6 +9,7 @@
 //   node .tools/standards/calibrate.mjs --list          # 覆盖盘点：谁有标准、来源、缺哪些
 //   node .tools/standards/calibrate.mjs --check         # 校验全部标准（分值/结构）
 //   node .tools/standards/calibrate.mjs --wizard <id>   # 交互录入/修订一题的采分点
+//   node .tools/standards/calibrate.mjs --draft <id>    # 从材料预解析采分点草稿（录入前参考）
 //
 // 产出写入 frontend/src/data/standards/manual.json（由 index.js 以最高人工优先级合并）。
 // **不动 public.js / generated.js 这两个源文件** —— 手改对象字面量容易写坏，
@@ -183,15 +184,100 @@ async function cmdWizard(id) {
   console.log('  备份：manual.bak-<日期>.json ｜ 生效：重跑前端即可（index.js 里 manual 优先级最高）')
 }
 
+// ── ④ 预解析草稿：从材料启发式挑「要点句」，给 --wizard 录入当底稿 ──
+// 纯本地启发式（不调 LLM 不花钱）：对策动词命中 + 长度适中 + 数字/引号词加分。
+// 草稿只是候选清单，采分点最终以人工判断为准。
+async function cmdDraft(id) {
+  const { splitMaterialBlocks } = await import(
+    pathToFileURL(path.join(ROOT, 'frontend/src/utils/grading/materialTrim.js')).href
+  )
+  const qs = await questionIndex()
+  const q = qs.find((x) => x.id === id)
+  if (!q) {
+    console.error(`✗ 题库里没有题目 ${id}。用 --list 看缺哪些。`)
+    process.exit(1)
+  }
+
+  // 拿整卷材料与题干预求：real 卷从 exam 文件、仿真题从题自带
+  let material = ''
+  let stem = String(q.title || '')
+  if (q.id.startsWith('real-')) {
+    const examId = q.id.slice(5, q.id.lastIndexOf('-'))
+    const no = q.id.slice(q.id.lastIndexOf('-') + 1)
+    const exam = await import(pathToFileURL(path.join(ROOT, `frontend/src/data/real-exams/exam-${examId}.js`)).href)
+    material = exam.default.material || ''
+    const qq = (exam.default.questions || []).find((x) => String(x.no) === no)
+    if (qq) stem = qq.stem || stem
+  } else if (q.id.startsWith('builtin-')) {
+    const { BUILTIN_QUESTIONS } = await import(pathToFileURL(path.join(ROOT, 'frontend/src/data/builtin-questions.js')).href)
+    const b = BUILTIN_QUESTIONS.find((x) => x.id === q.id.slice(8))
+    material = b?.material || ''
+    stem = b?.stem || stem
+  }
+  if (!material) {
+    console.log('该题没有可解析的材料（或材料需在练习页载入）。')
+    return
+  }
+
+  // 启发式打分：对策动词与问题信号词都是采分点的强信号
+  // （对策型题抓"做法句"，梳理问题/概括类题抓"问题句"——两类都要进候选）
+  const ACTION = /(建立|开展|推进|完善|落实|加强|提升|推动|实施|打造|构建|健全|强化|优化|推广|整合|培育|鼓励|引导|支持|探索|创新|示范|规范|考核|监督|出台|设立|纳入|组织|培训|宣传)/
+  const PROBLEM = /(缺乏|不足|不到位|不规范|不完善|隐患|矛盾|困难|薄弱|缺失|滞后|占用|损坏|随意|混乱|投诉|反映|狭窄|拥堵)/
+  const NUM = /[0-9０-９]|百分之|比例|人次|万元/
+  const QUOTED = /[「『"][^」』"]{2,12}[」』"]/
+
+  let blocks = []
+  try {
+    blocks = splitMaterialBlocks(material) // [{label, text}]，与练习页裁剪同源
+  } catch {
+    blocks = [{ label: '材料', text: material }]
+  }
+
+  const cands = []
+  for (const b of blocks) {
+    const sentences = String(b.body || b.text)
+      .split(/(?<=[。；;！？])/)
+      .map((s) => s.trim())
+      .filter((s) => s.length >= 12 && s.length <= 80)
+    for (const s of sentences) {
+      let score = 0
+      const kind = []
+      const acts = s.match(new RegExp(ACTION.source, 'g'))
+      if (acts) { score += acts.length * 2; kind.push('做法') }
+      const probs = s.match(new RegExp(PROBLEM.source, 'g'))
+      if (probs) { score += probs.length * 2; kind.push('问题') }
+      if (NUM.test(s)) score += 1
+      if (QUOTED.test(s)) score += 1
+      if (score >= 3) cands.push({ label: b.label || '材料', text: s, score, kind: kind.join('/') })
+    }
+  }
+  cands.sort((a, b) => b.score - a.score)
+
+  console.log(`\n预解析草稿：${id}`)
+  console.log(`题干：${stem.slice(0, 80)}`)
+  if (!cands.length) {
+    console.log('（材料里没找到明显的做法/问题句 —— 对照材料逐段手工归纳）')
+    return
+  }
+  console.log(`候选要点句 ${cands.length} 条，按信号强度排序（前 12 条）：\n`)
+  for (const c of cands.slice(0, 12)) {
+    console.log(`  [${c.label}·${c.kind}] ${c.text}`)
+  }
+  console.log(`\n以上是**候选**，不是答案 —— 对照题干问什么，删掉不相关的，再进向导录：`)
+  console.log(`  node .tools/standards/calibrate.mjs --wizard ${id}`)
+}
+
 // ── main ──
 if (flag('list') >= 0) await cmdList()
 else if (flag('check') >= 0) cmdCheck()
 else if (flag('wizard') >= 0) await cmdWizard(val('wizard'))
+else if (flag('draft') >= 0) await cmdDraft(val('draft'))
 else {
   console.log(`用法：
-  node .tools/standards/calibrate.mjs --list           # 覆盖盘点
-  node .tools/standards/calibrate.mjs --check          # 校验全部标准
-  node .tools/standards/calibrate.mjs --wizard <题目id> # 交互录入采分点
+  node .tools/standards/calibrate.mjs --list            # 覆盖盘点
+  node .tools/standards/calibrate.mjs --check           # 校验全部标准
+  node .tools/standards/calibrate.mjs --draft <题目id>   # 材料预解析草稿（不花钱）
+  node .tools/standards/calibrate.mjs --wizard <题目id>  # 交互录入采分点
 
 ⚠️ 本工具写的是**公开库**标准（≤2021 与仿真题）。私有卷（≥2022）的标准走 standards-private/。`)
 }
