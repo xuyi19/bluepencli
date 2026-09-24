@@ -1,12 +1,47 @@
 <template>
   <div class="w-full max-w-6xl">
 
-    <section class="mb-8">
-      <h1 class="font-serif text-2xl font-semibold text-c-ink">蓝笔申论</h1>
-      <p class="text-sm text-c-muted mt-2 leading-6">
-        每日一练 → 五位老师按申论标准批改 → 记录归档到本机 docs，随时复盘<br />
-        所有数据存在本机，只有批改那一刻才联网
+    <!-- 首屏 hero：一句话说清这个工具和别的 AI 批改的分界（不是多一层包装，是模拟一场阅卷）。
+         按钮三个：主行动（开始批改）/ 使用文档（新用户第一步）/ 题库（老用户找题）。 -->
+    <section class="mb-10">
+      <div class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full neu-sm text-xs text-c-muted mb-5">
+        <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+          <circle cx="9" cy="8" r="3.2" /><circle cx="16.5" cy="9.5" r="2.6" />
+          <path d="M3 19c0-3.2 2.7-5 6-5s6 1.8 6 5" /><path d="M16.5 14.5c2.6.2 4.5 1.8 4.5 4.5" />
+        </svg>
+        五位老师圆桌合议 · 数据存本机 · 无需注册
+      </div>
+      <h1 class="font-serif text-4xl md:text-5xl font-semibold text-c-ink leading-tight tracking-tight">
+        申论批改，<br />
+        <span class="text-c-bark">不该只有一个分数</span>
+      </h1>
+      <p class="text-sm md:text-base text-c-muted mt-4 leading-7 max-w-xl">
+        五位申论老师各按自己的方法论独立阅卷，分数会真的分歧——分歧自动复核、圆桌合议；
+        采分点锚点与纯代码校验兜底，每个分数都给得出依据。
       </p>
+      <div class="flex flex-wrap items-center gap-3 mt-7">
+        <RouterLink to="/practice"
+          class="px-6 py-3 rounded-full text-sm font-medium text-c-cream bg-c-bark
+            shadow-[0_4px_14px_rgba(92,64,51,0.28)] hover:translate-y-px transition-all duration-300">
+          开始批改
+        </RouterLink>
+        <RouterLink to="/guide"
+          class="inline-flex items-center gap-1.5 px-5 py-3 rounded-full text-sm font-medium text-c-body
+            neu-sm hover:text-c-bark hover:translate-y-px transition-all duration-300">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M4 19.5A2.5 2.5 0 016.5 17H20" />
+            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z" />
+            <path d="M9 7h7M9 11h5" />
+          </svg>
+          使用文档
+        </RouterLink>
+        <RouterLink to="/questions"
+          class="px-5 py-3 rounded-full text-sm text-c-muted hover:text-c-bark transition-colors duration-300">
+          去题库挑题 →
+        </RouterLink>
+      </div>
     </section>
 
     <!-- 今日一练：首页最显眼的位置，进来就能开始 -->

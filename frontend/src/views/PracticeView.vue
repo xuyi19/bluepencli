@@ -149,7 +149,10 @@
       <!-- 给定资料 + 题目：并排，仿考场卷面 -->
       <!-- 上排定高：材料在面板内滚、作答区位置就稳定不动（材料长度变化不再顶跑下方内容）；
            高度吃掉视口剩余空间——空地铺满，而不是留一截白 -->
-      <div class="grid grid-cols-1 lg:grid-cols-7 gap-6 mb-6 lg:h-[calc(100vh-330px)] lg:min-h-[480px]">
+      <!-- ⚠️ lg:grid-rows-[minmax(0,1fr)] 不是装饰：grid 行轨道默认 auto，会被长材料
+           撑高（容器设了 height 也拦不住，轨道溢出容器），材料直接画出面板、
+           叠到下方作答区上，sticky 提交条悬在材料中间 —— 内滚链条在这一环断掉。 -->
+      <div class="grid grid-cols-1 lg:grid-cols-7 lg:grid-rows-[minmax(0,1fr)] gap-6 mb-6 lg:h-[calc(100vh-330px)] lg:min-h-[480px]">
 
         <!-- 左：给定资料（材料才是大头，占 5/7） -->
         <section class="lg:col-span-5 rounded-2xl p-5 neu flex flex-col lg:min-h-0">
@@ -195,8 +198,11 @@
             </div>
           </div>
 
-          <!-- 有材料：阅读态（默认）/ 编辑态 -->
-          <div v-else-if="form.material" class="flex-1 min-h-0">
+          <!-- 有材料：阅读态（默认）/ 编辑态。
+               ⚠️ 这层必须是 flex flex-col：里面的滚动容器靠 flex-1 min-h-0 拿高度，
+               父级不是 flex 的话 flex-1 无效 → 容器高度=内容高度，长材料直接
+               溢出面板、叠到下方作答区上（宽屏 lg 下 max-h 兜底也被关掉，必现）。 -->
+          <div v-else-if="form.material" class="flex-1 min-h-0 flex flex-col">
             <!-- 说明条要跟**当前用的是哪一份**走：
                  说"已省去 N 则"却在显示整卷，会让人看不懂到底用了什么（真踩过）。 -->
             <div v-if="trimState.trimmed"

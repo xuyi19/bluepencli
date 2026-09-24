@@ -40,6 +40,7 @@ import StatsView from '../views/StatsView.vue'
 import WeaknessView from '../views/WeaknessView.vue'
 import SettingsView from '../views/SettingsView.vue'
 import ChangelogView from '../views/ChangelogView.vue'
+import GuideView from '../views/GuideView.vue'
 
 export default createRouter({
   // hash 模式：打包成单文件后，用 file:// 双击打开也不会白屏
@@ -61,5 +62,6 @@ export default createRouter({
     { path: '/weakness', name: 'weakness', component: WeaknessView },
     { path: '/settings', name: 'settings', component: SettingsView },
     { path: '/changelog', name: 'changelog', component: ChangelogView },
+    { path: '/guide', name: 'guide', component: GuideView },
   ],
 })

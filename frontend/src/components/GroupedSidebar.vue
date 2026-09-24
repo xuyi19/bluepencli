@@ -1,47 +1,57 @@
 <template>
   <div class="h-full flex flex-col">
 
-    <!-- Logo 区：印章 + 纸背层次，撑起"这是一支写申论的笔"的辨识度。
-         高度压紧——侧栏要在常规视口里一屏放下全部入口，不让导航滚动 -->
+    <!-- Logo 区：印章 + 纸背层次。图标是一枚「笔尖」——blue pencil 的那支笔：
+         校对、批注、评阅文稿，比一个「笔」字更有辨识度。
+         版本徽章挂在标题行右端，副标题独占一行不折行（曾因太长把「五位老师」折成两行）。 -->
     <RouterLink to="/" class="block px-4 pt-4 pb-3 shrink-0 border-b border-c-line group">
-      <div class="flex items-center gap-2.5">
+      <div class="flex items-center gap-3">
         <!-- 印章：后面垫一张微旋的纸，做出叠纸的厚度感 -->
-        <div class="relative w-10 h-10 shrink-0">
-          <div class="absolute inset-0 rounded-[0.95rem] bg-c-barkSoft rotate-6
+        <div class="relative w-11 h-11 shrink-0">
+          <div class="absolute inset-0 rounded-[1rem] bg-c-barkSoft rotate-6
             transition-transform duration-500 ease-in-out group-hover:rotate-12" />
-          <div class="relative w-10 h-10 rounded-[0.95rem] bg-c-bark
+          <div class="relative w-11 h-11 rounded-[1rem] bg-c-bark
             flex items-center justify-center text-c-cream
-            font-serif text-lg leading-none ring-1 ring-white/20
-            shadow-[0_3px_10px_rgba(92,64,51,0.22)]">
-            笔
+            ring-1 ring-white/20 shadow-[0_3px_10px_rgba(92,64,51,0.22)]">
+            <!-- 笔尖：叶形 nib + 中缝 + 蓄墨孔 -->
+            <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 2.5c3.2 2.9 5.5 6.1 5.5 9.5 0 3.6-2.2 6.9-5.5 9.5-3.3-2.6-5.5-5.9-5.5-9.5 0-3.4 2.3-6.6 5.5-9.5z" />
+              <path d="M12 8v6" />
+              <circle cx="12" cy="17" r="1.3" />
+            </svg>
           </div>
         </div>
 
         <div class="min-w-0 flex-1">
-          <div class="font-serif font-semibold text-base text-c-ink leading-tight tracking-tight">
-            蓝笔申论
+          <div class="flex items-baseline justify-between gap-2">
+            <div class="font-serif font-semibold text-lg text-c-ink leading-tight tracking-tight">
+              蓝笔申论
+            </div>
+            <span class="tnum text-[10px] px-1.5 rounded-full bg-c-barkSoft text-c-bark leading-4 shrink-0">
+              v{{ version }}
+            </span>
           </div>
-          <div class="text-[11px] text-c-muted mt-0.5 flex items-center gap-1.5">
-            <span class="tnum px-1.5 rounded-full bg-c-barkSoft text-c-bark leading-4">v{{ version }}</span>
-            <span>本地存储 · 五位老师</span>
-          </div>
+          <div class="text-[11px] text-c-muted mt-0.5 whitespace-nowrap">五位老师 · 圆桌合议</div>
         </div>
       </div>
     </RouterLink>
 
-    <!-- 分组导航：group 为空串的条目不带组头（首页是入口不是分类） -->
-    <nav class="flex-1 overflow-y-auto px-3 py-3 space-y-3">
+    <!-- 分组导航：group 为空串的条目不带组头（首页是入口不是分类）。
+         字号 14px / 行高 py-2：侧栏是全程盯着的面板，字太小人累；
+         12 项 + 组头在一屏内放得下，overflow-y-auto 只做小屏兜底。 -->
+    <nav class="flex-1 overflow-y-auto px-3 py-3 space-y-2.5">
       <div v-for="g in groups" :key="g.title || '_top'">
         <div v-if="g.title" class="px-3 mb-1 text-[11px] font-medium text-c-muted tracking-widest">{{ g.title }}</div>
         <div class="space-y-0.5">
           <RouterLink v-for="item in g.items" :key="item.path" :to="item.path"
             @click="emit('navigate')"
-            class="flex items-center gap-2 px-3 py-1.5 rounded-xl text-[13px]
+            class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm
               transition-colors duration-300 ease-in-out"
             :class="isActive(item.path)
               ? 'bg-c-barkSoft text-c-bark font-medium'
               : 'text-c-body hover:bg-c-barkSoft/60'">
-            <svg class="w-[15px] h-[15px] shrink-0 opacity-70" viewBox="0 0 24 24" fill="none"
+            <svg class="w-[17px] h-[17px] shrink-0 opacity-70" viewBox="0 0 24 24" fill="none"
               stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"
               aria-hidden="true" v-html="iconOf(item.path)" />
             <span>{{ item.label }}</span>
@@ -98,12 +108,12 @@
 
       <RouterLink to="/settings"
         @click="emit('navigate')"
-        class="flex items-center gap-3 px-3 py-2 rounded-xl text-[13px]
+        class="flex items-center gap-3 px-3 py-2 rounded-xl text-sm
           transition-colors duration-300 ease-in-out"
         :class="route.path.startsWith('/settings')
           ? 'bg-c-barkSoft text-c-bark font-medium'
           : 'text-c-body hover:bg-c-barkSoft/60'">
-        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+        <svg class="w-[17px] h-[17px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
           <circle cx="12" cy="12" r="3" />
           <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09A1.65 1.65 0 008 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 003.68 15a1.65 1.65 0 00-1.51-1H2a2 2 0 110-4h.09A1.65 1.65 0 003.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z" />
         </svg>
