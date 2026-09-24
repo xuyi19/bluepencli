@@ -268,11 +268,9 @@
               placeholder="把材料原样粘进来（材料 1、材料 2……）"
               class="w-full h-full px-3.5 py-2.5 rounded-xl text-xs neu-inset outline-none resize-none
                 text-c-body placeholder:text-c-muted leading-7" />
-            <div v-else class="max-h-[26rem] overflow-y-auto space-y-3.5 pr-1">
-              <div v-for="(b, i) in materialBlocks(form.material)" :key="i">
-                <div v-if="b.label" class="text-xs font-medium text-c-bark mb-1">{{ b.label }}</div>
-                <p class="text-sm text-c-body leading-7 whitespace-pre-wrap">{{ b.body }}</p>
-              </div>
+            <div v-else class="max-h-[26rem] overflow-y-auto pr-1">
+              <Highlightable :blocks="materialBlocks(form.material)" :marks="marks.material"
+                @change="(l) => onMarksChange('material', l)" class="space-y-3.5" />
             </div>
           </div>
 
@@ -343,16 +341,38 @@
         </section>
       </div>
 
-      <!-- 我的作答：方格纸，仿考场卷面 -->
+      <!-- 我的作答：方格纸，仿考场卷面；标注态可划荧光（编辑/标注两态切换，输入体验不动） -->
       <section class="rounded-2xl p-5 neu mb-6">
         <div class="flex items-center justify-between mb-3">
           <span class="text-sm font-medium text-c-body">我的作答</span>
-          <span v-if="overLimit" class="text-xs tnum text-[#b4552d]">
-            超出 {{ countChars(form.answer) - form.wordLimit }} 字
-          </span>
+          <div class="flex items-center gap-3">
+            <span v-if="markCount" class="text-xs text-c-muted tnum">已标 {{ markCount }} 处</span>
+            <span v-if="overLimit" class="text-xs tnum text-[#b4552d]">
+              超出 {{ countChars(form.answer) - form.wordLimit }} 字
+            </span>
+          </div>
         </div>
         <div class="mx-auto w-full max-w-[760px]">
-          <GridPaper v-model="form.answer" :word-limit="form.wordLimit || 0" />
+          <div v-if="!answerMarkMode" class="mb-1.5 flex justify-end">
+            <button @click="answerMarkMode = form.answer.trim() ? true : answerMarkMode"
+              :disabled="!form.answer.trim()" :title="form.answer.trim() ? '用荧光笔圈出关键词、关键句（不影响作答）' : '先写点内容再标注'"
+              class="text-xs text-c-muted hover:text-c-bark underline underline-offset-2 transition-colors disabled:opacity-40 disabled:no-underline disabled:cursor-not-allowed">
+              🖍️ 荧光标注
+            </button>
+          </div>
+          <GridPaper v-if="!answerMarkMode" v-model="form.answer" :word-limit="form.wordLimit || 0" />
+          <div v-else>
+            <div class="mb-1.5 flex items-center justify-between text-xs text-c-muted">
+              <span>选中文字后选颜色划荧光；标记存在本机，下次打开还在，批改不受影响</span>
+              <button @click="answerMarkMode = false"
+                class="underline underline-offset-2 text-c-muted hover:text-c-bark transition-colors shrink-0 ml-3">
+                返回编辑
+              </button>
+            </div>
+            <Highlightable :blocks="[{ body: form.answer }]" :marks="marks.answer"
+              @change="(l) => onMarksChange('answer', l)"
+              class="rounded-xl neu-inset px-3.5 py-2.5 max-h-[32rem] overflow-y-auto" />
+          </div>
         </div>
       </section>
 
@@ -568,7 +588,7 @@
           <span class="text-sm font-medium text-c-body">我的作答 · 老师批注</span>
           <span class="text-xs text-c-muted">不同老师用不同颜色</span>
         </div>
-        <AnnotatedAnswer :answer="form.answer" :results="report.results" />
+        <AnnotatedAnswer :answer="form.answer" :results="report.results" :highlights="marks.answer" />
       </section>
 
       <!-- 各老师：一张卡一位，左侧色条 -->
@@ -823,6 +843,7 @@ import { RouterLink, useRoute } from 'vue-router'
 import { toast } from '../utils/toast'
 import ScoreRing from '../components/ScoreRing.vue'
 import AnnotatedAnswer from '../components/AnnotatedAnswer.vue'
+import Highlightable from '../components/Highlightable.vue'
 import ReviewCard from '../components/ReviewCard.vue'
 import CredibilityCard from '../components/CredibilityCard.vue'
 import GridPaper from '../components/GridPaper.vue'
@@ -961,6 +982,40 @@ const loadedId = ref('')
 const loadedMeta = reactive({ type: '', exam: '', difficulty: 0, kind: '', topics: [] })
 const showPicker = ref(false)
 const materialEdit = ref(false)
+
+// ── 荧光标注（材料 + 作答）───────────────────────────────────
+// 存在 localStorage、按**题目**维度（不是按记录）：同一道题反复练，上次划的重点还在 ——
+// 划标记是"读题时的动作"，不该跟着某一次提交走。
+// ⚠️ 不写进批改记录，所以不涉及任何后端字段（也就不会踩 pydantic 静默丢字段的坑）。
+const marks = reactive({ material: [], answer: [] })
+const answerMarkMode = ref(false)   // 作答区：编辑态（textarea）/ 标注态（只读可划）
+
+function marksKey(qid) {
+  return `bp-marks:${qid || 'blank'}`
+}
+function loadMarks(qid) {
+  try {
+    const raw = JSON.parse(localStorage.getItem(marksKey(qid)) || '{}')
+    marks.material = Array.isArray(raw.material) ? raw.material : []
+    marks.answer = Array.isArray(raw.answer) ? raw.answer : []
+  } catch {
+    marks.material = []
+    marks.answer = []
+  }
+}
+function saveMarks(qid) {
+  try {
+    localStorage.setItem(marksKey(qid), JSON.stringify({ material: marks.material, answer: marks.answer }))
+  } catch {
+    /* 存不下就算了：标记是辅助功能，不该因为它让做题流程报错 */
+  }
+}
+function onMarksChange(which, list) {
+  marks[which] = list
+  saveMarks(loadedId.value)
+}
+/** 划了多少处（供工具条显示；0 时不显示那一行，别占地方） */
+const markCount = computed(() => (marks.material?.length || 0) + (marks.answer?.length || 0))
 const pickKeyword = ref('')
 
 let controller = null
@@ -1250,6 +1305,8 @@ async function applyQuestion(q, { resetAnswer = true } = {}) {
 
   showPicker.value = false
   materialEdit.value = false
+  answerMarkMode.value = false   // 换题回到编辑态
+  loadMarks(loadedId.value)      // 这道题上次划的重点还在
   resetExamTimer()   // 换题 = 换卷，考场计时重置
   nextTick(() => window.scrollTo({ top: 0, behavior: 'smooth' }))
 }
@@ -1279,6 +1336,9 @@ function startBlank() {
   form.questionType = ''
   form.answer = ''
   loadedId.value = ''
+  marks.material = []            // 空白题没有可标注的对象
+  marks.answer = []
+  answerMarkMode.value = false
   Object.assign(loadedMeta, { type: '', exam: '', difficulty: 0, kind: '', topics: [] })
   showPicker.value = false
   materialEdit.value = true

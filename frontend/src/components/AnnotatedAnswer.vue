@@ -1,13 +1,30 @@
 <template>
   <div>
-    <!-- 图例：谁标了什么颜色 -->
-    <div v-if="legend.length" class="flex flex-wrap items-center gap-x-4 gap-y-2 mb-3">
+    <!-- 图例：老师色 + 你自己划的荧光，两套必须分得清 -->
+    <div v-if="legend.length || highlightRanges.length"
+      class="flex flex-wrap items-center gap-x-4 gap-y-2 mb-3">
       <span v-for="l in legend" :key="l.id" class="inline-flex items-center gap-1.5 text-xs">
         <span class="w-2.5 h-2.5 rounded-full shrink-0" :style="{ background: l.color }" />
         <span class="text-c-body">{{ l.name }}</span>
         <span class="text-c-muted">{{ l.count }} 处</span>
       </span>
-      <span class="text-xs text-c-muted ml-auto">划色处悬停看批注</span>
+      <span v-if="highlightRanges.length" class="inline-flex items-center gap-1.5 text-xs">
+        <span class="w-2.5 h-2.5 rounded-sm shrink-0"
+          :style="{ background: colorById(highlightRanges[0].color).bg, border: '1px solid rgba(0,0,0,.08)' }" />
+        <span class="text-c-body">我的标注</span>
+        <span class="text-c-muted">{{ highlightRanges.length }} 处</span>
+      </span>
+      <span class="text-xs text-c-muted ml-auto">
+        背景色＝你自己划的 · 下划线＝老师的批注，悬停看详情
+      </span>
+    </div>
+
+    <!-- 荧光失效提示：作答被改过就会这样。如实说出来，别让用户以为"我没划上" -->
+    <div v-if="staleHighlights.length" class="mb-3 text-xs text-c-muted leading-6">
+      有 {{ staleHighlights.length }} 处荧光在当前作答里找不到（多半是那段话被改掉了）：
+      <span v-for="(h, i) in staleHighlights" :key="i"
+        class="inline-block mr-1.5 px-1.5 py-0.5 rounded"
+        :style="{ background: colorById(h.color).bg }">{{ h.text.slice(0, 10) }}{{ h.text.length > 10 ? '…' : '' }}</span>
     </div>
 
     <!-- 正文：保留原始换行，按老师颜色划色 -->
@@ -33,10 +50,14 @@
 <script setup>
 import { computed } from 'vue'
 import { TEACHERS } from '../agents/teachers'
+import { colorById, findRange, normalizeHighlight } from '../utils/highlight'
 
 const props = defineProps({
   answer: { type: String, default: '' },
   results: { type: Array, default: () => [] },
+  // 用户自己划的荧光（{ text, color, nth }）。它和老师的批注**叠加显示**：
+  // 荧光占背景、批注走下划线 —— 一眼能分出"我划的重点"与"老师指的问题"。
+  highlights: { type: Array, default: () => [] },
 })
 
 function metaOf(id) {
@@ -111,28 +132,64 @@ const legend = computed(() => {
 const unlocated = computed(() => marks.value.filter((m) => !m.located))
 
 /**
+ * 用户的荧光区间（已定位到答案原文的那部分）。
+ * ⚠️ 定位不到的**不在这里丢掉**：单独算出来给模板提示，否则用户会以为"我没划上"。
+ */
+const highlightRanges = computed(() => {
+  const answer = props.answer || ''
+  const out = []
+  for (const raw of props.highlights || []) {
+    const h = normalizeHighlight(raw)
+    if (!h) continue
+    const r = findRange(answer, h)
+    if (r) out.push({ start: r.start, end: r.end, color: h.color, text: h.text })
+  }
+  return out
+})
+
+/** 荧光里那些在当前答案文本中找不到的（作答改过就会这样）——要如实说，不能静默吞 */
+const staleHighlights = computed(() => {
+  if (!props.highlights?.length) return []
+  const answer = props.answer || ''
+  return props.highlights
+    .map((raw) => normalizeHighlight(raw))
+    .filter((h) => h && !findRange(answer, h))
+})
+
+/**
  * 一处的下划线样式。
  * 多位老师标同一句时，下划线按老师数量切成等分色段——
  * 比「只显示第一位老师的颜色」更能说明这里有分歧。
  */
 function segStyle(seg) {
   const cs = seg.colors?.length ? seg.colors : seg.color ? [seg.color] : []
-  if (!cs.length) return {}
+  const style = {}
 
-  const base = { backgroundColor: cs[0] + '16', paddingBottom: '1px' }
+  // 背景只有一层：用户划了荧光就用荧光色（那是他亲手标的）；
+  // 没有荧光时才退回老师批注的极浅底色 —— 两层半透明叠起来会脏，谁的颜色都认不出。
+  if (seg.highlight) style.backgroundColor = colorById(seg.highlight).bg
+  else if (cs.length) style.backgroundColor = cs[0] + '16'
+
+  // 老师批注一律走**下划线**：这样「我划的（背景）」与「老师指的（下划线）」
+  // 压在同一段文字上也能一眼分开。
   if (cs.length === 1) {
-    return { ...base, borderBottom: `2px solid ${cs[0]}` }
+    return { ...style, borderBottom: `2px solid ${cs[0]}`, paddingBottom: '1px' }
   }
-  const n = cs.length
-  const stops = cs.flatMap((c, i) => [`${c} ${(i / n) * 100}%`, `${c} ${((i + 1) / n) * 100}%`])
-  return {
-    ...base,
-    backgroundImage: `linear-gradient(to right, ${stops.join(', ')})`,
-    backgroundSize: '100% 2px',
-    backgroundPosition: 'bottom',
-    backgroundRepeat: 'no-repeat',
-    borderBottom: '2px solid transparent',
+  if (cs.length > 1) {
+    // 多位老师标同一句：下划线切成等分色段，比"只显示第一位"更能说明这里有分歧
+    const n = cs.length
+    const stops = cs.flatMap((c, i) => [`${c} ${(i / n) * 100}%`, `${c} ${((i + 1) / n) * 100}%`])
+    return {
+      ...style,
+      backgroundImage: `linear-gradient(to right, ${stops.join(', ')})`,
+      backgroundSize: '100% 2px',
+      backgroundPosition: 'bottom',
+      backgroundRepeat: 'no-repeat',
+      borderBottom: '2px solid transparent',
+      paddingBottom: '1px',
+    }
   }
+  return style
 }
 
 const segments = computed(() => {
@@ -153,23 +210,38 @@ const segments = computed(() => {
     }
   }
 
-  const out = []
-  let pos = 0
+  // 边界合并：把「批注区间」与「荧光区间」的所有端点并起来切段，
+  // 于是每一段同时知道自己落在哪条批注、哪条荧光里 —— 两者才能真正叠加显示。
+  const points = new Set([0, answer.length])
   for (const g of groups) {
-    if (g.start > pos) out.push({ text: answer.slice(pos, g.start) })
-    const tip = g.items
-      .map((m) => `${m.teacherName}｜${m.type}\n${m.comment}${m.fix ? '\n改：' + m.fix : ''}`)
-      .join('\n\n———\n\n')
-    const colors = [...new Set(g.items.map((m) => m.color))]
-    out.push({
-      text: answer.slice(g.start, g.end),
-      color: colors[0],
-      colors,
-      tip,
-    })
-    pos = g.end
+    points.add(g.start)
+    points.add(g.end)
   }
-  if (pos < answer.length) out.push({ text: answer.slice(pos) })
+  for (const h of highlightRanges.value) {
+    points.add(h.start)
+    points.add(h.end)
+  }
+  const sorted = [...points].sort((a, b) => a - b)
+
+  const out = []
+  for (let i = 0; i < sorted.length - 1; i++) {
+    const s = sorted[i]
+    const e = sorted[i + 1]
+    if (s >= e) continue
+    const g = groups.find((x) => x.start <= s && e <= x.end)
+    const hl = highlightRanges.value.find((x) => x.start <= s && e <= x.end)
+    out.push({
+      text: answer.slice(s, e),
+      colors: g ? [...new Set(g.items.map((m) => m.color))] : [],
+      color: g ? g.items[0].color : null,
+      tip: g
+        ? g.items
+            .map((m) => `${m.teacherName}｜${m.type}\n${m.comment}${m.fix ? '\n改：' + m.fix : ''}`)
+            .join('\n\n———\n\n')
+        : '',
+      highlight: hl ? hl.color : null,
+    })
+  }
   return out
 })
 </script>
