@@ -51,6 +51,13 @@ const rootEl = ref(null)
 const palette = ref(null) // { text, nth, left, top }
 const colors = HIGHLIGHT_COLORS
 
+// 色板定位。⚠️ 这个值若漏定义，色板会失去坐标糊在容器左上角——
+// 划了字"看起来没反应"（真踩过：探针用 querySelector 找色块照样点得到，
+// 只有真实鼠标路径 + console 告警才暴露）。
+const paletteStyle = computed(() =>
+  palette.value ? { left: `${palette.value.left}px`, top: `${palette.value.top}px` } : {}
+)
+
 const plainText = computed(() => props.blocks.map((b) => b.body || '').join('\n'))
 
 function bgOf(id) {

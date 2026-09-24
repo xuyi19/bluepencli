@@ -31,6 +31,21 @@ const browser = await puppeteer.launch({
   defaultViewport: { width: 1440, height: 1000, deviceScaleFactor: 2 },
 })
 const page = await browser.newPage()
+// Vue 告警零容忍：paletteStyle 漏定义那次，页面不崩、功能"看起来正常"，
+// 唯一线索就是一条 console 告警——不收集它，探针永远绿
+const pageWarns = []
+page.on('console', (m) => {
+  const t = m.text()
+  if (/vite|WebSocket|HMR/i.test(t)) return
+  if (m.type() === 'warning' || m.type() === 'error' || /was accessed during render|not defined/i.test(t)) {
+    pageWarns.push(t.slice(0, 140))
+  }
+})
+page.on('pageerror', (e) => {
+  const t = String(e)
+  if (/WebSocket|vite/i.test(t)) return // dev server 的 HMR 噪声（headless 连不上是常态）
+  pageWarns.push('pageerror: ' + t.slice(0, 140))
+})
 await page.goto(URL, { waitUntil: 'networkidle2', timeout: 60000 })
 await new Promise((r) => setTimeout(r, 1500))
 
@@ -87,6 +102,19 @@ async function paintIn(containerSel, swatchIdx) {
     root.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }))
   }, containerSel, swatchIdx)
   await new Promise((r) => setTimeout(r, 300))
+  // 色板必须出现在**选区旁边**：paletteStyle 漏定义时色板会失去坐标糊在容器左上角，
+  // querySelector 照样找得到——位置才是用户"划了没反应"的真判据
+  const near = await page.evaluate(() => {
+    const sel = window.getSelection()
+    if (!sel?.rangeCount) return { ok: false, why: '选区已不在' }
+    const r = sel.getRangeAt(0).getBoundingClientRect()
+    const el = document.querySelector('.hl-palette')
+    if (!el) return { ok: false, why: '色板没弹出来' }
+    const p = el.getBoundingClientRect()
+    const dist = Math.hypot(p.x - r.x, p.y - r.bottom)
+    return { ok: dist < 300, why: `色板距选区 ${Math.round(dist)}px` }
+  })
+  check('色板出现在选区旁边', near.ok, near.why)
   await page.evaluate((idx) => {
     const btn = document.querySelectorAll('.hl-palette .hl-swatch')[idx]
     btn?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
@@ -177,6 +205,69 @@ const ansCount = saved2?.answer?.length || 0
 check('作答区 1 处荧光已落库', ansCount === 1, `实际 ${ansCount} 条`)
 await new Promise((r) => setTimeout(r, 400))
 
+// ── 3b. 真鼠标拖拽（与用户操作同路径）──
+// 程序化构造选区绕开了真实鼠标路径上的所有环节；paletteStyle 漏定义那次
+// 就是这么漏掉的。这里必须用 page.mouse 按下-拖动-松开走一遍。
+await page.evaluate(() => {
+  const sec = [...document.querySelectorAll('section')].find((s) => s.querySelector('[data-hl-block]'))
+  sec?.scrollIntoView({ block: 'center' })
+})
+await new Promise((r) => setTimeout(r, 500))
+const dragBox = await page.evaluate(() => {
+  const sec = [...document.querySelectorAll('section')].find((s) => s.querySelector('[data-hl-block]'))
+  if (!sec) return null
+  const ps = [...sec.querySelectorAll('[data-hl-block] p')]
+  const p = ps.sort((a, b) => b.textContent.length - a.textContent.length)[0]
+  const walker = document.createTreeWalker(p, NodeFilter.SHOW_TEXT)
+  let node = walker.nextNode()
+  while (node && node.textContent.trim().length < 10) node = walker.nextNode()
+  if (!node) return null
+  // 避开已有标记的区间（6..24 已被程序化划过），从 40 字往后拖
+  const r = document.createRange()
+  const start = Math.min(40, node.textContent.length - 12)
+  r.setStart(node, start)
+  r.setEnd(node, start + 8)
+  const rect = r.getBoundingClientRect()
+  return { x1: rect.left + 2, y1: rect.top + rect.height / 2, x2: rect.right + 6, y2: rect.top + rect.height / 2 }
+})
+if (dragBox) {
+  await page.mouse.move(dragBox.x1, dragBox.y1)
+  await page.mouse.down()
+  for (let i = 1; i <= 8; i++) {
+    await page.mouse.move(dragBox.x1 + ((dragBox.x2 - dragBox.x1) * i) / 8, dragBox.y1)
+    await new Promise((r) => setTimeout(r, 30))
+  }
+  await page.mouse.up()
+  await new Promise((r) => setTimeout(r, 500))
+  const rm = await page.evaluate(() => ({
+    selLen: window.getSelection()?.toString().length || 0,
+    palette: !!document.querySelector('.hl-palette'),
+    near: (() => {
+      const sel = window.getSelection()
+      if (!sel?.rangeCount) return -1
+      const r = sel.getRangeAt(0).getBoundingClientRect()
+      const el = document.querySelector('.hl-palette')
+      if (!el) return -1
+      const p = el.getBoundingClientRect()
+      return Math.round(Math.hypot(p.x - r.x, p.y - r.bottom))
+    })(),
+  }))
+  check('真鼠标拖拽弹出色板', rm.palette, `选区 ${rm.selLen} 字` + (rm.near >= 0 ? `，距选区 ${rm.near}px` : ''))
+  check('真鼠标路径色板也在选区旁', rm.near >= 0 && rm.near < 300, `距选区 ${rm.near}px`)
+  if (rm.palette) {
+    await page.evaluate(() => document.querySelectorAll('.hl-palette .hl-swatch')[4]
+      ?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+    await new Promise((r) => setTimeout(r, 300))
+    const cnt = await page.evaluate(() => {
+      const key = Object.keys(localStorage).find((k) => k.startsWith('bp-marks:'))
+      return (JSON.parse(localStorage.getItem(key) || '{}').material || []).length
+    })
+    check('真鼠标划的标记落库', cnt === 4, `实际 ${cnt} 条`)
+  }
+} else {
+  check('真鼠标拖拽找到可拖文本', false, '没定位到可见的正文段')
+}
+
 // ── 4. 截图：材料荧光 / 作答标注态 / 整页布局 ──
 const shotMaterial = `${OUT}/hl-material.png`
 await page.evaluate(() => {
@@ -233,6 +324,8 @@ if (canGrade) {
 for (const f of [shotMaterial, shotAnswer, shotFull, resultShot].filter(Boolean)) {
   try { check(`截图 ${f.split('/').pop()} 已生成`, statSync(f).size > 30000, `${statSync(f).size}B`) } catch { check(`截图 ${f}`, false, '不存在') }
 }
+
+check('无 Vue 告警 / 未定义属性 / 页面报错', pageWarns.length === 0, pageWarns.slice(0, 2).join(' | '))
 
 await browser.close()
 console.log(failed ? `有 ${failed} 项失败` : '全部通过')
