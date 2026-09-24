@@ -17,7 +17,7 @@
       <div>
         <h1 class="text-xl font-semibold text-c-ink">题库</h1>
         <p class="text-sm text-c-muted mt-1.5">
-          国考真题 {{ countBySource('真题') }} 道（{{ REAL_EXAMS.length }} 套）· 仿真 {{ SIM_QUESTIONS.length }} 道 · 自建 {{ mine.length }} 道
+          国考真题 {{ countBySource('真题') }} 道（{{ REAL_EXAMS.length }} 套）· 仿真 {{ SIM_QUESTIONS.length }} 道 · 自建 {{ ownCount }} 道
           <span class="text-c-muted">· 题型覆盖 {{ coveredTypes }} / 5</span>
         </p>
       </div>
@@ -29,6 +29,11 @@
           class="px-4 py-2.5 rounded-xl text-xs font-medium neu-sm text-c-bark disabled:opacity-40">
           {{ importing ? '导入中…' : '导入题库包' }}
         </button>
+        <button @click="toggleLib" id="btn-my-lib"
+          class="px-4 py-2.5 rounded-xl text-xs font-medium neu-sm text-c-bark">
+          {{ showLib ? '收起' : '我的题库' }}
+          <span v-if="imports.length" class="tnum opacity-60 ml-0.5">{{ imports.length }}</span>
+        </button>
         <button @click="showImport = !showImport"
           class="px-4 py-2.5 rounded-xl text-xs font-medium neu-sm text-c-bark">
           {{ showImport ? '收起录入' : '+ 录入题目' }}
@@ -36,6 +41,25 @@
         <!-- 一次只能选一个包：分开的包分别导入，避免一次误吞几个来源不明的文件 -->
         <input ref="packInput" type="file" accept=".bpq,application/json,.json"
           class="hidden" @change="onPackFile" />
+      </div>
+    </div>
+
+    <!-- 导入过程逐条回显：把「格式 → 验签 → 水印 → 解密 → 入库」摆出来。
+         加密包的价值（谁签发的、水印是谁）本来只在文档里，现在用户在导入这一刻就能看见。 -->
+    <div v-if="importSteps.length" class="rounded-2xl p-5 neu mb-6">
+      <div class="flex items-center justify-between mb-3">
+        <span class="text-sm font-medium text-c-body">导入题库包</span>
+        <button v-if="!importing" @click="importSteps = []"
+          class="text-xs text-c-muted hover:text-c-bark">关闭</button>
+      </div>
+      <div class="space-y-1.5">
+        <div v-for="(s, i) in importSteps" :key="i" class="flex items-start gap-2 text-xs leading-6">
+          <span class="shrink-0 w-3.5 text-center" :style="{ color: stepColor(s.state) }">{{ stepIcon(s.state) }}</span>
+          <span class="min-w-0">
+            <span :style="s.state === 'fail' ? { color: '#b4552d' } : {}" :class="s.state === 'fail' ? '' : 'text-c-body'">{{ s.label }}</span>
+            <span v-if="s.detail" class="text-c-muted"> · {{ s.detail }}</span>
+          </span>
+        </div>
       </div>
     </div>
 
@@ -138,6 +162,47 @@
     </div>
 
     <!-- 录入面板 -->
+    <!-- 我的题库：按**导入批次**分组，看清来源、能整批删。
+         此前导入完只有一句 toast，用户既不知道导过什么、也删不掉 —— 这是最大的体验缺口。 -->
+    <div v-if="showLib" class="rounded-2xl p-5 neu mb-6">
+      <div class="text-sm font-medium text-c-body mb-1">我的题库</div>
+      <div class="text-xs text-c-muted mb-4 leading-5">
+        这里记的是<strong>导入过的题库包</strong>（作者定向分发的私有卷）。
+        「删除整批」＝把这一包带进来的题全部清掉，<strong>不影响</strong>内置真题与你自己录入的题目。
+      </div>
+      <div v-if="!imports.length" class="text-xs text-c-muted leading-6">
+        还没有导入过题库包。拿到 <code>.bpq</code> 文件后拖进本页任意位置即可。
+      </div>
+      <div v-else class="space-y-2.5">
+        <div v-for="it in imports" :key="it.id" class="rounded-xl px-4 py-3" style="background: #f1ece4">
+          <div class="flex items-start justify-between gap-3">
+            <div class="min-w-0">
+              <div class="text-xs text-c-body">
+                <strong>{{ it.exams }} 套 / {{ it.questions }} 题</strong>
+                <span v-if="it.yearRange" class="text-c-muted"> · {{ it.yearRange }}</span>
+                <span v-if="it.tier" class="text-c-muted"> · {{ it.tier }}</span>
+              </div>
+              <div class="text-[11px] text-c-muted mt-1 leading-5">
+                导入于 {{ fmtTime(it.createdAt) }}<template v-if="it.fileName"> · {{ it.fileName }}</template>
+              </div>
+              <div class="text-[11px] text-c-muted leading-5">
+                水印：{{ it.fingerprint }}<template v-if="it.issuer"> · 签发：{{ it.issuer }}</template>
+                <template v-if="it.issuedAt"> · {{ it.issuedAt }}</template>
+              </div>
+              <div v-if="it.examTitles && it.examTitles.length" class="text-[11px] text-c-muted leading-5">
+                卷：{{ it.examTitles.join('、') }}
+              </div>
+            </div>
+            <button @click="askRemoveImport(it)" :disabled="importing"
+              class="shrink-0 px-3 py-1.5 rounded-lg text-[11px] neu-sm disabled:opacity-40"
+              style="color: #b4552d">
+              删除整批
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div v-if="showImport" class="rounded-2xl p-5 neu mb-6">
       <div class="text-sm font-medium text-c-body mb-1">录入题目</div>
       <div class="text-xs text-c-muted mb-4 leading-5">
@@ -277,7 +342,7 @@ import {
 import { pickDaily } from '../data/daily'
 import { trimMaterial } from '../utils/grading/materialTrim'
 import { AUTHOR } from '../data/author'
-import { readPackFile, importPack, openSealedPack } from '../bpq/importer'
+import { readPackFile, importPack, openSealedPack, listImports, removeImport } from '../bpq/importer'
 import { useFileDrop } from '../utils/fileDrop'
 import { copyAuthorLine } from '../utils/watermark'
 import WeChatPanel from '../components/WeChatPanel.vue'
@@ -285,7 +350,9 @@ import WeChatPanel from '../components/WeChatPanel.vue'
 const router = useRouter()
 
 const builtin = ref(BUILTIN_POOL)
-const mine = ref([])
+const mine = ref([])          // 用户侧全部（自建 + 题库包导入的）——pool 要用它
+/** 「自建」只数用户自己录入的：导入的私有真题不算自建（此前被算进去了） */
+const ownCount = computed(() => mine.value.filter((q) => q._source !== 'bpq').length)
 const keyword = ref('')
 const typeFilter = ref('')
 const systemFilter = ref('')   // 体系筛选（国考 / 省考-河北…），动态枚举
@@ -306,6 +373,62 @@ const importing = ref(false)
 
 /** 私有卷套数：分发版恒为 0，据此决定"已导入"还是"引导获取" */
 const privateExamCount = ref(PRIVATE_EXAM_COUNT)
+
+// ── 我的题库：导入批次 ────────────────────────────────────────
+// 此前导入完只弹一句 toast：用户既不知道导过什么、也删不掉 —— 这是最大的体验缺口。
+// 这里把批次列出来（来源 / 时间 / 水印 / 卷清单），并能整批删除。
+const showLib = ref(false)
+const imports = ref([])
+const importSteps = ref([])
+
+const stepIcon = (s) => (s === 'ok' ? '✓' : s === 'fail' ? '✗' : s === 'doing' ? '…' : '·')
+const stepColor = (s) => (s === 'ok' ? '#4f7d5e' : s === 'fail' ? '#b4552d' : '#9c6b2f')
+function fmtTime(t) {
+  const d = new Date(t || 0)
+  const p = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
+}
+
+/** 推一条回显；返回下标，稍后就地改成 ok / fail */
+function pushStep(label, state = 'doing', detail = '') {
+  importSteps.value.push({ label, state, detail })
+  return importSteps.value.length - 1
+}
+function setStep(i, state, detail = '') {
+  const s = importSteps.value[i]
+  if (!s) return
+  s.state = state
+  if (detail) s.detail = detail
+}
+
+async function loadImports() {
+  try {
+    imports.value = await listImports()
+  } catch {
+    imports.value = []   // 读不到不该让整页崩（老库还没有 imports 表也不会走到这，upgrade 已建）
+  }
+}
+
+function toggleLib() {
+  showLib.value = !showLib.value
+  if (showLib.value) loadImports()
+}
+
+async function askRemoveImport(it) {
+  const ok = await toast.confirm(
+    `删除这一批？\n\n${it.exams} 套 / ${it.questions} 题（水印 ${it.fingerprint}）将被清掉。\n` +
+      '不影响内置真题与你自己录入的题目；想再练需要重新导入题库包。',
+    { title: '删除导入批次', okText: '删除整批' },
+  )
+  if (!ok) return
+  try {
+    const n = await removeImport(it.id)
+    await Promise.all([load(), loadImports()])
+    toast.success(`已删除 ${n} 道题（这一批）`)   // 如实报数，不写"已删除"这种不报数的空话
+  } catch (err) {
+    toast.error(err?.message || '删除失败')
+  }
+}
 
 const draft = reactive({
   title: '', type: '', exam: '', requirement: '',
@@ -426,7 +549,14 @@ function countByType(t) {
 }
 
 async function load() {
-  mine.value = await getAll(STORES.questions)
+  const all = await getAll(STORES.questions)
+  // mine = 用户侧全部（自建 + 导入）：pool 由它构成，导入的题必须能在题库里看到、能练。
+  // ⚠️ 别在这里按来源过滤掉导入题 —— 那样题库列表里就看不到私有卷了（试过，是回归）。
+  mine.value = all
+  // 私有卷数 = 内置常量与库内导入的**并集**，按卷 id 去重（重复导入同一卷不该算两次）。
+  // 用并集而不是"加"：删除整批后能正确回落，不会越删越大。
+  const byExam = new Set(all.filter((q) => q._source === 'bpq').map((q) => q._examId).filter(Boolean))
+  privateExamCount.value = Math.max(PRIVATE_EXAM_COUNT, byExam.size)
 }
 
 /**
@@ -450,17 +580,45 @@ async function onPackFile(e) {
 async function handlePack(file) {
   if (importing.value) return    // 拖拽可能连发，导入中再丢进来直接忽略
   importing.value = true
+  importSteps.value = []         // 每次导入都从干净的回显开始
   try {
+    const iRead = pushStep('读取文件', 'doing', file.name)
     let r = await readPackFile(file)
+    setStep(iRead, 'ok', `${(file.size / 1024).toFixed(0)} KB`)
 
+    // ① 格式：明文包在这一步就能全判完；加密包只标出类型，验签解密在下面两步
+    if (!r.sealed) {
+      const iFmt = pushStep('格式与校验和', 'doing')
+      setStep(iFmt, r.ok ? 'ok' : 'fail', r.ok ? `${r.pack?.exams?.length || 0} 套` : r.errors[0] || '')
+    } else {
+      pushStep('格式', 'ok', '加密包 v2 —— 先验签、再解密')
+    }
+
+    // ② 加密包：验签 → 解密，逐条回显（阶段回调从 openSealedPack 里透出来）
+    let iSig = -1
+    let iDec = -1
     for (let attempt = 0; r.sealed && !r.pack && attempt < 3; attempt++) {
       const pwd = await toast.askPassword(
         '这份题库包是加密的，需要作者给你的口令才能打开。\n'
         + '（口令与包是分开给的——如果作者把两者发在同一条消息里，提醒他一下）',
         { placeholder: '口令', okText: '打开' },
       )
-      if (!pwd) return              // 用户取消
-      r = await openSealedPack(r.text, pwd)
+      if (!pwd) {
+        pushStep('已取消', 'fail', '没有输入口令')
+        return
+      }
+      if (iSig < 0) iSig = pushStep('签名校验', 'doing', '用内置公钥验证签发者…')
+      if (iDec < 0) iDec = pushStep('解密', 'doing', '按口令解密…')
+      r = await openSealedPack(r.text, pwd, {
+        onStage: (ev) => {
+          if (ev.stage === 'signature') {
+            setStep(iSig, ev.ok ? 'ok' : 'fail', ev.ok ? (ev.keyId ? `keyId ${ev.keyId}` : '签名有效') : '签名不通过')
+          }
+          if (ev.stage === 'decrypt') {
+            setStep(iDec, ev.ok ? 'ok' : 'fail', ev.ok ? '' : '口令不对或文件被改动')
+          }
+        },
+      })
       if (r.ok) break
       const msg = r.errors.join('')
       // 口令错可以重试；签名不过、格式不对这类问题再输一百遍也没用，直接说清
@@ -472,16 +630,32 @@ async function handlePack(file) {
     }
 
     if (!r.ok) {
+      pushStep('校验未通过', 'fail', r.errors[0] || '')
       toast.error(r.errors[0] || '题库包不可用')
       return
     }
-    for (const w of r.warnings) toast.warning(w)
-    const res = await importPack(r.pack)
-    await load()
-    // 已导入的私有卷要从"引导获取"切成"已导入"文案
-    privateExamCount.value = Math.max(privateExamCount.value, res.exams)
+
+    // ③ 水印：加密包的价值本来只写在文档里，这里让用户在导入这一刻就看见
+    pushStep('水印', r.pack?.userFingerprint ? 'ok' : 'doing', r.pack?.userFingerprint || '未署名')
+
+    for (const w of r.warnings) {
+      pushStep('提示', 'doing', w)
+      toast.warning(w)
+    }
+
+    // ④ 入库（流式报题数）
+    const iSave = pushStep('写入题库', 'doing')
+    const res = await importPack(r.pack, {
+      fileName: file.name,
+      onProgress: (n) => setStep(iSave, 'doing', `已写入 ${n} 道`),
+    })
+    setStep(iSave, 'ok', `${res.exams} 套 / ${res.questions} 题`)
+
+    await Promise.all([load(), loadImports()])
+    pushStep('完成', 'ok', `可在「我的题库」里查看来源或整批删除`)
     toast.success(`已导入 ${res.exams} 套 / ${res.questions} 道题（水印：${res.fingerprint}）`)
   } catch (err) {
+    pushStep('导入失败', 'fail', err?.message || '请确认文件是 .bpq 题库包')
     toast.error(err?.message || '导入失败，请确认文件是 .bpq 题库包')
   } finally {
     importing.value = false
@@ -535,5 +709,8 @@ function practiceWith(q) {
   router.push({ path: '/practice', query: { questionId: q.id } })
 }
 
-onMounted(load)
+onMounted(async () => {
+  await load()
+  await loadImports()   // 「我的题库」的批次列表（按钮上要显示数量）
+})
 </script>

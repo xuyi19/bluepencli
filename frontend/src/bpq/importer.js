@@ -33,7 +33,7 @@
 
 // 注意这里带 .js 后缀：Node 的 ESM 不做扩展名补全，
 // 而 .tools/verify-bpq.mjs 要直接 import 这个文件做校验（用的就是前端这一份算法）。
-import { put, uid, STORES } from '../store/db.js'
+import { put, uid, STORES, getAll, remove } from '../store/db.js'
 import {
   SIG_ALGO,
   decryptPayload,
@@ -176,7 +176,7 @@ async function verifyWithAnyKey(pack, keys) {
  * 伪造的包在这一步就被拒掉，既省时间，也避免"解密失败"这种含糊的报错
  * 掩盖真正的原因（其实根本不是口令问题，是包不对）。
  */
-export async function openSealedPack(text, passphrase, { publicKeys } = {}) {
+export async function openSealedPack(text, passphrase, { publicKeys, onStage } = {}) {
   const warnings = []
   const { pack, error } = parseJson(text)
   if (error) return { ok: false, sealed: true, errors: [error], warnings, pack: null }
@@ -194,6 +194,9 @@ export async function openSealedPack(text, passphrase, { publicKeys } = {}) {
 
   const sig = await verifyWithAnyKey(pack, publicKeys)
   if (!sig.ok) {
+    // 回显给 UI：验签失败要能明确说"不是作者签发的"，
+    // 这和"口令不对"是完全不同的两件事，不能让用户靠猜。
+    onStage?.({ stage: 'signature', ok: false, reason: sig.reason })
     errors.push(
       sig.reason === 'no-key'
         ? '当前程序没有内置验签公钥，无法确认这个包的来源，已拒绝导入'
@@ -201,6 +204,7 @@ export async function openSealedPack(text, passphrase, { publicKeys } = {}) {
     )
     return { ok: false, sealed: true, errors, warnings, pack: null }
   }
+  onStage?.({ stage: 'signature', ok: true, keyId: pack.sig?.keyId || '' })
 
   let inner = null
   try {
@@ -208,9 +212,11 @@ export async function openSealedPack(text, passphrase, { publicKeys } = {}) {
   } catch {
     // GCM 解不开只有两种可能：口令不对，或密文被动过。签名已经过了，
     // 所以这里几乎一定是口令问题 —— 但口吻别太绝对，给用户两条路都想一想
+    onStage?.({ stage: 'decrypt', ok: false })
     errors.push('打开失败：口令不对（也可能是文件被改动过）')
     return { ok: false, sealed: true, errors, warnings, pack: null }
   }
+  onStage?.({ stage: 'decrypt', ok: true })
 
   if (!Array.isArray(inner?.exams) || !inner.exams.length) {
     errors.push('题库包里没有任何试卷')
@@ -247,11 +253,16 @@ export async function openSealedPack(text, passphrase, { publicKeys } = {}) {
  *   一行都不用改。代价是整卷材料在每题里各存一份（2022–2024 共 45 题 × 7KB
  *   ≈ 300KB，一次性写入，可接受）。
  */
-export async function importPack(pack, { onProgress } = {}) {
+export async function importPack(pack, { onProgress, fileName = '' } = {}) {
   const stamp = pack.userFingerprint || '未署名'
+  // 批次号：题目与批次记录共用同一个值。
+  // 没有它就只能"按题删"，而用户真正想表达的是"把上次那包删掉"。
+  const batch = uid()
   const list = []
+  const examIds = []
 
   for (const e of pack.exams) {
+    examIds.push(e.id)
     for (const q of e.questions) {
       list.push({
         // 固定前缀 bpq-，与 real-（内置真题）/ builtin-（仿真）互不冲突
@@ -274,9 +285,11 @@ export async function importPack(pack, { onProgress } = {}) {
         materialChars: e.material.length,
         // 来源与批次：清空重导时能认出来，也留作水印
         _source: 'bpq',
+        _examId: e.id,          // 卷 id：从题目反查归属卷（比解析题 id 的字符串靠得住）
         _packIssuer: pack.issuer || '',
         _packIssuedAt: pack.issuedAt || '',
         _packFingerprint: stamp,
+        _packBatch: batch,     // 归属批次：「我的题库」按它整批查看与删除
       })
       if (onProgress) onProgress(list.length)
     }
@@ -286,13 +299,53 @@ export async function importPack(pack, { onProgress } = {}) {
     await put(STORES.questions, q)
   }
 
+  // ⚠️ 顺序：**先写题目、后写批次记录**。
+  //    万一中途失败，宁可出现"题目已入库但没批次记录"（还能按题目反查来源），
+  //    也不要出现"批次写着 45 题、库里其实只有 10 题"的假账 —— 那种记录会让人误删。
+  await put(STORES.imports, {
+    id: batch,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+    fileName: fileName || '',
+    issuer: pack.issuer || '',
+    issuedAt: pack.issuedAt || '',
+    fingerprint: stamp,
+    tier: pack.tier || '',
+    yearRange: pack.yearRange || '',
+    exams: pack.exams.length,
+    questions: list.length,
+    examIds,
+    examTitles: pack.exams.map((e) => `${e.year} ${e.paper}${e.system ? ' ' + e.system : ''}`),
+  })
+
   return {
     questions: list.length,
     exams: pack.exams.length,
     fingerprint: stamp,
     issuer: pack.issuer || '',
-    batch: uid(),
+    batch,
   }
+}
+
+/** 列出导入批次（新的在前）——「我的题库」页的数据来源 */
+export async function listImports() {
+  const list = await getAll(STORES.imports)
+  return list.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
+}
+
+/**
+ * 整批删除一包导入的题。
+ * ⚠️ 先删题目、再删批次记录：反过来的话中途失败会留下一批"查不到来源的孤儿题"，
+ *    而它们仍在题库里可答可批，用户却再也定位不到是谁带进来的。
+ * 返回删掉的题目数，便于 UI 如实汇报（不写"已删除"这种不报数的空话）。
+ */
+export async function removeImport(batchId) {
+  if (!batchId) throw new Error('缺少批次号')
+  const all = await getAll(STORES.questions)
+  const mine = all.filter((q) => q._packBatch === batchId)
+  for (const q of mine) await remove(STORES.questions, q.id)
+  await remove(STORES.imports, batchId)
+  return mine.length
 }
 
 /**

@@ -5,8 +5,9 @@
 // 许可: AGPL-3.0 · 转发或修改请保留本署名
 // ──────────────────────────────────────────────────────────────
 const DB_NAME = 'bluepencil'
-// 加了 questions 表，版本号必须递增，否则老用户的库不会升级
-const DB_VERSION = 2
+// 加表必须递增版本号，否则老用户的库不会升级。
+// （onupgradeneeded 里是"循环创建缺失的表"，所以加表**不需要**写迁移代码）
+const DB_VERSION = 3
 
 export const STORES = {
   articles: 'articles',
@@ -14,6 +15,10 @@ export const STORES = {
   records: 'records',
   notes: 'notes',
   mistakes: 'mistakes',
+  // 题库包的导入批次。记的是"这一包谁发给我、什么时候、几套几题、水印是谁"——
+  // 「我的题库」页按它分组展示与整批删除。题目自身也带 `_packBatch` 冗余字段，
+  // 所以即使批次记录丢了，仍能按题目反查出批次（不至于变成删不掉的孤儿题）。
+  imports: 'imports',
 }
 
 let dbPromise = null
