@@ -437,6 +437,11 @@
               · {{ countChars(form.answer) }} 字
             </div>
             <div class="text-xs text-c-muted mt-2.5 leading-5">{{ report.final.roundtableNote }}</div>
+            <!-- 批改依据（结果冻结）：这份分是用哪版标准、哪版提示词、哪个模型算的。
+                 写出来是有意的——只给分数不给来路，用户没法判断该不该信。 -->
+            <div v-if="provenanceText" class="text-xs text-c-muted mt-1.5 leading-5">
+              批改依据：{{ provenanceText }}
+            </div>
             <div v-if="archiveState" class="text-xs mt-2"
               :class="archiveState === 'docs' ? 'text-[#4f7d5e]' : 'text-c-muted'">
               {{ archiveState === 'docs'
@@ -881,6 +886,26 @@ const report = ref(null)
 const record = ref(null)
 const archiveState = ref('')
 const error = ref('')
+
+/**
+ * 结果页「批改依据」一行 —— 把冻结在结果里的 provenance 拼成人话。
+ * 目的很直接：只给一个分数、不说它怎么来的，用户没法判断该不该信这个分。
+ */
+const provenanceText = computed(() => {
+  const p = report.value?.provenance
+  if (!p) return ''
+  const srcLabel =
+    { manual: '人工校准标准', llm: '模型预解析标准', none: '无标准（裸判）' }[p.standardSource] ||
+    p.standardSource ||
+    '无标准'
+  const bits = [srcLabel]
+  if (p.standardVersion) bits.push(`v${p.standardVersion}`)
+  if (p.standardPoints) bits.push(`${p.standardPoints} 个采分点`)
+  if (p.promptVersion) bits.push(`提示词 ${p.promptVersion}`)
+  if (p.model) bits.push(`模型 ${p.model}`)
+  if (p.deep) bits.push('深度模式')
+  return bits.join(' · ')
+})
 const followupText = ref('')
 const sampleText = ref('')
 const sampling = ref(false)

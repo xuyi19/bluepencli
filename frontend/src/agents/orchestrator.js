@@ -13,7 +13,7 @@
 // 支持 1~5 位老师任意组合：单人直接出结果，双人加权合并，
 // 三人及以上走完整圆桌（辩论 + 合议）。
 
-import { chat } from '../api/llm'
+import { chat, getConfig } from '../api/llm'
 import { reportTask } from '../api/backend'
 import { TEACHERS, getTeachers, detectMode } from './teachers'
 import {
@@ -23,6 +23,7 @@ import {
   DEBATE_SCHEMA,
   FUSION_SYSTEM,
   FUSION_SCHEMA,
+  PROMPT_VERSION,
 } from './skills'
 import { parseJson } from '../utils/parse'
 // 第①层：题目标准层（采分点）——有则注入，无则裸判，绝不因此中断批改
@@ -50,6 +51,37 @@ const TEMPERATURE = {
 
 function genTaskId() {
   return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`
+}
+
+/**
+ * 结果冻结：把「这份分是怎么来的」钉进结果里。
+ *
+ * 批改结果由 **标准 + 提示词 + 模型 + 温度** 四件事共同决定。不记下来，
+ * 半年后打开旧记录就答不出"为什么同一道题、同一个模型，两次分数不一样"，
+ * 也无法证明"同样的输入能复现同样的输出" —— 而那正是本项目对外讲的核心。
+ *
+ * 存下来之后：① 记录可追溯；② 结果页能显示一行"来路"给用户看；
+ * ③ 面试/答辩问"怎么保证可重复"时有直接答案。
+ */
+function buildProvenance({ stdInfo, mode, teachers, deep, scoreSource }) {
+  let cfg = {}
+  try {
+    cfg = getConfig() || {}
+  } catch {
+    // 配置读不出来不影响批改 —— 只是 model 字段留空
+  }
+  return {
+    standardSource: stdInfo?.standard?.source || stdInfo?.source || 'none', // manual / … / none
+    standardVersion: stdInfo?.standard?.meta?.version || null,
+    standardPoints: stdInfo?.standard?.points?.length || 0,
+    promptVersion: PROMPT_VERSION,
+    model: cfg.model || '',
+    temperatures: Object.fromEntries((teachers || []).map((t) => [t.id, TEMPERATURE[t.id] ?? 0.3])),
+    deep: !!deep,
+    mode,
+    scoreSource, // single（单人直采）/ weighted（加权）/ fusion（合议）
+    frozenAt: new Date().toISOString(),
+  }
 }
 
 function buildPaper({ title, requirement, material, answer, maxScore, wordLimit }) {
@@ -280,9 +312,16 @@ export async function runGrading({ paper: paperInput, teacherIds, deep = false, 
   const facts = formatRulesForPrompt(hardRules)
 
   // ---------- 阶段1：并行独立阅卷 ----------
+  // extra 里同时注入两样东西：
+  //   ① 采分点标准（有则注入，无则空串）
+  //   ② 硬规则的客观事实（字数/格式/结构/重复，纯代码算出来的）
+  // ② 必须**前置给每一位老师**，而不是只当辩论/合议的旁证 ——
+  // 否则单人阅卷时（尤其 solo），"字数明显不够"这种确定事实对老师毫无约束，
+  // 只能等合议阶段补救。把确定的交给代码、让模型在确定的边界内判断，是这套内核的原则。
+  const graderExtra = [stdPrompt, facts].filter(Boolean).join('\n\n')
   onProgress?.({ type: 'stage', stage: 'grading' })
   const results = await Promise.all(
-    teachers.map((t) => gradeByTeacher(t, paper, { onProgress, signal, deep, taskId, extra: stdPrompt }))
+    teachers.map((t) => gradeByTeacher(t, paper, { onProgress, signal, deep, taskId, extra: graderExtra }))
   )
 
   // ---------- 阶段2：分歧检测 ----------
@@ -357,6 +396,14 @@ export async function runGrading({ paper: paperInput, teacherIds, deep = false, 
       llm_calls: teachers.length + (output.debate ? 1 : 0) + (output.fusion ? 1 : 0),
       disputed: !!output.dispute?.disputed,
       status: 'success',
+    })
+    // 结果冻结：这一份记录的「来路」（标准/提示词/模型/温度）
+    output.provenance = buildProvenance({
+      stdInfo,
+      mode,
+      teachers,
+      deep,
+      scoreSource: output.fusion ? 'fusion' : teachers.length === 1 ? 'single' : 'weighted',
     })
     return output
   }

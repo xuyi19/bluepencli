@@ -182,6 +182,9 @@ class PracticeRecordIn(BaseModel):
     #    pydantic 对没声明的字段一律**静默丢弃** —— 前端存了、docs 里却没有，
     #    且两边都不报错，是最难查的一类不一致。
     credibility: dict | None = None
+    # 结果冻结：标准版本 / 提示词版本 / 模型 / 温度（前端 orchestrator.buildProvenance 组装）
+    # ⚠️ 同理必须显式声明，否则同上静默丢弃
+    provenance: dict | None = None
 
 
 class PracticeRecordSummary(BaseModel):

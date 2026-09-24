@@ -254,6 +254,26 @@ def render_markdown(record: dict) -> str:
         for c in cred.get("caveats") or []:
             L.append(f">   - ⚠ {c}")
 
+    # —— 结果冻结（来路）——
+    # 一个分数如果不写清"哪版标准、哪版提示词、哪个模型、什么温度"，
+    # 半年后翻出来就没法回答"为什么同一道题两次分数不同"，也证明不了可复现。
+    prov = record.get("provenance") or {}
+    if prov:
+        src = str(prov.get("standardSource") or "none")
+        src_label = {"manual": "人工校准", "llm": "模型预解析", "none": "无标准（裸判）"}.get(src, src)
+        bits = [f"标准：{src_label}"]
+        if prov.get("standardVersion"):
+            bits.append(f"v{prov['standardVersion']}")
+        if prov.get("standardPoints"):
+            bits.append(f"{prov['standardPoints']} 个采分点")
+        if prov.get("promptVersion"):
+            bits.append(f"提示词 {prov['promptVersion']}")
+        if prov.get("model"):
+            bits.append(f"模型 {prov['model']}")
+        if prov.get("deep"):
+            bits.append("深度模式")
+        L.append(f"> 来路：{' · '.join(bits)}")
+
     L.append("")
 
     # 章节号按实际出现的章节递增——「给定资料」为空时不该留下一、三的跳号

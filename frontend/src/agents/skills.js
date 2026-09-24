@@ -12,6 +12,16 @@
 import { TEACHERS } from './teachers'
 import { errorTypePromptList } from '../data/error-taxonomy'
 
+// 批改 Prompt 的版本号。
+//
+// ⚠️ **改了本文件里任何提示词（老师的指令 / 通用铁律 / 输出契约 / 辩论 / 合议），
+//    就把这个号往上加一位** —— 记录里会把它冻结下来（见 orchestrator 的 provenance）。
+//
+// 为什么值得一个版本号：批改结果由「标准 + 提示词 + 模型 + 温度」四件事共同决定。
+// 不记提示词版本，半年后看到"同一道题、同一个模型，分数却不一样"就永远查不清，
+// 也没法证明"同样的输入能复现同样的输出"—— 而这正是这个项目对外讲的卖点。
+export const PROMPT_VERSION = 'grading-v1'
+
 const COMMON_RULES = `
 【通用铁律】
 1. 你的评价必须落到具体句子：引用考生原文片段，指出问题，给出改法。
