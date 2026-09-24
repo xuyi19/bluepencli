@@ -332,6 +332,22 @@
             </div>
           </div>
 
+          <!-- 提纲：默认收起不占地方；按题目存本机，批改不看它 -->
+          <details class="mt-3 group">
+            <summary class="flex items-center cursor-pointer list-none select-none
+              text-xs text-c-muted hover:text-c-bark transition-colors">
+              <span class="transition-transform duration-200 group-open:rotate-90 inline-block mr-1">▸</span>
+              <span class="font-medium">提纲</span>
+              <span class="text-c-muted/70 ml-2">先列提纲再动笔</span>
+              <span v-if="outline.trim()" class="tnum ml-auto">{{ outline.length }} 字</span>
+              <span v-else class="ml-auto">展开</span>
+            </summary>
+            <textarea v-model="outline" rows="4"
+              placeholder="立论一句 → 分论点（附材料依据）→ 结尾收束。提纲只存在本机，批改不看它。"
+              class="w-full mt-2 px-3 py-2 rounded-xl text-xs neu-inset outline-none resize-none
+                text-c-body placeholder:text-c-muted leading-6" />
+          </details>
+
           <div v-if="loadedMeta.topics?.length" class="flex flex-wrap gap-1.5 mt-4 pt-4 border-t border-c-line">
             <span v-for="t in loadedMeta.topics" :key="t"
               class="text-xs px-1.5 py-0.5 rounded" style="background: #f5f1ea; color: #78716c">
@@ -1018,6 +1034,28 @@ function onMarksChange(which, list) {
 const markCount = computed(() => (marks.material?.length || 0) + (marks.answer?.length || 0))
 const pickKeyword = ref('')
 
+// ── 提纲（先列提纲再动笔）──
+// 与荧光标记同理：按题目存本机（bp-outline:<qid>），是"读题时的动作"，
+// 不写进批改记录、不涉及后端字段。批改不看提纲——它是给考生自己理思路用的。
+const outline = ref('')
+function outlineKey(qid) {
+  return `bp-outline:${qid || 'blank'}`
+}
+function loadOutline(qid) {
+  try {
+    outline.value = localStorage.getItem(outlineKey(qid)) || ''
+  } catch {
+    outline.value = ''
+  }
+}
+watch(outline, () => {
+  try {
+    localStorage.setItem(outlineKey(loadedId.value), outline.value)
+  } catch {
+    /* 存不下就算了：提纲是辅助功能，不该因为它让做题流程报错 */
+  }
+})
+
 let controller = null
 let timer = null
 
@@ -1307,6 +1345,7 @@ async function applyQuestion(q, { resetAnswer = true } = {}) {
   materialEdit.value = false
   answerMarkMode.value = false   // 换题回到编辑态
   loadMarks(loadedId.value)      // 这道题上次划的重点还在
+  loadOutline(loadedId.value)    // 这道题上次的提纲还在
   resetExamTimer()   // 换题 = 换卷，考场计时重置
   nextTick(() => window.scrollTo({ top: 0, behavior: 'smooth' }))
 }
@@ -1339,6 +1378,7 @@ function startBlank() {
   marks.material = []            // 空白题没有可标注的对象
   marks.answer = []
   answerMarkMode.value = false
+  loadOutline('')                // 空白题的提纲单独一格（bp-outline:blank）
   Object.assign(loadedMeta, { type: '', exam: '', difficulty: 0, kind: '', topics: [] })
   showPicker.value = false
   materialEdit.value = true

@@ -56,6 +56,35 @@ const cols = await page.evaluate(() => {
 })
 check('材料面板明显宽于题目面板（≥2 倍）', cols.length === 2 && cols[0] >= cols[1] * 2, JSON.stringify(cols))
 
+// ── 提纲模块：存在、可展开、输入会落 localStorage ──
+const outline = await page.evaluate(() => {
+  const d = [...document.querySelectorAll('details')].find((x) => x.textContent.includes('提纲'))
+  if (!d) return null
+  const ta = d.querySelector('textarea')
+  if (!ta) return { exists: true, ta: false }
+  return { exists: true, ta: true }
+})
+check('提纲模块存在且带输入框', outline?.exists && outline?.ta, JSON.stringify(outline))
+if (outline?.ta) {
+  await page.evaluate(() => {
+    const d = [...document.querySelectorAll('details')].find((x) => x.textContent.includes('提纲'))
+    d.open = true
+  })
+  await page.click('details textarea')
+  await page.type('details textarea', '立论：减负贵在治本；分论点：考核导向、资源下沉；收束：群众获得感。')
+  await new Promise((r) => setTimeout(r, 400))
+  const saved = await page.evaluate(() => {
+    const key = Object.keys(localStorage).find((k) => k.startsWith('bp-outline:'))
+    return key ? localStorage.getItem(key) : null
+  })
+  check('提纲输入按题目落库', saved && saved.includes('分论点'), String(saved).slice(0, 30))
+  // 收尾清理：探针注入的提纲不留给用户
+  await page.evaluate(() => {
+    const key = Object.keys(localStorage).find((k) => k.startsWith('bp-outline:'))
+    if (key) localStorage.removeItem(key)
+  })
+}
+
 // ── 荧光色板 8 色 ──
 const blockCount = await page.evaluate(() => document.querySelectorAll('[data-hl-block] p').length)
 check('页面有材料可划', blockCount > 0, `实际 ${blockCount}`)
