@@ -197,6 +197,37 @@ function cleanup() {
 
 let targets = null
 let page = null
+
+// 秒退检测：桌面版的单实例插件会让「第二实例」exit 0 立刻退出。
+// 作者本人开着桌面版时（发行版是**中文名 exe**，按进程名查抓不到）就会撞上，
+// 而后续表现只是"CDP 40 秒没起来"，很容易被误判成 WebView2 坏了 —— 先把方向纠正过来。
+{
+  const early = await new Promise((resolve) => {
+    let done = false
+    child.once('exit', (code) => {
+      if (!done) {
+        done = true
+        resolve({ early: true, code })
+      }
+    })
+    setTimeout(() => {
+      if (!done) {
+        done = true
+        resolve({ early: false })
+      }
+    }, 3000)
+  })
+  if (early.early) {
+    try {
+      child.kill('SIGKILL')
+    } catch {}
+    console.log(`✗ 被测 exe 启动后 3 秒内自行退出（exit ${early.code}）—— 单实例锁让路：已有同 identifier 的实例在跑。`)
+    console.log('  多半是你自己开着「蓝笔申论-桌面版」，或上一轮测试没杀干净。')
+    console.log('  查：tasklist 看「蓝笔申论-桌面版-*.exe」；关掉它再跑本探针。')
+    process.exit(1)
+  }
+}
+
 const deadline = Date.now() + 40000
 while (Date.now() < deadline) {
   targets = await fetchTargets()

@@ -5,7 +5,7 @@
     <div class="flex items-end justify-between gap-4 mb-8">
       <div class="min-w-0">
         <h1 class="text-xl font-semibold text-c-ink">
-          {{ step === 'answer' ? '练习批改' : step === 'grading' ? '批改中' : '批改结果' }}
+          {{ step === 'answer' ? (isExamMode ? '考场模式' : '练习批改') : step === 'grading' ? '批改中' : '批改结果' }}
         </h1>
         <p class="text-sm text-c-muted mt-1.5">
           {{ step === 'answer'
@@ -39,24 +39,20 @@
     <!-- ==================== 第一步：答题 ==================== -->
     <template v-if="step === 'answer'">
 
-      <!-- 练习模式：训练（现状，随时批改）/ 考场（倒计时，时间到自动交卷） -->
+      <!-- 模式由入口决定（侧边栏「实战」下两个入口），页内不再互相切换：
+           练习批改 = 训练；考场模式 = 独立路由。这里只标当前形态 + 给去另一边的路。 -->
       <div class="flex flex-wrap items-center gap-2 mb-5">
-        <div class="flex rounded-xl p-1 neu-sm">
-          <button @click="switchMode('train')"
-            class="px-4 py-1.5 rounded-lg text-xs font-medium transition-all duration-200"
-            :class="!isExamMode ? 'neu-inset text-c-bark' : 'text-c-muted'">
-            训练模式
-          </button>
-          <button @click="switchMode('exam')"
-            class="px-4 py-1.5 rounded-lg text-xs font-medium transition-all duration-200"
-            :class="isExamMode ? 'neu-inset text-c-bark' : 'text-c-muted'">
-            考场模式
-          </button>
-        </div>
+        <span class="px-3.5 py-1.5 rounded-lg text-xs font-medium neu-inset text-c-bark">
+          {{ isExamMode ? '考场模式' : '练习批改' }}
+        </span>
         <span class="text-xs text-c-muted">
           {{ isExamMode ? '落笔即计时，时间到自动交卷 —— 按真实考场练节奏' : '随时批改、随时看参考答案，适合日常消化' }}
         </span>
-        <div v-if="isExamMode" class="flex items-center gap-2 ml-auto">
+        <RouterLink v-if="!isExamMode" to="/exam"
+          class="ml-auto text-xs px-3 py-1.5 rounded-lg neu-sm text-c-body transition-all duration-200 hover:translate-y-px">
+          去考场模式练节奏 →
+        </RouterLink>
+        <div v-else class="flex items-center gap-2 ml-auto">
           <label class="text-xs text-c-muted">时长</label>
           <select v-model.number="examMinutes" @change="resetExamTimer"
             class="px-2 py-1 rounded-lg text-xs neu-inset outline-none text-c-body">
@@ -938,14 +934,19 @@ const canGrade = computed(
 // ── 考场模式：倒计时 + 交卷确认 + 超时自动交卷 ──
 // 设计取舍：落笔（首次输入）才计时，贴真实考场的「发卷后开始」；
 // 训练模式一条代码路径都不动，两个模式互不干扰。
-const practiceMode = ref(localStorage.getItem('practice_mode') || 'train')
-const isExamMode = computed(() => practiceMode.value === 'exam')
-function switchMode(m) {
-  practiceMode.value = m
-  localStorage.setItem('practice_mode', m)
-  resetExamTimer()
-  confirmSubmit.value = false
-}
+//
+// 2026-09-24 起模式由**路由**决定，不再靠页内 chip 切换：
+//   /practice → 练习批改（训练）    /exam → 考场模式（独立入口）
+// 一个组件两种形态 —— 改一处逻辑两页同时生效，也不会出现"两份实现漂移"。
+const isExamMode = computed(() => route.name === 'exam')
+// 换页时重置计时与交卷确认：从考场页离开再回来，不该带着上一轮的倒计时
+watch(
+  () => route.name,
+  () => {
+    resetExamTimer()
+    confirmSubmit.value = false
+  }
+)
 
 const examMinutes = ref(30)
 const examRemain = ref(30 * 60)

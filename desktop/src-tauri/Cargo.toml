@@ -6,7 +6,7 @@
 # ──────────────────────────────────────────────────────────────
 [package]
 name = "bluepencil"
-version = "0.19.0"
+version = "0.19.1"
 description = "蓝笔申论 —— 公考申论练习与 AI 批改的桌面端"
 authors = ["许一 <xuconghui_03@qq.com>"]
 license = "AGPL-3.0"

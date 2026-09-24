@@ -51,6 +51,9 @@ export default createRouter({
     { path: '/articles', name: 'articles', component: ArticlesView },
     { path: '/questions', name: 'questions', component: QuestionsView },
     { path: '/practice', name: 'practice', component: PracticeView },
+    // 考场模式：与练习批改共用组件，靠路由名切成计时形态
+    // （同一份作答/批改逻辑，避免"两份实现漂移"）
+    { path: '/exam', name: 'exam', component: PracticeView },
     { path: '/records', name: 'records', component: RecordsView },
     { path: '/stats', name: 'stats', component: StatsView },
     { path: '/weakness', name: 'weakness', component: WeaknessView },

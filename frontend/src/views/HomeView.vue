@@ -49,7 +49,7 @@
 
     <section class="mb-10">
       <h2 class="text-sm font-medium text-c-body mb-4">开始</h2>
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <RouterLink v-for="a in ACTIONS" :key="a.path" :to="a.path"
           class="rounded-2xl p-5 neu-sm group transition-all duration-300
             hover:translate-y-px">
@@ -191,6 +191,12 @@ const ACTIONS = [
     title: '练习批改',
     desc: '先把题答完，再交给老师批改；不同老师用不同颜色标出问题',
     icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg>',
+  },
+  {
+    path: '/exam',
+    title: '考场模式',
+    desc: '落笔即计时，时间到自动交卷 —— 按真实考场练节奏，作答用时记进报告',
+    icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9 2h6"/></svg>',
   },
   {
     path: '/questions',
