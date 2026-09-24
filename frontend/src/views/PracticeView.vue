@@ -2,7 +2,9 @@
   <div :class="step === 'answer' ? 'w-full max-w-5xl' : 'w-full'">
 
     <!-- ==================== 页头 ==================== -->
-    <div class="flex items-end justify-between gap-4 mb-8">
+    <!-- 答题态用更紧的下边距：整页要在一屏里放下（材料独滚），省出来的都是作答空间 -->
+    <div class="flex items-end justify-between gap-4"
+      :class="step === 'answer' ? 'mb-4' : 'mb-8'">
       <div class="min-w-0">
         <h1 class="text-xl font-semibold text-c-ink">
           {{ step === 'answer' ? modeTitle : step === 'grading' ? '批改中' : '批改结果' }}
@@ -39,34 +41,15 @@
     <!-- ==================== 第一步：答题 ==================== -->
     <template v-if="step === 'answer'">
 
-      <!-- 形态由入口决定（侧边栏「实战」下三个入口），页内不再互相切换：
-           练习批改 = 训练；真题模式 = 按原卷给全材料；考场模式 = 独立路由。 -->
-      <div class="flex flex-wrap items-center gap-2 mb-5">
-        <span class="px-3.5 py-1.5 rounded-lg text-xs font-medium neu-inset text-c-bark">
-          {{ modeTitle }}
-        </span>
-        <span class="text-xs text-c-muted">
-          {{ isExamMode
-            ? '落笔即计时，时间到自动交卷 —— 按真实考场练节奏'
-            : isRealMode
-              ? '按原卷给全材料，练「在整卷里找资料」—— 材料更全，批改成本也更高'
-              : '随时批改、随时看参考答案，适合日常消化' }}
-        </span>
-        <RouterLink v-if="!isExamMode" to="/exam"
-          class="ml-auto text-xs px-3 py-1.5 rounded-lg neu-sm text-c-body transition-all duration-200 hover:translate-y-px">
-          去考场模式练节奏 →
-        </RouterLink>
-        <div v-else class="flex items-center gap-2 ml-auto">
-          <label class="text-xs text-c-muted">时长</label>
-          <select v-model.number="examMinutes" @change="resetExamTimer"
-            class="px-2 py-1 rounded-lg text-xs neu-inset outline-none text-c-body">
-            <option v-for="m in [15, 20, 30, 40, 60, 90, 120]" :key="m" :value="m">{{ m }} 分钟</option>
-          </select>
-        </div>
-      </div>
+      <!-- 答题壳：宽屏下一屏放下（材料独滚、题目与作答固定），不再整页滚动。
+           高度 = 视口 - 顶栏 padding - 页头；内部 grid flex-1 吃掉剩余空间。 -->
+      <div class="lg:flex lg:flex-col lg:h-[calc(100vh-172px)] lg:min-h-[600px]">
+
+      <!-- 模式说明不再单独占一条卡：模式名在页头标题里已经有了，这里的字全是重复 -->
+
       <!-- 考场倒计时条：落笔（首次输入）即开始 -->
       <div v-if="isExamMode"
-        class="rounded-2xl px-5 py-3.5 mb-5 neu flex items-center justify-between"
+        class="rounded-2xl px-5 py-3 mb-4 neu shrink-0 flex items-center justify-between"
         :style="examUrgent ? 'background:#fdecea' : ''">
         <div class="flex items-center gap-3">
           <span class="text-sm font-medium" :style="examUrgent ? 'color:#b91c1c' : 'color:#1f2430'">
@@ -76,83 +59,29 @@
             {{ examClock }}
           </span>
         </div>
-        <div class="text-xs text-c-muted">
-          {{ examRunning
-            ? (examUrgent ? '最后 5 分钟，抓紧组织答案' : '作答中——交卷前可以继续修改')
-            : '开始输入后自动计时' }}
+        <div class="flex items-center gap-3">
+          <div class="text-xs text-c-muted">
+            {{ examRunning
+              ? (examUrgent ? '最后 5 分钟，抓紧组织答案' : '作答中——交卷前可以继续修改')
+              : '开始输入后自动计时' }}
+          </div>
+          <label class="text-xs text-c-muted flex items-center gap-1.5">
+            时长
+            <select v-model.number="examMinutes" @change="resetExamTimer" :disabled="examRunning"
+              class="px-2 py-1 rounded-lg text-xs neu-inset outline-none text-c-body disabled:opacity-50">
+              <option v-for="m in [15, 20, 30, 40, 60, 90, 120]" :key="m" :value="m">{{ m }} 分钟</option>
+            </select>
+          </label>
         </div>
       </div>
 
-      <!-- 今日一练：进页面就有题有材料，不用自己找。做成扁条，别把材料挤到折线以下 -->
-      <section v-if="todayQ" class="rounded-2xl px-5 py-4 neu mb-5">
-        <div class="flex flex-wrap items-center justify-between gap-x-5 gap-y-3">
-          <div class="min-w-0 flex-1">
-            <div class="flex flex-wrap items-center gap-x-2.5 gap-y-1 mb-1.5">
-              <span class="px-2 py-0.5 rounded-full text-xs font-medium shrink-0"
-                style="background: #f2ebe2; color: #5c4033">今日一练</span>
-              <span class="text-xs text-c-muted tnum">{{ todayLabel }}</span>
-              <span class="text-xs px-1.5 py-0.5 rounded shrink-0"
-                style="background: #e8ecdf; color: #3d5a7a">{{ todayQ.type }}</span>
-              <span v-if="todayQ.kind" class="text-xs text-c-muted shrink-0">{{ todayQ.kind }}</span>
-              <span class="text-xs text-c-muted truncate">{{ todayQ.exam }}</span>
-              <span v-if="doneToday" class="text-xs shrink-0" style="color: #4f7d5e">✓ 今天已练过</span>
-            </div>
-
-            <h2 class="font-serif text-sm md:text-base text-c-ink leading-7">{{ todayQ.title }}</h2>
-
-            <div class="flex flex-wrap items-center gap-x-3.5 gap-y-1 text-xs text-c-muted mt-2">
-              <span class="tnum">满分 {{ todayQ.maxScore }}</span>
-              <span v-if="todayQ.wordLimit" class="tnum">≤ {{ todayQ.wordLimit }} 字</span>
-              <span>{{ DIFFICULTY_LABEL[todayQ.difficulty] || '' }}</span>
-              <span class="tnum">材料 {{ todayQ.materialChars || (todayQ.material || '').length }} 字</span>
-            </div>
-          </div>
-
-          <div class="flex items-center gap-2 shrink-0">
-            <button v-if="loadedId !== todayQ.id" @click="applyQuestion(todayQ)"
-              class="px-4 py-2 rounded-xl text-xs font-medium text-c-cream
-                bg-c-bark transition-colors duration-300">
-              用今日一练作答
-            </button>
-            <span v-else
-              class="px-4 py-2 rounded-xl text-xs font-medium neu-inset text-c-bark">
-              已在作答这一题
-            </span>
-            <button @click="shuffle"
-              class="px-4 py-2 rounded-xl text-xs font-medium neu-sm text-c-body
-                hover:text-c-bark transition-colors duration-300">
-              换一题
-            </button>
-          </div>
-        </div>
-
-        <!-- 材料速览：不点开只占一行，点开在卡片下方铺开，不挡下面的题目区 -->
-        <!-- 真题的材料要等「用这道题」载入对应卷才有，这里先给个提示 -->
-        <div v-if="todayQ.needLoad"
-          class="mt-3 pt-3 border-t border-c-line text-xs text-c-muted leading-6">
-          真题的整卷材料约 {{ todayQ.materialChars }} 字，点「用今日一练作答」后载入。
-        </div>
-        <details v-else class="mt-3 pt-3 border-t border-c-line group">
-          <summary class="text-xs text-c-muted cursor-pointer hover:text-c-bark transition-colors list-none">
-            <span class="transition-transform duration-300 group-open:rotate-90 inline-block mr-1">▸</span>
-            先读材料（{{ materialBlocks(todayMaterialText).length }} 则）<span v-if="todayTrim" class="text-c-bark">· 本题用第 {{ todayTrim.used.join('、') }} 则</span>
-          </summary>
-          <div class="mt-3 max-h-72 overflow-y-auto space-y-3 pr-1">
-            <div v-for="(b, i) in materialBlocks(todayMaterialText)" :key="i">
-              <div v-if="b.label" class="text-xs font-medium text-c-bark mb-1">{{ b.label }}</div>
-              <p class="text-xs text-c-body leading-7 whitespace-pre-wrap">{{ b.body }}</p>
-            </div>
-          </div>
-        </details>
-      </section>
-
       <!-- 给定资料 + 题目：并排，仿考场卷面 -->
-      <!-- 上排定高：材料在面板内滚、作答区位置就稳定不动（材料长度变化不再顶跑下方内容）；
+      <!-- 上排 flex-1：材料在面板内滚、题目作答位置固定不动（答题只滚材料，不滚页面）；
            高度吃掉视口剩余空间——空地铺满，而不是留一截白 -->
       <!-- ⚠️ lg:grid-rows-[minmax(0,1fr)] 不是装饰：grid 行轨道默认 auto，会被长材料
            撑高（容器设了 height 也拦不住，轨道溢出容器），材料直接画出面板、
            叠到下方作答区上，sticky 提交条悬在材料中间 —— 内滚链条在这一环断掉。 -->
-      <div class="grid grid-cols-1 lg:grid-cols-7 lg:grid-rows-[minmax(0,1fr)] gap-6 mb-6 lg:h-[calc(100vh-330px)] lg:min-h-[480px]">
+      <div class="grid grid-cols-1 lg:grid-cols-7 lg:grid-rows-[minmax(0,1fr)] gap-4 lg:gap-x-6 lg:mb-4 mb-4 lg:flex-1 lg:min-h-[380px]">
 
         <!-- 左：给定资料（材料才是大头，占 5/7） -->
         <section class="lg:col-span-5 rounded-2xl p-5 neu flex flex-col lg:min-h-0">
@@ -164,37 +93,14 @@
               </span>
             </span>
             <div class="flex items-center gap-3 shrink-0">
-              <button @click="togglePicker"
+              <button @click="openPicker"
                 class="text-xs text-c-muted hover:text-c-bark transition-colors">
-                {{ showPicker ? '收起题库' : '从题库选题' }}
+                换一题
               </button>
-              <button v-if="form.material && !showPicker" @click="materialEdit = !materialEdit"
+              <button v-if="form.material" @click="materialEdit = !materialEdit"
                 class="text-xs text-c-muted hover:text-c-bark transition-colors">
                 {{ materialEdit ? '完成编辑' : '编辑' }}
               </button>
-            </div>
-          </div>
-
-          <!-- 选题面板：空态与主动换题都走这里，左边不再是一片空白 -->
-          <div v-if="showPicker" class="flex-1">
-            <input v-model="pickKeyword" type="text" placeholder="搜索题目 / 来源 / 主题"
-              class="w-full px-3.5 py-2.5 rounded-xl text-xs neu-inset outline-none mb-3
-                text-c-body placeholder:text-c-muted" />
-            <div class="space-y-2 max-h-[22rem] overflow-y-auto pr-1">
-              <button v-for="q in pickList" :key="q.id" @click="applyQuestion(q)"
-                class="w-full text-left rounded-xl p-3.5 neu-sm transition-all duration-200
-                  hover:translate-y-px">
-                <div class="flex items-center gap-2 mb-1.5">
-                  <span class="text-xs px-1.5 py-0.5 rounded shrink-0"
-                    style="background: #e8ecdf; color: #3d5a7a">{{ q.type }}</span>
-                  <span class="text-xs text-c-muted truncate">{{ q.exam }}</span>
-                  <span v-if="q.id === loadedId" class="text-xs text-c-bark shrink-0 ml-auto">当前</span>
-                </div>
-                <div class="text-xs text-c-body leading-6">{{ q.title }}</div>
-              </button>
-              <div v-if="!pickList.length" class="text-xs text-c-muted py-6 text-center">
-                没有匹配的题目
-              </div>
             </div>
           </div>
 
@@ -202,7 +108,7 @@
                ⚠️ 这层必须是 flex flex-col：里面的滚动容器靠 flex-1 min-h-0 拿高度，
                父级不是 flex 的话 flex-1 无效 → 容器高度=内容高度，长材料直接
                溢出面板、叠到下方作答区上（宽屏 lg 下 max-h 兜底也被关掉，必现）。 -->
-          <div v-else-if="form.material" class="flex-1 min-h-0 flex flex-col">
+          <div v-if="form.material" class="flex-1 min-h-0 flex flex-col">
             <!-- 说明条要跟**当前用的是哪一份**走：
                  说"已省去 N 则"却在显示整卷，会让人看不懂到底用了什么（真踩过）。 -->
             <div v-if="trimState.trimmed"
@@ -245,7 +151,7 @@
               从题库挑一道开始，或直接粘贴你自己的材料
             </div>
             <div class="flex gap-2">
-              <button @click="togglePicker"
+              <button @click="openPicker"
                 class="px-4 py-2 rounded-xl text-xs font-medium neu-inset text-c-bark">
                 从题库选题
               </button>
@@ -321,9 +227,10 @@
         </section>
       </div>
 
-      <!-- 我的作答：方格纸，仿考场卷面；标注态可划荧光（编辑/标注两态切换，输入体验不动） -->
-      <section class="rounded-2xl p-5 neu mb-6">
-        <div class="flex items-center justify-between mb-3">
+      <!-- 我的作答：方格纸，仿考场卷面；标注态可划荧光（编辑/标注两态切换，输入体验不动）。
+           lg 下定高、内部滚动 —— 页面本身不动，答题全程只有材料面板在滚 -->
+      <section class="rounded-2xl p-5 neu mb-4 shrink-0 lg:h-[268px] lg:flex lg:flex-col">
+        <div class="flex items-center justify-between mb-3 shrink-0">
           <span class="text-sm font-medium text-c-body">我的作答</span>
           <div class="flex items-center gap-3">
             <span v-if="markCount" class="text-xs text-c-muted tnum">已标 {{ markCount }} 处</span>
@@ -332,7 +239,7 @@
             </span>
           </div>
         </div>
-        <div class="mx-auto w-full max-w-[760px]">
+        <div class="mx-auto w-full max-w-[760px] lg:flex-1 lg:min-h-0 lg:overflow-y-auto">
           <div v-if="!answerMarkMode" class="mb-1.5 flex justify-end">
             <button @click="answerMarkMode = form.answer.trim() ? true : answerMarkMode"
               :disabled="!form.answer.trim()" :title="form.answer.trim() ? '用荧光笔圈出关键词、关键句（不影响作答）' : '先写点内容再标注'"
@@ -357,7 +264,7 @@
       </section>
 
       <!-- 提交：常驻底部，长作答不用滚回去找按钮 -->
-      <div class="sticky bottom-4 z-10">
+      <div class="sticky bottom-0 z-10 shrink-0 pb-1">
         <div class="rounded-2xl p-3 neu backdrop-blur">
           <div class="flex items-center gap-3">
             <!-- 考场模式：交卷两段确认（防误触）；超时自动交卷不走这里 -->
@@ -381,6 +288,89 @@
           </div>
           <div v-if="!canGrade" class="text-xs text-c-muted text-center mt-2">
             {{ !hasKey ? '先到设置页配置 API' : '作答至少 20 字才能提交' }}
+          </div>
+        </div>
+      </div>
+
+      </div><!-- /答题壳（lg 一屏固定） -->
+
+      <!-- 选题弹窗：进入/切换模式即弹出，按题型分类选题。
+           分类从题池现算（题型是自由文本，别写死枚举——自建题什么类型都可能有）；
+           「今日一练」置顶第一个，跟原来的日常节奏接上。 -->
+      <div v-if="showPickerModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30"
+        @click.self="closePicker">
+        <div class="w-full max-w-2xl rounded-2xl p-5 bg-c-paper shadow-[0_18px_50px_rgba(92,64,51,0.25)]
+          flex flex-col max-h-[82vh]">
+          <div class="flex items-center justify-between mb-3 shrink-0">
+            <div class="min-w-0">
+              <span class="text-sm font-medium text-c-body">选一道题开始作答</span>
+              <!-- 模式说明跟着弹窗走：顶部卡删了，但三种形态的差异说明得有人讲 -->
+              <span class="text-xs text-c-muted ml-2">
+                {{ isExamMode
+                  ? '落笔即计时，时间到自动交卷 —— 按真实考场练节奏'
+                  : isRealMode
+                    ? '按原卷给全材料，练「在整卷里找资料」—— 材料更全，批改成本也更高'
+                    : '随时批改、随时看参考答案，适合日常消化' }}
+              </span>
+            </div>
+            <button @click="closePicker" class="text-c-muted hover:text-c-bark text-xs leading-none shrink-0 ml-3">✕</button>
+          </div>
+
+          <!-- 分类条：全部 / 今日一练 / 动态题型 -->
+          <div class="flex flex-wrap items-center gap-1.5 mb-3 shrink-0">
+            <button @click="pickCat = '全部'"
+              class="px-2.5 py-1 rounded-lg text-xs transition-all duration-200"
+              :class="pickCat === '全部' ? 'bg-c-bark text-c-cream font-medium' : 'text-c-muted hover:text-c-bark neu-sm'">
+              全部
+            </button>
+            <button @click="pickCat = '今日一练'" :disabled="!todayQ"
+              class="px-2.5 py-1 rounded-lg text-xs transition-all duration-200 disabled:opacity-40"
+              :class="pickCat === '今日一练' ? 'bg-c-bark text-c-cream font-medium' : 'text-c-muted hover:text-c-bark neu-sm'">
+              今日一练
+            </button>
+            <span class="w-px h-4 bg-c-line mx-0.5" />
+            <button v-for="c in pickCats" :key="c" @click="pickCat = c"
+              class="px-2.5 py-1 rounded-lg text-xs transition-all duration-200"
+              :class="pickCat === c ? 'bg-c-bark text-c-cream font-medium' : 'text-c-muted hover:text-c-bark neu-sm'">
+              {{ c }}
+            </button>
+          </div>
+
+          <input v-model="pickKeyword" type="text" placeholder="搜索题目 / 来源 / 主题"
+            class="w-full px-3.5 py-2.5 rounded-xl text-xs neu-inset outline-none mb-3 shrink-0
+              text-c-body placeholder:text-c-muted" />
+
+          <div class="flex-1 min-h-0 overflow-y-auto space-y-2 pr-1">
+            <button v-for="q in pickList" :key="q.id" @click="applyQuestion(q)"
+              class="w-full text-left rounded-xl p-3.5 neu-sm transition-all duration-200
+                hover:translate-y-px">
+              <div class="flex items-center gap-2 mb-1.5">
+                <span class="text-xs px-1.5 py-0.5 rounded shrink-0"
+                  style="background: #e8ecdf; color: #3d5a7a">{{ q.type || '未分类' }}</span>
+                <span class="text-xs text-c-muted truncate">{{ q.exam }}</span>
+                <span v-if="q.kind" class="text-xs text-c-muted shrink-0">{{ q.kind }}</span>
+                <span v-if="q.id === loadedId" class="text-xs text-c-bark shrink-0 ml-auto">当前</span>
+              </div>
+              <div class="text-xs text-c-body leading-6">{{ q.title }}</div>
+            </button>
+            <div v-if="!pickList.length" class="text-xs text-c-muted py-8 text-center">
+              {{ pickCat === '今日一练' ? '今日一练还没就绪，稍等片刻' : '这个分类下没有匹配的题目' }}
+            </div>
+          </div>
+
+          <div class="flex items-center justify-between mt-3 pt-3 border-t border-c-line shrink-0">
+            <span class="text-xs text-c-muted">题库共 {{ pool.length }} 题 · 也可以先空白作答粘贴自己的材料</span>
+            <div class="flex items-center gap-2 shrink-0">
+              <!-- 考场入口从顶部卡挪到这里：想练节奏的人随时能跳过去 -->
+              <RouterLink v-if="!isExamMode" to="/exam"
+                class="text-xs px-3 py-1.5 rounded-lg neu-sm text-c-body transition-all duration-200 hover:translate-y-px">
+                去考场模式练节奏 →
+              </RouterLink>
+              <button @click="startBlank(); closePicker()"
+                class="px-3 py-1.5 rounded-lg text-xs neu-sm text-c-body hover:text-c-bark transition-colors">
+                空白作答
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -887,9 +877,8 @@ import { mergeKeyPoints, summarizeKeyPoints } from '../utils/grading/keyPoints'
 import { trimMaterial } from '../utils/grading/materialTrim'
 import { buildRecord, archiveRecord, countChars, fmtDateTime, listAllRecords } from '../utils/record'
 import { getAll, STORES } from '../store/db'
-import { DIFFICULTY_LABEL } from '../data/builtin-questions'
 import { BUILTIN_POOL, resolveQuestion } from '../data/questions'
-import { pickDaily, pickRandom, practicedToday } from '../data/daily'
+import { pickDaily, practicedToday } from '../data/daily'
 import { useReadiness } from '../utils/readiness'
 
 const route = useRoute()
@@ -1003,20 +992,12 @@ const mine = ref([])
 const todayQ = ref(null)
 const doneToday = ref(false)
 
-// 今日一练卡片的材料速览：同样按题裁 —— 卡片展示的就是作答时真正要读的那几则。
-const todayTrim = computed(() => {
-  const q = todayQ.value
-  if (!q || q.needLoad || !q.material) return null
-  const t = trimMaterial(q.material, [q.title, q.requirement].filter(Boolean).join(' '))
-  return t.trimmed ? t : null
-})
-const todayMaterialText = computed(() =>
-  todayTrim.value ? todayTrim.value.text : todayQ.value?.material || ''
-)
+// 今日一练在选题弹窗里作为第一个分类出现；材料按需载入，不再单独维护速览裁剪。
 
 const loadedId = ref('')
 const loadedMeta = reactive({ type: '', exam: '', difficulty: 0, kind: '', topics: [] })
-const showPicker = ref(false)
+const showPickerModal = ref(false)
+const pickCat = ref('全部')
 const materialEdit = ref(false)
 
 // ── 荧光标注（材料 + 作答）───────────────────────────────────
@@ -1191,23 +1172,40 @@ watch(
   }
 )
 
-const todayLabel = computed(() => {
-  const d = new Date()
-  return `${d.getMonth() + 1} 月 ${d.getDate()} 日`
+// —— 选题弹窗：进入/切换模式即弹出 ——
+function openPicker() {
+  materialEdit.value = false
+  showPickerModal.value = true
+}
+function closePicker() {
+  showPickerModal.value = false
+}
+
+/** 分类条：题型从题池现算（题型是自由文本，自建题什么类型都可能有，别写死枚举） */
+const pickCats = computed(() => {
+  const seen = []
+  for (const q of pool.value) {
+    if (q.type && !seen.includes(q.type)) seen.push(q.type)
+  }
+  return seen
 })
 
-/** 选题面板：按关键词过滤，未加载的排前面 */
+/** 选题列表：分类 + 关键词双重过滤，未加载的排前面 */
 const pickList = computed(() => {
   const k = pickKeyword.value.trim().toLowerCase()
-  const list = pool.value.filter((q) => {
-    if (!k) return true
-    return (
+  let list = pool.value
+  if (pickCat.value === '今日一练') {
+    list = todayQ.value ? [todayQ.value] : []
+  } else if (pickCat.value !== '全部') {
+    list = list.filter((q) => q.type === pickCat.value)
+  }
+  if (k) {
+    list = list.filter((q) =>
       (q.title || '').toLowerCase().includes(k) ||
       (q.exam || '').toLowerCase().includes(k) ||
       (q.type || '').toLowerCase().includes(k) ||
-      (q.topics || []).some((t) => t.toLowerCase().includes(k))
-    )
-  })
+      (q.topics || []).some((t) => t.toLowerCase().includes(k)))
+  }
   return [...list].sort((a, b) => (a.id === loadedId.value ? -1 : b.id === loadedId.value ? 1 : 0))
 })
 
@@ -1363,26 +1361,13 @@ async function applyQuestion(q, { resetAnswer = true } = {}) {
     topics: q.topics || [],
   })
 
-  showPicker.value = false
+  showPickerModal.value = false
   materialEdit.value = false
   answerMarkMode.value = false   // 换题回到编辑态
   loadMarks(loadedId.value)      // 这道题上次划的重点还在
   loadOutline(loadedId.value)    // 这道题上次的提纲还在
   resetExamTimer()   // 换题 = 换卷，考场计时重置
   nextTick(() => window.scrollTo({ top: 0, behavior: 'smooth' }))
-}
-
-/** 换一题：随机，但不与当前这题重复 */
-async function shuffle() {
-  const q = pickRandom(pool.value, loadedId.value)
-  if (!q) return toast.warning('题库是空的，先录入题目')
-  await applyQuestion(q)
-  toast.success('已换一题')
-}
-
-function togglePicker() {
-  showPicker.value = !showPicker.value
-  if (showPicker.value) materialEdit.value = false
 }
 
 /** 空白作答：清掉题目，只留输入框，方便粘贴自己的材料 */
@@ -1402,7 +1387,7 @@ function startBlank() {
   answerMarkMode.value = false
   loadOutline('')                // 空白题的提纲单独一格（bp-outline:blank）
   Object.assign(loadedMeta, { type: '', exam: '', difficulty: 0, kind: '', topics: [] })
-  showPicker.value = false
+  showPickerModal.value = false
   materialEdit.value = true
 }
 
@@ -1581,8 +1566,20 @@ onMounted(async () => {
       exam: route.query.exam || '',
     }
   }
-  // 都没有就默认用今日一练 —— 进页面就有题有材料，不再是空白表单
-  applyQuestion(q || todayQ.value, { resetAnswer: false })
+  // 都没有就默认用今日一练 —— 进页面就有题有材料，不再是空白表单。
+  // ⚠️ 必须 await：applyQuestion 收尾会把弹窗状态复位，不 await 的话
+  // 它会在 openPicker 之后才跑完，把刚弹出来的选题弹窗又关掉（竞态，真踩过）。
+  await applyQuestion(q || todayQ.value, { resetAnswer: false })
+
+  // 选模式 → 弹分类选题：这是进来的第一件事。带着 query（题库页跳转）来的不算，
+  // 那条路径用户已经选好题了。
+  if (!route.query.questionId && !route.query.material) openPicker()
+})
+
+// 三个模式入口复用同一组件实例（onMounted 不会重跑）：切换模式同样弹选题，
+// 让"选模式"这个动作总有"选题"接着。批改中/看结果时不打断。
+watch(() => route.path, (p, op) => {
+  if (p !== op && step.value === 'answer') openPicker()
 })
 
 onUnmounted(() => {

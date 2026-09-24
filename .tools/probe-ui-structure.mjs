@@ -22,6 +22,11 @@ const browser = await puppeteer.launch({
   defaultViewport: { width: 1440, height: 1000, deviceScaleFactor: 2 },
 })
 const page = await browser.newPage()
+// 注假 Key 再加载：一屏布局断言要测「配置后」的形态——
+// 没 Key 时页面多一条「去配置」横幅，会把整页顶出视口（那是未配置态的合法表现）。
+await page.evaluateOnNewDocument(() => {
+  localStorage.setItem('llm_config', JSON.stringify({ api_key: 'probe-fake-key' }))
+})
 await page.goto('http://127.0.0.1:5279/#/practice', { waitUntil: 'networkidle2', timeout: 60000 })
 await new Promise((r) => setTimeout(r, 2200))
 
@@ -60,16 +65,23 @@ check('材料面板明显宽于题目面板（≥2 倍）', cols.length === 2 &&
 const hs = await page.evaluate(() => {
   const sec = document.querySelector('[data-hl-block]')?.closest('section')
   const grid = sec?.parentElement
+  const doc = document.scrollingElement
   return {
     secH: Math.round(sec?.getBoundingClientRect().height || 0),
     gridH: Math.round(grid?.getBoundingClientRect().height || 0),
+    pageOverflow: doc.scrollHeight > doc.clientHeight + 2,
+    pageOverflowPx: doc.scrollHeight - doc.clientHeight,
     scrollable: (() => {
       const el = sec?.querySelector('.overflow-y-auto')
       return el ? el.scrollHeight > el.clientHeight || el.clientHeight > 400 : false
     })(),
   }
 })
-check('材料面板高度 ≥480px（定高铺满）', hs.secH >= 480, `面板 ${hs.secH}px / 栅格 ${hs.gridH}px`)
+// ── 一屏布局：材料面板是一屏 flex 剩余空间的自适应高度（旧设计是 calc 定高 ≥480）。
+//    v0.25.0 起答题页整页不滚（材料独滚），面板高度跟着视口走——
+//    断言改为「够用的高度」+ 内部滚动生效，钉的是可用性而不是某个实现值。
+check('材料面板高度 ≥360px（一屏自适应）', hs.secH >= 360, `面板 ${hs.secH}px / 栅格 ${hs.gridH}px`)
+check('材料面板与作答区、提交条同屏（整页不滚）', hs.pageOverflow !== true, `页面溢出 ${hs.pageOverflowPx ?? 0}px`)
 check('材料面板内部滚动生效', hs.scrollable, JSON.stringify(hs))
 
 // ── 提纲模块：存在、可展开、输入会落 localStorage ──
