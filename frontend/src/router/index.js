@@ -53,6 +53,8 @@ export default createRouter({
     { path: '/practice', name: 'practice', component: PracticeView },
     // 考场模式：与练习批改共用组件，靠路由名切成计时形态
     // （同一份作答/批改逻辑，避免"两份实现漂移"）
+    // 真题模式：按原卷给全材料（练"在整卷里找资料"），与练习批改共用同一份作答与批改逻辑
+    { path: '/real', name: 'real', component: PracticeView },
     { path: '/exam', name: 'exam', component: PracticeView },
     { path: '/records', name: 'records', component: RecordsView },
     { path: '/stats', name: 'stats', component: StatsView },

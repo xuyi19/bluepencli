@@ -5,7 +5,7 @@
     <div class="flex items-end justify-between gap-4 mb-8">
       <div class="min-w-0">
         <h1 class="text-xl font-semibold text-c-ink">
-          {{ step === 'answer' ? (isExamMode ? '考场模式' : '练习批改') : step === 'grading' ? '批改中' : '批改结果' }}
+          {{ step === 'answer' ? modeTitle : step === 'grading' ? '批改中' : '批改结果' }}
         </h1>
         <p class="text-sm text-c-muted mt-1.5">
           {{ step === 'answer'
@@ -39,14 +39,18 @@
     <!-- ==================== 第一步：答题 ==================== -->
     <template v-if="step === 'answer'">
 
-      <!-- 模式由入口决定（侧边栏「实战」下两个入口），页内不再互相切换：
-           练习批改 = 训练；考场模式 = 独立路由。这里只标当前形态 + 给去另一边的路。 -->
+      <!-- 形态由入口决定（侧边栏「实战」下三个入口），页内不再互相切换：
+           练习批改 = 训练；真题模式 = 按原卷给全材料；考场模式 = 独立路由。 -->
       <div class="flex flex-wrap items-center gap-2 mb-5">
         <span class="px-3.5 py-1.5 rounded-lg text-xs font-medium neu-inset text-c-bark">
-          {{ isExamMode ? '考场模式' : '练习批改' }}
+          {{ modeTitle }}
         </span>
         <span class="text-xs text-c-muted">
-          {{ isExamMode ? '落笔即计时，时间到自动交卷 —— 按真实考场练节奏' : '随时批改、随时看参考答案，适合日常消化' }}
+          {{ isExamMode
+            ? '落笔即计时，时间到自动交卷 —— 按真实考场练节奏'
+            : isRealMode
+              ? '按原卷给全材料，练「在整卷里找资料」—— 材料更全，批改成本也更高'
+              : '随时批改、随时看参考答案，适合日常消化' }}
         </span>
         <RouterLink v-if="!isExamMode" to="/exam"
           class="ml-auto text-xs px-3 py-1.5 rounded-lg neu-sm text-c-body transition-all duration-200 hover:translate-y-px">
@@ -874,8 +878,10 @@ function applyTrim(q) {
   trimState.after = t.after || fullMat.length
   trimState.savedPct = t.savedPct || 0
   trimState.trimmed = !!t.trimmed
-  trimState.active = !!t.trimmed
-  form.material = t.trimmed ? t.text : fullMat
+  // 真题模式默认**不裁**：它的定位就是"按原卷给全材料"（要自己在整卷里找资料）。
+  // 仍保留切换按钮 —— 用户想省成本时可以自己改成按题材料。
+  trimState.active = isRealMode.value ? false : !!t.trimmed
+  form.material = trimState.active ? t.text : fullMat
 }
 
 function resetTrim() {
@@ -972,6 +978,12 @@ const canGrade = computed(
 //   /practice → 练习批改（训练）    /exam → 考场模式（独立入口）
 // 一个组件两种形态 —— 改一处逻辑两页同时生效，也不会出现"两份实现漂移"。
 const isExamMode = computed(() => route.name === 'exam')
+// 真题模式：按**原卷**给全材料，练"在整卷里找资料"——与训练模式的"按题裁剪"形成互补。
+// 三种形态共用这一份作答与批改逻辑（路由名决定形态，不搞三份实现）。
+const isRealMode = computed(() => route.name === 'real')
+const modeTitle = computed(() =>
+  isExamMode.value ? '考场模式' : isRealMode.value ? '真题模式' : '练习批改'
+)
 // 换页时重置计时与交卷确认：从考场页离开再回来，不该带着上一轮的倒计时
 watch(
   () => route.name,
