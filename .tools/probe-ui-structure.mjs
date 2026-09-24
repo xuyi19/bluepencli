@@ -56,6 +56,22 @@ const cols = await page.evaluate(() => {
 })
 check('材料面板明显宽于题目面板（≥2 倍）', cols.length === 2 && cols[0] >= cols[1] * 2, JSON.stringify(cols))
 
+// ── 上排定高：材料面板吃满视口剩余高度（作答区才不会随材料长短上下跳）──
+const hs = await page.evaluate(() => {
+  const sec = document.querySelector('[data-hl-block]')?.closest('section')
+  const grid = sec?.parentElement
+  return {
+    secH: Math.round(sec?.getBoundingClientRect().height || 0),
+    gridH: Math.round(grid?.getBoundingClientRect().height || 0),
+    scrollable: (() => {
+      const el = sec?.querySelector('.overflow-y-auto')
+      return el ? el.scrollHeight > el.clientHeight || el.clientHeight > 400 : false
+    })(),
+  }
+})
+check('材料面板高度 ≥480px（定高铺满）', hs.secH >= 480, `面板 ${hs.secH}px / 栅格 ${hs.gridH}px`)
+check('材料面板内部滚动生效', hs.scrollable, JSON.stringify(hs))
+
 // ── 提纲模块：存在、可展开、输入会落 localStorage ──
 const outline = await page.evaluate(() => {
   const d = [...document.querySelectorAll('details')].find((x) => x.textContent.includes('提纲'))

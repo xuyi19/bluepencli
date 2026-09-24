@@ -191,10 +191,12 @@
       </section>
 
       <!-- 给定资料 + 题目：并排，仿考场卷面 -->
-      <div class="grid grid-cols-1 lg:grid-cols-7 gap-6 mb-6">
+      <!-- 上排定高：材料在面板内滚、作答区位置就稳定不动（材料长度变化不再顶跑下方内容）；
+           高度吃掉视口剩余空间——空地铺满，而不是留一截白 -->
+      <div class="grid grid-cols-1 lg:grid-cols-7 gap-6 mb-6 lg:h-[calc(100vh-330px)] lg:min-h-[480px]">
 
         <!-- 左：给定资料（材料才是大头，占 5/7） -->
-        <section class="lg:col-span-5 rounded-2xl p-5 neu flex flex-col">
+        <section class="lg:col-span-5 rounded-2xl p-5 neu flex flex-col lg:min-h-0">
           <div class="flex items-center justify-between gap-3 mb-3">
             <span class="text-sm font-medium text-c-body">
               给定资料
@@ -268,7 +270,7 @@
               placeholder="把材料原样粘进来（材料 1、材料 2……）"
               class="w-full h-full px-3.5 py-2.5 rounded-xl text-xs neu-inset outline-none resize-none
                 text-c-body placeholder:text-c-muted leading-7" />
-            <div v-else class="max-h-[32rem] overflow-y-auto pr-1">
+            <div v-else class="flex-1 min-h-0 overflow-y-auto pr-1 max-h-[32rem] lg:max-h-none">
               <Highlightable :blocks="materialBlocks(form.material)" :marks="marks.material"
                 @change="(l) => onMarksChange('material', l)" class="space-y-3.5" />
             </div>
@@ -293,8 +295,8 @@
           </div>
         </section>
 
-        <!-- 右：题目要求（压缩占地：题干和要求各留必要行数，元信息两列小字） -->
-        <section class="lg:col-span-2 rounded-2xl p-4 neu">
+        <!-- 右：题目要求（压缩占地；定高下内容多就面板内滚） -->
+        <section class="lg:col-span-2 rounded-2xl p-4 neu lg:overflow-y-auto lg:min-h-0">
           <div class="flex items-center justify-between mb-3">
             <span class="text-sm font-medium text-c-body">题目</span>
             <div class="flex items-center gap-1.5">
