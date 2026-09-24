@@ -239,16 +239,30 @@
 
           <!-- 有材料：阅读态（默认）/ 编辑态 -->
           <div v-else-if="form.material" class="flex-1 min-h-0">
+            <!-- 说明条要跟**当前用的是哪一份**走：
+                 说"已省去 N 则"却在显示整卷，会让人看不懂到底用了什么（真踩过）。 -->
             <div v-if="trimState.trimmed"
               class="flex flex-wrap items-center gap-x-2 gap-y-0.5 mb-3 text-xs leading-5">
-              <span class="font-medium text-c-bark">本题用给定资料{{ trimState.used.join('、') }}</span>
-              <span class="text-c-muted tnum">
-                整卷共 {{ trimState.dropped + trimState.used.length }} 则，已省去其余 {{ trimState.dropped }} 则（材料 {{ trimState.before }} → {{ trimState.after }} 字，省 {{ trimState.savedPct }}%）
-              </span>
-              <button @click="toggleTrim"
-                class="underline underline-offset-2 text-c-muted hover:text-c-bark transition-colors">
-                {{ trimState.active ? '查看整卷材料' : '只用本题材料' }}
-              </button>
+              <template v-if="trimState.active">
+                <span class="font-medium text-c-bark">本题用给定资料{{ trimState.used.join('、') }}</span>
+                <span class="text-c-muted tnum">
+                  整卷共 {{ trimState.dropped + trimState.used.length }} 则，已省去其余 {{ trimState.dropped }} 则（材料 {{ trimState.before }} → {{ trimState.after }} 字，省 {{ trimState.savedPct }}%）
+                </span>
+                <button @click="toggleTrim"
+                  class="underline underline-offset-2 text-c-muted hover:text-c-bark transition-colors">
+                  查看整卷材料
+                </button>
+              </template>
+              <template v-else>
+                <span class="font-medium text-c-bark">当前用的是整卷材料</span>
+                <span class="text-c-muted tnum">
+                  本题只问资料{{ trimState.used.join('、') }}；切成本题材料可省 {{ trimState.savedPct }}%（{{ trimState.before }} → {{ trimState.after }} 字）
+                </span>
+                <button @click="toggleTrim"
+                  class="underline underline-offset-2 text-c-muted hover:text-c-bark transition-colors">
+                  只用本题材料
+                </button>
+              </template>
             </div>
             <textarea v-if="materialEdit" v-model="form.material" rows="14"
               placeholder="把材料原样粘进来（材料 1、材料 2……）"

@@ -49,6 +49,9 @@ t('真题模式默认不裁材料（按原卷给全）',
   /trimState\.active\s*=\s*isRealMode\.value\s*\?\s*false\s*:/.test(pv),
   '这是真题模式与训练模式的唯一实质差异')
 t('真题模式如实说明成本更高', /材料更全，批改成本也更高/.test(pv))
+// 说明条要跟"当前用哪份"走：说"已省去 N 则"却在显示整卷，用户会看不懂到底用了什么。
+t('材料说明条区分当前状态（整卷态说"当前用的是整卷材料"）',
+  /当前用的是整卷材料/.test(pv) && /本题只问资料/.test(pv))
 t('已无 practice_mode 本地存储状态', !/practice_mode/.test(pv), '旧 chip 切换的遗留')
 t('已无 switchMode 函数', !/function switchMode/.test(pv))
 t('路由切换时重置计时', /watch\(\s*\(\)\s*=>\s*route\.name/.test(pv))
