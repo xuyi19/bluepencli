@@ -172,6 +172,89 @@ t('标准键名不带 builtin- 前缀的话，练习页会取不到（回归护�
   assert.ok(PUBLIC_STANDARDS['builtin-q-01'])
 })
 
+// ── 同义表述（synonyms）与反向要点（forbidden_point）────────────────
+// 这两个字段直接决定"采分准不准"：
+//   synonyms 少了 —— 考生换个说法就被判 miss，覆盖率系统性偏低；
+//   forbidden_point 少了 —— 方向写反也能拿分，是最伤信任的一类误判。
+// 所以每个字段都配一条"没有它会怎样"的反证，证明它不是装饰。
+t('同义表述：考生换一种说法，同样算命中', () => {
+  const p = {
+    id: 'p1',
+    label: '加强组织领导',
+    weight: 4,
+    keywords: ['领导小组'],
+    synonyms: ['成立专班', '由主要领导牵头'],
+  }
+  assert.equal(matchPoint(p, '成立专班推进此项工作').status, POINT_STATUS.HIT)
+})
+
+t('没有同义词时，同样的改写仍是 miss（反证：这个字段不是装饰）', () => {
+  const p = { id: 'p1', label: '加强组织领导', weight: 4, keywords: ['领导小组'] }
+  assert.equal(matchPoint(p, '成立专班推进此项工作').status, POINT_STATUS.MISS)
+})
+
+t('反向要点：方向写错时即使命中关键词也不给分', () => {
+  const p = {
+    id: 'p1',
+    label: '政府应加强监管',
+    weight: 4,
+    keywords: ['监管'],
+    forbidden_point: ['由市场自行调节'],
+  }
+  const m = matchPoint(p, '政府不应介入，应由市场自行调节资源配置')
+  assert.equal(m.status, POINT_STATUS.MISS)
+  assert.equal(m.forbidden, true)
+  assert.deepEqual(m.matchedForbidden, ['由市场自行调节'])
+})
+
+t('反向要点的判据**先于**关键词命中（顺序反了就等于没做）', () => {
+  const p = { id: 'p1', label: 'x', weight: 2, keywords: ['监管'], forbidden_point: ['监管应放开'] }
+  assert.equal(matchPoint(p, '监管应放开').forbidden, true)
+})
+
+t('compareWithStandard 单独统计踩到反向要点的数量', () => {
+  const std = normalizeStandard({
+    questionId: 'q',
+    totalScore: 4,
+    points: [{ id: 'p1', label: 'a', weight: 4, keywords: ['监管'], forbidden_point: ['放开管制'] }],
+  })
+  const cmp = compareWithStandard(std, '应当放开管制')
+  assert.equal(cmp.forbiddenCount, 1)
+  assert.equal(cmp.earned, 0)
+})
+
+t('校验期拦下「同一个词既算同义又算反向」的自相矛盾', () => {
+  const bad = normalizeStandard({
+    questionId: 'q',
+    totalScore: 2,
+    points: [{ id: 'p1', label: 'a', weight: 2, synonyms: ['加强'], forbidden_point: ['加强'] }],
+  })
+  assert.equal(validateStandard(bad).ok, false)
+})
+
+t('注入给老师的文本里出现同义表述与反向要点提示', () => {
+  const std = normalizeStandard({
+    questionId: 'q',
+    totalScore: 2,
+    points: [{ id: 'p1', label: 'a', weight: 2, synonyms: ['成立专班'], forbidden_point: ['交由市场自决'] }],
+  })
+  const txt = formatStandardForPrompt(std)
+  assert.match(txt, /同义表述/)
+  assert.match(txt, /反向要点/)
+  assert.match(txt, /成立专班/)
+  assert.match(txt, /交由市场自决/)
+})
+
+t('规范化必须保留两个新字段（不保留＝录了也白录）', () => {
+  const std = normalizeStandard({
+    questionId: 'q',
+    totalScore: 2,
+    points: [{ id: 'p1', label: 'a', weight: 2, synonyms: ['x'], forbidden_point: ['y'] }],
+  })
+  assert.deepEqual(std.points[0].synonyms, ['x'])
+  assert.deepEqual(std.points[0].forbidden_point, ['y'])
+})
+
 console.log(`\n采分点标准层单测：${pass} passed, ${fails.length} failed`)
 for (const f of fails) console.log(`  ✗ ${f.name}\n    ${f.msg}`)
 process.exit(fails.length ? 1 : 0)

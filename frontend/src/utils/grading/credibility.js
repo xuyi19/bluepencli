@@ -74,6 +74,8 @@ const PENALTY = {
   parseFailMax: 50,
   rulesCapped: 5,
   reviewMissing: 10,
+  /** 采分点标准只是模型预解析草稿（source='llm'）——有锚点但未人工复核 */
+  stdDraft: 6,
 }
 
 /** UI 用的展示文案与色值（沿用项目配色，别自创） */
@@ -235,6 +237,51 @@ export function assessCredibility({
     }
   }
 
+  // ── 信号 2b：标准的来路（人工精校 / 机器草稿 / 没有） ──────────
+  // 这一条直接回答"分数准不准"：同一个模型、同一份作答，背后有没有锚点，
+  // 结论的可信程度完全不同 —— 人工精校的采分点是可复算的尺子，
+  // 机器草稿有尺子但没校过，没有标准则连"这次判得对不对"都无法回答。
+  // ⚠️ 无标准**不额外扣分**：没有标准不是批改犯错，是这道题还没有尺子 ——
+  //    扣分没有依据；但也不该再显示"可信度高"，所以走汇总处的 cap（见下）。
+  {
+    // ⚠️ 取值路径别写错：传进来的 `standard` 是 buildStandardComparison 的结果，
+    //    形如 `{ standard: summarizeStandard(…), ...cmp }` —— source 在**内层**。
+    //    只写 `standard?.source` 会恒取到 undefined，于是人工精校的标准被误判成机器草稿。
+    //    两种形状都兼容，是因为测试与调用方都可能直接传归一化后的标准对象。
+    const src = String(standard?.standard?.source || standard?.source || '')
+    if (stdCov === null) {
+      signals.push({
+        id: 'standardSource',
+        label: '标准来源',
+        valueText: '无标准（裸判）',
+        level: SIGNAL_LEVEL.BAD,
+        basis: '该题没有录入采分点标准，模型只能凭题干与材料直接判断',
+        note: '没有锚点，分数换一次批改就可能变，跨题目之间也不好比较',
+      })
+    } else if (src === 'manual') {
+      signals.push({
+        id: 'standardSource',
+        label: '标准来源',
+        valueText: '人工精校',
+        level: SIGNAL_LEVEL.GOOD,
+        basis: "采分点标准的 source='manual'：由作者逐条核对、可复算",
+        note: '这是这套评分最强的一层锚 —— 分数可复算、可解释',
+      })
+      reasons.push('采分点标准经过人工精校，分数有可复算的锚点')
+    } else {
+      // source='llm' 或缺失（工具批量产出）都归这一档
+      penalty += PENALTY.stdDraft
+      signals.push({
+        id: 'standardSource',
+        label: '标准来源',
+        valueText: `机器预解析${src ? `（source=${src}）` : '（未标注来源）'}`,
+        level: SIGNAL_LEVEL.WARN,
+        basis: "采分点由模型预解析生成，标准 source 不是 'manual'",
+        note: '有锚点但未经人工复核，可能漏采分点、或把关键词写偏',
+      })
+    }
+  }
+
   // ── 信号 3：阅卷完成度（有没有人掉链子） ────────────────────
   if (list.length) {
     const level = failedList.length ? SIGNAL_LEVEL.BAD : SIGNAL_LEVEL.GOOD
@@ -315,7 +362,10 @@ export function assessCredibility({
   // 这时无论其它信号多好看，都只能算「基本可信」。
   // ⚠️ 为什么封顶而不是扣分：这两项缺失**不是错误**，给低分没有依据；
   //    但它们确实意味着「没有任何交叉验证」，所以不该显示成「可信度高」。
-  if (rates.length < 2 && stdCov === null) {
+  // ⚠️ 2026-09-24 扩展：**只要是"无标准"就封顶**（不再限定单人）——
+  //    几位老师一致只能说明"几个模型想法接近"，说明不了"判得对"。
+  //    想到"可信度高"，唯一的路是把这道题的采分点人工精校了。
+  if (stdCov === null) {
     cap = Math.min(cap, THRESHOLDS.mediumCapScore)
   }
 

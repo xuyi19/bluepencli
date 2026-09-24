@@ -51,7 +51,9 @@ function idealReport(over = {}) {
       { teacherId: 'bailu', score: 17.5, maxScore: 20 },
     ],
     final: { finalScore: 17.5, maxScore: 20 },
-    standard: { coverage: 85, earned: 17, total: 20 },
+    // 形状与运行时一致：buildStandardComparison 返回 `{ standard: summarizeStandard(…), ...cmp }`，
+    // 采分点的来源（manual/llm）在**内层** `standard.standard.source` 上，不在外层
+    standard: { standard: { source: 'manual' }, coverage: 85, earned: 17, total: 20 },
     hardRules: { rawDeduction: 1, objectiveDeduction: 1, capped: false },
     debate: null,
     ...over,
@@ -102,7 +104,9 @@ check('单人 + 有标准 → 可以拿高分（有锚点可比）',
     mode: 'solo',
     results: [{ teacherId: 'a', score: 17.5, maxScore: 20 }],
     final: { finalScore: 17.5, maxScore: 20 },
-    standard: { coverage: 85, earned: 17, total: 20 },
+    // 形状与运行时一致：buildStandardComparison 返回 `{ standard: summarizeStandard(…), ...cmp }`，
+    // 采分点的来源（manual/llm）在**内层** `standard.standard.source` 上，不在外层
+    standard: { standard: { source: 'manual' }, coverage: 85, earned: 17, total: 20 },
   }).level === LEVEL.HIGH)
 
 const noStd = assessCredibility(idealReport({ standard: null }))
@@ -110,6 +114,39 @@ check('没有采分点标准 → 吻合度是「不适用」',
   sig(noStd, 'standardAgreement')?.level === SIGNAL_LEVEL.NA)
 check('没有标准时明确告知：这次缺一个独立于模型的旁证',
   noStd.caveats.some((c) => c.includes('没有采分点标准')))
+
+// ── 标准来源（2026-09-24 新增信号 2b）──────────────────────
+// 它回答的是"分数准不准"这个最大的短板：同一个模型、同一份作答，
+// 背后有没有锚点、锚点校过没校过，可信程度不同。
+console.log('')
+console.log('── 二·五、标准的来路 ──')
+
+check('人工精校 → 标准来源为「好」，并进入 reasons',
+  sig(good, 'standardSource')?.level === SIGNAL_LEVEL.GOOD &&
+    good.reasons.some((r) => r.includes('人工精校')),
+  sig(good, 'standardSource')?.valueText || '')
+
+check('无标准 → 标准来源为「差」，明确指出是裸判',
+  sig(noStd, 'standardSource')?.level === SIGNAL_LEVEL.BAD,
+  sig(noStd, 'standardSource')?.valueText || '')
+
+check('无标准 → 等级最多「基本可信」（几位老师一致只能说明模型想法接近，说明不了判得对）',
+  noStd.level === LEVEL.MEDIUM, `${noStd.level} / ${noStd.score} 分`)
+
+const draftStd = assessCredibility(
+  idealReport({ standard: { standard: { source: 'llm' }, coverage: 85, earned: 17, total: 20 } })
+)
+check('机器预解析草稿 → 标准来源为「注意」（有尺子但没校过）',
+  sig(draftStd, 'standardSource')?.level === SIGNAL_LEVEL.WARN,
+  sig(draftStd, 'standardSource')?.valueText || '')
+check('机器草稿比人工精校扣分更多',
+  draftStd.score < good.score, `${draftStd.score} vs ${good.score}`)
+check('每种来源都带了算法口径（basis）',
+  ['good', 'noStd', 'draftStd'].every((k) => {
+    const c = { good, noStd, draftStd }[k]
+    const s = sig(c, 'standardSource')
+    return s && typeof s.basis === 'string' && s.basis.length >= 10
+  }))
 
 // ── 三、破坏性事件必须降级 ────────────────────────────────
 console.log('')

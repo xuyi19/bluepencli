@@ -19,6 +19,9 @@
 //   · 各采分点 weight 之和必须等于 totalScore，不许凑数；
 //   · evidence 必须是材料里的**原文片段**（程序会去材料里精确匹配，改写了就失效）；
 //   · 匹配时忽略空白，但标点与引号必须和材料一致——**evidence 尽量避开引号**。
+//   · synonyms 是**等价表述**（考生换个说法表达同一要点，同样算命中）；
+//     forbidden_point 是**反向要点**（写出这些＝方向理解错了，该点不给分）。
+//     两者不许出现同一个词——自相矛盾，validateStandard 与 calibrate --check 都会拦。
 
 // ⚠️ 键名必须等于**练习页用的题目 id**，不是数据文件里的原始 id：
 //    · 仿真题在题库里会被加前缀（builtin-questions.js::withPrefix）→ 键是 `builtin-q-01`；
@@ -39,6 +42,8 @@ export const PUBLIC_STANDARDS = {
         weight: 4,
         evidence: ['成立数字乡村建设领导小组', '考核结果纳入市县党政领导班子实绩考核'],
         keywords: ['领导小组', '部门参与', '月调度', '实绩考核'],
+        synonyms: ['成立工作专班', '多部门联席会议推进', '纳入干部实绩考核'],
+        forbidden_point: ['无需政府主导，由村民自发组织'],
         note: '只写"加强领导"而无具体机制不给分；"纳入班子实绩考核"是加分细节。',
       },
       {
@@ -47,6 +52,8 @@ export const PUBLIC_STANDARDS = {
         weight: 3,
         evidence: ['省财政每年安排专项资金', '对成效突出的县给予每县最高'],
         keywords: ['专项资金', '奖补', '财政'],
+        synonyms: ['设立省级专项资金', '以奖代补'],
+        forbidden_point: ['资金以村集体自筹为主'],
         note: '"投入资金"泛写不得分，须落到"专项资金 + 奖补"两条具体举措。',
       },
       {
@@ -55,6 +62,8 @@ export const PUBLIC_STANDARDS = {
         weight: 3,
         evidence: ['数字乡村建设评价指标体系', '设置 28 项指标'],
         keywords: ['评价指标', '维度', '28'],
+        synonyms: ['制定建设评价标准', '明确考核维度与指标'],
+        forbidden_point: ['不必建立统一评价标准'],
         note: '此项常被漏答——材料中与"考核"伴生，注意区分"机制考核"与"指标体系"两个点。',
       },
       {
@@ -67,6 +76,8 @@ export const PUBLIC_STANDARDS = {
           '与省农科院共建数字农业试验站',
         ],
         keywords: ['智慧农业', '高标准农田', '灌溉', '施肥', '培训', '新农人'],
+        synonyms: ['数字农业平台', '智能灌溉施肥建议', '培育新型职业农民'],
+        forbidden_point: ['以增加化肥农药投入提高产量'],
         note: '分值最高的一点，含"平台建设 + 生产应用 + 人才培养"三个层次，只答"建了平台"最多给一半（partial）。',
       },
       {
@@ -75,6 +86,8 @@ export const PUBLIC_STANDARDS = {
         weight: 3,
         evidence: ['建成县域电商公共服务中心', '统一品牌、统一包装、统一物流'],
         keywords: ['电商', '直播', '品牌', '物流', '补贴'],
+        synonyms: ['县级电商服务中心', '统一品牌包装物流'],
+        forbidden_point: ['只靠外来企业收购，无需本地品牌建设'],
         note: '"统一品牌包装物流"是区别于普通"搞直播"的采分词，要写出来。',
       },
       {
@@ -83,6 +96,8 @@ export const PUBLIC_STANDARDS = {
         weight: 3,
         evidence: ['村民扫码即可上报问题', '自动派单到相应村干部，办结后由上报人评价'],
         keywords: ['小程序', '微治理', '派单', '上报', '评价'],
+        synonyms: ['乡村治理数字化平台', '线上上报自动派单办结评价'],
+        forbidden_point: ['仍按传统方式上门找村干部反映'],
         note: '"闭环"是关键——只写"开发了小程序"属 partial，写到"派单 + 评价"才算全。',
       },
     ],

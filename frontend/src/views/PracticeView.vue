@@ -56,7 +56,7 @@
           <label class="text-xs text-c-muted">时长</label>
           <select v-model.number="examMinutes" @change="resetExamTimer"
             class="px-2 py-1 rounded-lg text-xs neu-inset outline-none text-c-body">
-            <option v-for="m in [15, 20, 30, 40, 60, 90]" :key="m" :value="m">{{ m }} 分钟</option>
+            <option v-for="m in [15, 20, 30, 40, 60, 90, 120]" :key="m" :value="m">{{ m }} 分钟</option>
           </select>
         </div>
       </div>
@@ -510,6 +510,10 @@
             覆盖率 {{ report.standard.coverage }}%（{{ report.standard.earned }} / {{ report.standard.total }} 分，程序粗判）
           </span>
         </div>
+        <div v-if="report.standard.forbiddenCount" class="text-[11px] mb-3 leading-5" style="color: #b4552d">
+          ⛔ 有 {{ report.standard.forbiddenCount }} 处答到了反向要点 —— 这不是"少写"，是方向理解错了，
+          比漏点更该先纠正。
+        </div>
         <div class="h-1.5 rounded-full mb-4" style="background: #eae2d8">
           <div class="h-1.5 rounded-full" style="background: #8b9d77"
             :style="{ width: report.standard.coverage + '%' }"></div>
@@ -523,6 +527,10 @@
               <div class="text-xs text-c-body leading-6">{{ p.label }}</div>
               <div v-if="p.matchedKeywords?.length" class="text-[11px] text-c-muted mt-0.5 leading-5">
                 命中：{{ p.matchedKeywords.join('、') }}
+              </div>
+              <!-- 反向要点：答反了比漏写更需要注意，必须单独说清 -->
+              <div v-if="p.forbidden" class="text-[11px] mt-0.5 leading-5" style="color: #b4552d">
+                ⛔ 写到了反向要点「{{ (p.matchedForbidden || []).join('、') }}」——方向理解错了，本点不给分
               </div>
               <div v-if="p.status === 'miss' && p.evidence?.length" class="text-[11px] text-c-muted mt-0.5 leading-5">
                 材料依据：{{ p.evidence.slice(0, 2).join('｜') }}

@@ -20,7 +20,10 @@ import { PUBLIC_STANDARDS } from './public'
 import { GENERATED_STANDARDS } from './generated'
 import { PRIVATE_STANDARDS } from '@private-standards'
 // 校准工作台产出的人工精校（.tools/standards/calibrate.mjs 写这里，不动手写文件）
-import MANUAL_STANDARDS from './manual.json'
+// ⚠️ `with { type: 'json' }` 不能省：Vite 能容忍裸 JSON import，但 **Node 直跑会炸**
+//    （ERR_IMPORT_ATTRIBUTE_MISSING）—— .tools/ 下的工具（prompt-size、calibrate…）
+//    都是 Node 直跑并 import 本文件，漏了它整个工具链会在加载期崩。
+import MANUAL_STANDARDS from './manual.json' with { type: 'json' }
 
 /**
  * 全量标准表：questionId -> standard

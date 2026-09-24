@@ -99,6 +99,14 @@ function cmdCheck() {
     for (const p of st.points) {
       if (!p.label) problems.push(`${id}/${p.id}: 缺 label`)
       if (!Number(p.weight)) problems.push(`${id}/${p.id}: 权重非正数`)
+      if (p.synonyms != null && !Array.isArray(p.synonyms))
+        problems.push(`${id}/${p.id}: synonyms 必须是数组`)
+      if (p.forbidden_point != null && !Array.isArray(p.forbidden_point))
+        problems.push(`${id}/${p.id}: forbidden_point 必须是数组`)
+      // 同一个词既算同义又算反向 —— 该点永远判不准（注入给老师也是自相矛盾的）
+      const both = (p.synonyms || []).filter((s) => (p.forbidden_point || []).includes(s))
+      if (both.length)
+        problems.push(`${id}/${p.id}: 同义表述与反向要点重复（${both.join('、')}），自相矛盾`)
     }
   }
   console.log(`校验标准 ${Object.keys(all).filter((k) => !k.startsWith('_')).length} 条`)
@@ -141,20 +149,30 @@ async function cmdWizard(id) {
   const seed = cur?.points || []
   let n = 0
   console.log('逐条录入采分点（label 留空结束）：')
+  console.log('  · 关键词＝判据词（纯代码粗判用）')
+  console.log('  · 同义表述＝考生换一种说法表达同一要点的合法表达，写了都算命中')
+  console.log('  · 反向要点＝写出这些说明方向理解错了、该点不给分（这两项可留空）')
   while (true) {
     const seedP = seed[n]
     const label = await ask(`\n[${n + 1}] 采分点`, seedP?.label || '')
     if (!label) break
     const weight = Number(await ask(`    权重（分）`, String(seedP?.weight ?? ''))) || 0
     const kw = await ask('    关键词（逗号分隔）', (seedP?.keywords || []).join(','))
+    const syn = await ask('    同义表述（逗号分隔，可空）', (seedP?.synonyms || []).join(','))
+    const fb = await ask('    反向要点（逗号分隔，可空）', (seedP?.forbidden_point || []).join(','))
     const ev = await ask('    材料依据（逗号分隔，可空）', (seedP?.evidence || []).join(','))
     const note = await ask('    给分说明（可空）', seedP?.note || '')
+    const split = (s) => (s ? s.split(/[,，]/).map((x) => x.trim()).filter(Boolean) : [])
     points.push({
       id: seedP?.id || `p${n + 1}`,
       label,
       weight,
-      keywords: kw ? kw.split(/[,，]/).map((s) => s.trim()).filter(Boolean) : [],
-      evidence: ev ? ev.split(/[,，]/).map((s) => s.trim()).filter(Boolean) : [],
+      keywords: split(kw),
+      // 同义表述：考生换一种说法表达同一要点也算命中（不录就会把改写判成 miss）
+      synonyms: split(syn),
+      // 反向要点：写出这些＝方向理解错了，该点不给分（不录就可能"答反了还给分"）
+      forbidden_point: split(fb),
+      evidence: split(ev),
       note,
     })
     n++
