@@ -1,5 +1,5 @@
 <template>
-  <div ref="rootEl" class="hl-root" @mouseup="onMouseUp">
+  <div ref="rootEl" class="hl-root">
     <div v-for="(b, i) in blocks" :key="i" data-hl-block>
       <div v-if="b.label" class="text-xs font-medium text-c-bark mb-1">{{ b.label }}</div>
       <p class="text-sm text-c-body leading-7 whitespace-pre-wrap">
@@ -29,7 +29,7 @@
 // 为什么是个组件而不是直接改 GridPaper：作答区是 textarea（原生输入体验不能丢），
 // 材料区与「标注视图」是只读渲染 —— 两个场景共用同一套"选区 → 色板 → 标记"逻辑，
 // 但都不需要动输入控件本身。textarea 保持原样，标注走只读视图。
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import {
   HIGHLIGHT_COLORS,
   colorById,
@@ -38,6 +38,7 @@ import {
   readSelection,
   splitByMarks,
 } from '../utils/highlight'
+import { toast } from '../utils/toast'
 
 const props = defineProps({
   // [{ label?, body }]，材料按则分块；作答也可以只传一块
@@ -68,14 +69,14 @@ function splitOf(body) {
   return splitByMarks(body, props.marks)
 }
 
-/** 选区是否落在**同一块**里：跨块的话锚点算不清（块之间还有 label），直接不接 */
+/** 选区是否落在**同一块**里：跨块的话锚点算不清（块之间还有 label） */
 function sameBlock(range) {
   const node = range.commonAncestorContainer
   const el = node.nodeType === 1 ? node : node.parentElement
   return el?.closest('[data-hl-block]') || null
 }
 
-function onMouseUp() {
+function showPalette() {
   const sel = readSelection(rootEl.value, plainText.value)
   if (!sel) {
     palette.value = null
@@ -86,7 +87,8 @@ function onMouseUp() {
   const range = s.getRangeAt(0)
   const block = sameBlock(range)
   if (!block) {
-    palette.value = null // 跨块：不弹色板（锚点跨块会定位不稳）
+    palette.value = null // 跨块：锚点定位不稳。但**必须说**，不能静默没反应
+    toast.info('跨段选择没法稳定定位，请在同一段文字内划选')
     return
   }
   const rect = range.getBoundingClientRect()
@@ -95,10 +97,29 @@ function onMouseUp() {
     text: sel.text,
     nth: sel.nth,
     // 色板放在选区上方；贴顶时改放下方，免得被容器裁掉
-    left: Math.max(0, Math.min(rect.left - rootRect.left, rootRect.width - 190)),
+    left: Math.max(0, Math.min(rect.left - rootRect.left, rootRect.width - 330)),
     top: rect.top - rootRect.top - 42 < 0 ? rect.bottom - rootRect.top + 6 : rect.top - rootRect.top - 42,
   }
 }
+
+// mouseup 挂在 **window** 上而不是组件根：用户拖拽出面板外才松手是常事，
+// 挂在根上时 mouseup 不冒泡回来，色板就永远不弹（"有时候会有问题"的真实来源之一）。
+// 能不能弹由「选区锚点是否在容器内」决定，与松手位置无关。
+function onWindowMouseUp() {
+  if (!rootEl.value) return
+  const s = window.getSelection?.()
+  if (!s || s.isCollapsed || !s.rangeCount) {
+    palette.value = null
+    return
+  }
+  const inRoot = s.anchorNode && rootEl.value.contains(s.anchorNode)
+    && rootEl.value.contains(s.focusNode ?? s.anchorNode)
+  if (inRoot) showPalette()
+  else palette.value = null
+}
+
+onMounted(() => window.addEventListener('mouseup', onWindowMouseUp))
+onBeforeUnmount(() => window.removeEventListener('mouseup', onWindowMouseUp))
 
 function paint(colorId) {
   const p = palette.value

@@ -121,9 +121,9 @@ async function paintIn(containerSel, swatchIdx) {
   }, swatchIdx)
   await new Promise((r) => setTimeout(r, 300))
 }
-await paintIn('.max-h-\\[26rem\\] .hl-root, [data-hl-block]', 0) // 黄
-await paintIn('.max-h-\\[26rem\\] .hl-root, [data-hl-block]', 1) // 绿
-await paintIn('.max-h-\\[26rem\\] .hl-root, [data-hl-block]', 2) // 蓝
+await paintIn('.max-h-\\[32rem\\] .hl-root, [data-hl-block]', 0) // 黄
+await paintIn('.max-h-\\[32rem\\] .hl-root, [data-hl-block]', 1) // 绿
+await paintIn('.max-h-\\[32rem\\] .hl-root, [data-hl-block]', 2) // 蓝
 
 const saved = await page.evaluate(() => {
   const key = Object.keys(localStorage).find((k) => k.startsWith('bp-marks:'))

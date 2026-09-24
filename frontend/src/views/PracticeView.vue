@@ -191,10 +191,10 @@
       </section>
 
       <!-- 给定资料 + 题目：并排，仿考场卷面 -->
-      <div class="grid grid-cols-1 lg:grid-cols-5 gap-6 mb-6">
+      <div class="grid grid-cols-1 lg:grid-cols-7 gap-6 mb-6">
 
-        <!-- 左：给定资料 -->
-        <section class="lg:col-span-3 rounded-2xl p-5 neu flex flex-col">
+        <!-- 左：给定资料（材料才是大头，占 5/7） -->
+        <section class="lg:col-span-5 rounded-2xl p-5 neu flex flex-col">
           <div class="flex items-center justify-between gap-3 mb-3">
             <span class="text-sm font-medium text-c-body">
               给定资料
@@ -268,7 +268,7 @@
               placeholder="把材料原样粘进来（材料 1、材料 2……）"
               class="w-full h-full px-3.5 py-2.5 rounded-xl text-xs neu-inset outline-none resize-none
                 text-c-body placeholder:text-c-muted leading-7" />
-            <div v-else class="max-h-[26rem] overflow-y-auto pr-1">
+            <div v-else class="max-h-[32rem] overflow-y-auto pr-1">
               <Highlightable :blocks="materialBlocks(form.material)" :marks="marks.material"
                 @change="(l) => onMarksChange('material', l)" class="space-y-3.5" />
             </div>
@@ -293,9 +293,9 @@
           </div>
         </section>
 
-        <!-- 右：题目要求 -->
-        <section class="lg:col-span-2 rounded-2xl p-5 neu">
-          <div class="flex items-center justify-between mb-4">
+        <!-- 右：题目要求（压缩占地：题干和要求各留必要行数，元信息两列小字） -->
+        <section class="lg:col-span-2 rounded-2xl p-4 neu">
+          <div class="flex items-center justify-between mb-3">
             <span class="text-sm font-medium text-c-body">题目</span>
             <div class="flex items-center gap-1.5">
               <!-- 来源标签：导入的私有真题必须能一眼认出来（"这卷别外传"的前提是看得见） -->
@@ -306,28 +306,28 @@
             </div>
           </div>
 
-          <label class="block text-xs text-c-muted mb-1.5">题干</label>
-          <textarea v-model="form.title" rows="3"
+          <label class="block text-[11px] text-c-muted mb-1">题干</label>
+          <textarea v-model="form.title" rows="2"
             placeholder="例：结合给定资料，围绕「养老刚需也是产业蓝海」自拟题目，写一篇文章"
-            class="w-full px-3.5 py-2.5 rounded-xl text-xs neu-inset outline-none resize-none
+            class="w-full px-3 py-2 rounded-xl text-xs neu-inset outline-none resize-none
               text-c-body placeholder:text-c-muted leading-6" />
 
-          <label class="block text-xs text-c-muted mt-4 mb-1.5">作答要求</label>
-          <textarea v-model="form.requirement" rows="4"
+          <label class="block text-[11px] text-c-muted mt-3 mb-1">作答要求</label>
+          <textarea v-model="form.requirement" rows="3"
             placeholder="例：观点明确，结构完整，语言流畅，1000 字左右"
-            class="w-full px-3.5 py-2.5 rounded-xl text-xs neu-inset outline-none resize-none
+            class="w-full px-3 py-2 rounded-xl text-xs neu-inset outline-none resize-none
               text-c-body placeholder:text-c-muted leading-6" />
 
-          <div class="grid grid-cols-2 gap-4 mt-4">
+          <div class="grid grid-cols-2 gap-3 mt-3">
             <div>
-              <label class="block text-xs text-c-muted mb-1.5">满分</label>
+              <label class="block text-[11px] text-c-muted mb-1">满分</label>
               <input v-model.number="form.maxScore" type="number" min="1"
-                class="w-full px-3.5 py-2.5 rounded-xl text-xs neu-inset outline-none text-c-body tnum" />
+                class="w-full px-3 py-2 rounded-xl text-xs neu-inset outline-none text-c-body tnum" />
             </div>
             <div>
-              <label class="block text-xs text-c-muted mb-1.5">字数要求</label>
+              <label class="block text-[11px] text-c-muted mb-1">字数要求</label>
               <input v-model.number="form.wordLimit" type="number" placeholder="不限"
-                class="w-full px-3.5 py-2.5 rounded-xl text-xs neu-inset outline-none
+                class="w-full px-3 py-2 rounded-xl text-xs neu-inset outline-none
                   text-c-body placeholder:text-c-muted tnum" />
             </div>
           </div>

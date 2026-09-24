@@ -83,7 +83,11 @@ console.log('resolveMarks：失效必须看得见')
 }
 
 console.log('色板与计数')
-check('色板 5 色', HIGHLIGHT_COLORS.length === 5)
+check('色板 8 色', HIGHLIGHT_COLORS.length === 8)
+check('色板透明度足够突出（≥0.45）', HIGHLIGHT_COLORS.every((c) => {
+  const a = Number(c.bg.slice(c.bg.lastIndexOf(' '), -1))
+  return a >= 0.45
+}))
 check('countOccurrences 数对出现次数', countOccurrences(T, '基层减负') === 2)
 check('countOccurrences 空入参为 0', countOccurrences(T, '') === 0)
 

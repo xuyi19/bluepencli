@@ -17,13 +17,18 @@
 //
 // 本模块零副作用、纯函数，可被 Node 直接 import（护栏：.tools/test-highlight.mjs）。
 
-/** 荧光色板：半透明背景，压在深色正文上仍能看清字 */
+/** 荧光色板：半透明背景压在正文下。透明度刻意给到 0.45~0.6 ——
+ * 早先 0.34~0.42 太淡，用户反馈"不够突出"（划了像没划）。字是深色，
+ * 这些 alpha 在暖米纸上仍能保证正文对比度。 */
 export const HIGHLIGHT_COLORS = [
-  { id: 'yellow', label: '黄', bg: 'rgba(250, 214, 96, 0.42)' },
-  { id: 'green', label: '绿', bg: 'rgba(146, 205, 134, 0.38)' },
-  { id: 'blue', label: '蓝', bg: 'rgba(133, 183, 236, 0.36)' },
-  { id: 'pink', label: '粉', bg: 'rgba(242, 156, 178, 0.34)' },
-  { id: 'purple', label: '紫', bg: 'rgba(192, 160, 226, 0.34)' },
+  { id: 'yellow', label: '黄', bg: 'rgba(250, 204, 21, 0.60)' },
+  { id: 'green', label: '绿', bg: 'rgba(74, 222, 128, 0.52)' },
+  { id: 'blue', label: '蓝', bg: 'rgba(96, 165, 250, 0.52)' },
+  { id: 'pink', label: '粉', bg: 'rgba(244, 114, 182, 0.48)' },
+  { id: 'purple', label: '紫', bg: 'rgba(167, 139, 250, 0.48)' },
+  { id: 'orange', label: '橙', bg: 'rgba(251, 146, 60, 0.52)' },
+  { id: 'cyan', label: '青', bg: 'rgba(34, 211, 238, 0.46)' },
+  { id: 'red', label: '红', bg: 'rgba(248, 113, 113, 0.46)' },
 ]
 
 export const DEFAULT_COLOR = 'yellow'

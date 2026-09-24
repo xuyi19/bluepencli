@@ -10,11 +10,13 @@
 
     <div class="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-6">
 
-      <!-- 左：老师列表 -->
-      <div class="space-y-2.5">
+      <!-- 左：老师列表（活跃项带老师色边条，一眼看出当前是谁） -->
+      <div class="space-y-2">
         <button v-for="t in TEACHER_LIST" :key="t.id" @click="pick(t.id)"
-          class="w-full text-left rounded-2xl p-4 transition-all duration-200"
+          class="w-full text-left rounded-2xl p-3.5 transition-all duration-200 relative overflow-hidden"
           :class="active === t.id ? 'neu-inset' : 'neu-sm hover:translate-y-px'">
+          <div v-if="active === t.id" class="absolute left-0 top-3 bottom-3 w-1 rounded-r"
+            :style="{ background: t.color }" />
           <div class="flex items-center gap-3">
             <div class="w-9 h-9 rounded-xl flex items-center justify-center text-sm font-medium shrink-0"
               :style="{
@@ -24,10 +26,12 @@
               }">
               {{ t.avatar }}
             </div>
-            <div class="min-w-0">
+            <div class="min-w-0 flex-1">
               <div class="text-sm font-medium text-c-ink">{{ t.name }}</div>
               <div class="text-xs text-c-muted truncate">{{ t.school }}</div>
             </div>
+            <span class="text-[10px] tnum px-1.5 py-0.5 rounded shrink-0"
+              :style="{ background: t.color + '14', color: t.color }">×{{ t.weight }}</span>
           </div>
         </button>
       </div>
@@ -76,11 +80,13 @@
           </div>
 
           <div class="mt-4 pt-4 border-t border-c-line">
-            <div class="text-xs text-c-muted mb-2">评分维度（AI 批改时只从这四项评判）</div>
+            <div class="text-xs text-c-muted mb-2">评分维度（AI 批改时只从这 {{ teacher.dimensions.length }} 项评判）</div>
             <div class="flex flex-wrap gap-1.5">
-              <span v-for="d in teacher.dimensions" :key="d"
-                class="text-xs px-2 py-0.5 rounded-md"
-                :style="{ background: teacher.color + '12', color: teacher.color }">{{ d }}</span>
+              <span v-for="(d, i) in teacher.dimensions" :key="d"
+                class="text-xs px-2 py-0.5 rounded-md tnum"
+                :style="{ background: teacher.color + '12', color: teacher.color }">
+                {{ String(i + 1).padStart(2, '0') }} {{ d }}
+              </span>
             </div>
           </div>
         </div>
@@ -113,8 +119,8 @@
             <div class="text-xs text-c-muted tnum">{{ docLoading ? '加载中…' : `${(doc.length / 1000).toFixed(1)}k 字符` }}</div>
           </div>
           <div v-if="docLoading" class="text-xs text-c-muted py-6 text-center">正在加载…</div>
-          <div v-else class="rounded-xl p-4 neu-inset max-h-[620px] overflow-y-auto">
-            <pre class="text-xs text-c-body whitespace-pre-wrap leading-6"
+          <div v-else class="rounded-xl p-5 neu-inset max-h-[620px] overflow-y-auto">
+            <pre class="text-[13px] text-c-body whitespace-pre-wrap leading-7 max-w-prose mx-auto"
               style="font-family: inherit">{{ doc }}</pre>
           </div>
           <div class="text-xs text-c-muted mt-3 leading-5">

@@ -60,18 +60,20 @@ import GroupedSidebar from './components/GroupedSidebar.vue'
 import ToastHost from './components/ToastHost.vue'
 import WeChatHost from './components/WeChatHost.vue'
 
-// 导航数据：分组由 group 字段标定，避免再写一份冗余数组
+// 导航数据：分组由 group 字段标定，避免再写一份冗余数组。
+// group 为空串 = 不渲染组头（首页是入口不是分类）。
+// 实战提到第二位：这是本工具的核心动作，不该排在第三个组里。
 const NAV = [
-  { group: '学习', path: '/', label: '首页' },
-  { group: '学习', path: '/teachers', label: '老师' },
-  { group: '内容', path: '/questions', label: '题库' },
-  { group: '内容', path: '/articles', label: '文章库' },
+  { group: '', path: '/', label: '首页' },
   { group: '实战', path: '/practice', label: '练习批改' },
   // 考场模式独立入口（2026-09-24）：与练习批改同一组件，路由决定形态。
   // 分开的理由：一个是"随时批改随时看答案"的日常消化，一个是"计时交卷"的节奏训练，
   // 混在一个页面的切换里，用户找不到、也容易在考试时顺手点开答案。
   { group: '实战', path: '/real', label: '真题模式' },
   { group: '实战', path: '/exam', label: '考场模式' },
+  { group: '学习', path: '/teachers', label: '老师' },
+  { group: '学习', path: '/questions', label: '题库' },
+  { group: '学习', path: '/articles', label: '文章库' },
   // 分组名与条目名不能同名：分组头也是"复盘"，条目再叫"复盘"，
   // 侧边栏会出现两行一模一样的字，看着像重复项。
   { group: '复盘', path: '/records', label: '历史批改' },
