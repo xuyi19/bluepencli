@@ -90,9 +90,26 @@
         <span>加微信 / 交流群</span>
       </button>
 
-      <!-- 开源入口已升级为上方「关于」组的正式条目（与更新日志并排），
-           底部不再放重复的胶囊。微信入口保留在此（它是动作不是页面）。 -->
-      <div class="h-1.5" />
+      <!-- 小展示行：更新日志 / GitHub / Gitee（2026-10-08 从正式导航降级回来 ——
+           用户要求不占导航空间。三个并排、间隙 gap-1（4px）+ h-7 命中区，
+           比当年 61×28px/6px 缝的版本好点；更新日志走路由，仓库走外链。 -->
+      <div class="flex items-stretch gap-1">
+        <template v-for="m in miniLinks" :key="m.path">
+          <a v-if="m.href" :href="m.href" target="_blank" rel="noopener" :title="m.label"
+            class="flex-1 h-7 rounded-lg border border-c-line flex items-center justify-center
+              text-[11px] text-c-muted leading-none transition-colors duration-300 ease-in-out
+              hover:text-c-bark hover:bg-c-barkSoft hover:border-transparent">
+            {{ m.label }}
+          </a>
+          <RouterLink v-else :to="m.path" :title="m.label"
+            @click="emit('navigate')"
+            class="flex-1 h-7 rounded-lg border border-c-line flex items-center justify-center
+              text-[11px] text-c-muted leading-none transition-colors duration-300 ease-in-out
+              hover:text-c-bark hover:bg-c-barkSoft hover:border-transparent">
+            {{ m.label }}
+          </RouterLink>
+        </template>
+      </div>
 
       <RouterLink to="/settings"
         @click="emit('navigate')"
@@ -127,6 +144,7 @@ import { openWeChat } from '../utils/wechatPanel'
 
 const props = defineProps({
   nav: { type: Array, required: true },     // 含 group 字段的导航数组
+  miniLinks: { type: Array, default: () => [] }, // 底部设置上方的小展示行
   dot: { type: Object, required: true },    // { color, title }
   version: { type: String, default: '0.2.0' },
 })

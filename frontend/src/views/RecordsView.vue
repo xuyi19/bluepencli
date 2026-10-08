@@ -79,13 +79,15 @@
                   : exportState === 'ok:web' ? '已开始下载'
                   : '已保存：' + exportState.slice(3) }}
               </span>
-              <button @click="doExport('pdf')" :disabled="exportState === 'busy'"
-                class="text-xs text-c-muted hover:text-c-ink disabled:opacity-40 shrink-0">
-                导出 PDF
-              </button>
               <button @click="doExport('docx')" :disabled="exportState === 'busy'"
-                class="text-xs text-c-muted hover:text-c-ink disabled:opacity-40 shrink-0">
-                导出 Word
+                class="px-4 h-8 rounded-xl text-xs font-medium neu-sm text-c-bark
+                  hover:translate-y-px transition-transform disabled:opacity-40 shrink-0">
+                ⬇ 下载 Word
+              </button>
+              <button @click="doExport('pdf')" :disabled="exportState === 'busy'"
+                class="px-4 h-8 rounded-xl text-xs font-medium neu-sm text-c-bark
+                  hover:translate-y-px transition-transform disabled:opacity-40 shrink-0">
+                ⬇ 下载 PDF
               </button>
               <button @click="del(detail.id)" class="text-xs text-c-muted hover:text-[#b4552d] shrink-0">
                 删除

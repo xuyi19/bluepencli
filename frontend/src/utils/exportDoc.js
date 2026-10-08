@@ -130,6 +130,25 @@ function fmtCn(ts) {
   return `${d.getFullYear()} 年 ${d.getMonth() + 1} 月 ${d.getDate()} 日`
 }
 
+// ─────────────────────────── 黑白打印模式 ───────────────────────────
+// 2026-10-08 用户要求「文档直接黑白色就行」：彩色（老师色/主题绿）压成灰阶，
+// 所有底色（荧光标记/批注便签浅底）删掉换成下划线 —— 彩打费墨，黑白打印机
+// 把浅底打出来还发灰。两个渲染器入口统一过 toPrint，模型层不用感知。
+const GRAY_MAP = { '1F3A2E': '2B2B2B', '5B5B4A': '5B5B5B', '8A8578': '8A8A8A', 'B0AA9A': 'AAAAAA' }
+const GRAY_KEEP = new Set(['2B2B2B', '3A3A3A', '4A4A4A', '8A8A8A', 'AAAAAA', '5B5B5B'])
+
+function toPrint(nodes) {
+  return nodes.map((n) => ({
+    ...n,
+    runs: n.runs.map(({ fill, ...r }) => ({
+      ...r,
+      color: !r.color ? undefined
+        : GRAY_MAP[r.color] || (GRAY_KEEP.has(r.color) ? r.color : '2B2B2B'),
+      ...(fill ? { underline: true } : {}),
+    })),
+  }))
+}
+
 // ─────────────────────────── 内容模型 ───────────────────────────
 // 节点 = { runs:[Run], before?, after?, border? }   before/after 单位 twip（1pt=20）
 // Run  = { text, color?, size?, bold?, fill? }      size 半点（五号=21）；颜色 RRGGBB 无 #
@@ -174,7 +193,7 @@ export function buildReviewModel(data) {
   // ── 二、给定资料（含我的标记） ──
   nodes.push(mkNode([R({ text: '二、给定资料', bold: true, size: 21, color: '1F3A2E' })], { before: 280, border: true }))
   if (matMarks.length) {
-    nodes.push(mkNode([R({ text: '（底色 = 你自己划的荧光标记）', color: '8A8578', size: 14 })], { after: 100 }))
+    nodes.push(mkNode([R({ text: '（下划线 = 你自己划的标记）', color: '8A8578', size: 14 })], { after: 100 }))
   }
   if (data.material) {
     for (const b of materialBlocks(data.material)) {
@@ -226,19 +245,18 @@ export function buildReviewModel(data) {
     if (r) hlRanges.push({ ...r, fill: MARK_FILL[h.color] || MARK_FILL.yellow })
   }
 
-  // 图例
-  const legendRuns = []
+  // 图例（黑白打印：老师色块没意义，改纯文字计数）
+  const legendRuns = [R({ text: '批注：', bold: true, size: 14 })]
   const byTeacher = new Map()
   for (const r of annRanges) {
     byTeacher.set(r.colorHex, (byTeacher.get(r.colorHex) || 0) + 1)
   }
   for (const [color, n] of byTeacher) {
     const name = annRanges.find((r) => r.colorHex === color)?.teacherName || ''
-    legendRuns.push(R({ text: `■ ${name}`, color, bold: true, size: 14 }))
-    legendRuns.push(R({ text: ` ${n} 处　`, color: '8A8578', size: 14 }))
+    legendRuns.push(R({ text: `${name} ${n} 处　`, color: '4A4A4A', size: 14 }))
   }
-  if (hlRanges.length) legendRuns.push(R({ text: '□ 底色 = 我的荧光', color: '8A8578', size: 14 }))
-  if (legendRuns.length) nodes.push(mkNode(legendRuns, { after: 140 }))
+  if (hlRanges.length) legendRuns.push(R({ text: '下划线 = 我的标记', color: '8A8578', size: 14 }))
+  if (annRanges.length || hlRanges.length) nodes.push(mkNode(legendRuns, { after: 140 }))
 
   // 正文：区间按换行切开后逐行事件化游走
   if (!answer) {
@@ -336,12 +354,13 @@ export function buildReviewModel(data) {
  */
 export function buildLexiconModel(themes, { favOnly = false, favSet = null } = {}) {
   const nodes = []
-  const R = (o) => ({ size: 21, color: '2B2B2B', ...o })
+  // 素材本条目短、量大：正文 8pt、间距收紧，整册打印才不浪费纸（2026-10-08 用户反馈）
+  const R = (o) => ({ size: 16, color: '2B2B2B', ...o })
 
   const total = themes.reduce((s, t) => s + t.items.length, 0)
-  nodes.push(mkNode([R({ text: '蓝笔申论 · 规范词库', bold: true, size: 26 })], { after: 60 }))
+  nodes.push(mkNode([R({ text: '蓝笔申论 · 规范词库', bold: true, size: 22 })], { after: 40 }))
   nodes.push(
-    mkNode([R({ text: `${fmtCn(Date.now())} 导出 · 共 ${total} 条 · 主题与文章库九大主题对齐 · 背一组规范词，顶刷十篇时评`, color: '8A8578', size: 14 })], { after: 200 })
+    mkNode([R({ text: `${fmtCn(Date.now())} 导出 · 共 ${total} 条 · 主题与文章库九大主题对齐 · 背一组规范词，顶刷十篇时评`, color: '8A8578', size: 14 })], { after: 160 })
   )
 
   let n = 0
@@ -349,14 +368,14 @@ export function buildLexiconModel(themes, { favOnly = false, favSet = null } = {
     const items = favOnly && favSet ? t.items.filter((it) => favSet.has(it.id)) : t.items
     if (!items.length) continue
     n += items.length
-    nodes.push(mkNode([R({ text: `${t.name}（${items.length} 条）`, bold: true, size: 21, color: '1F3A2E' })], { before: 260, border: true }))
+    nodes.push(mkNode([R({ text: `${t.name}（${items.length} 条）`, bold: true, size: 18, color: '1F3A2E' })], { before: 200, border: true }))
     for (const it of items) {
       nodes.push(
         mkNode([
-          R({ text: it.plain, color: '8A8578', size: 16 }),
-          R({ text: '　→　', color: 'B0AA9A', size: 16 }),
+          R({ text: it.plain, color: '8A8578', size: 14 }),
+          R({ text: ' → ', color: 'B0AA9A', size: 14 }),
           R({ text: it.formal, bold: true }),
-        ], { after: 90 })
+        ], { after: 50 })
       )
     }
   }
@@ -378,15 +397,15 @@ export async function buildLexiconDocument(themes, opts = {}) {
 }
 
 async function renderDocxDocument(nodes) {
-  const { Document, Paragraph, TextRun, ShadingType, BorderStyle } = await import('docx')
-  const children = nodes.map((node) => {
+  const { Document, Paragraph, TextRun, BorderStyle } = await import('docx')
+  const children = toPrint(nodes).map((node) => {
     const runs = node.runs.map((r) =>
       new TextRun({
         text: r.text,
         size: r.size || BODY_SIZE,
         color: r.color || '2B2B2B',
         ...(r.bold ? { bold: true } : {}),
-        ...(r.fill ? { shading: { type: ShadingType.CLEAR, fill: r.fill } } : {}),
+        ...(r.underline ? { underline: {} } : {}),
         font: '宋体',
       })
     )
@@ -447,13 +466,13 @@ export async function renderPdfBlob(nodes, title) {
   const { createElement: h } = await import('react')
   const pt = (twip) => (twip || 0) / 20
 
-  const children = nodes.map((node, ni) => {
+  const children = toPrint(nodes).map((node, ni) => {
     const runs = node.runs.map((r, ri) =>
       h(R.Text, {
         key: ri,
         style: {
           color: r.color ? `#${r.color}` : '#2B2B2B',
-          backgroundColor: r.fill ? `#${r.fill}` : undefined,
+          textDecoration: r.underline ? 'underline' : undefined,
           fontWeight: r.bold ? 700 : 400,
           fontSize: (r.size || BODY_SIZE) / 2,
         },

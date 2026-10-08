@@ -23,14 +23,14 @@
 
     <!-- 桌面端侧边栏（固定）：用 1px 描边分区，不用阴影——纸感的做法 -->
     <aside class="hidden md:block fixed left-0 top-0 bottom-0 w-56 z-40 bg-c-cream border-r border-c-line">
-      <GroupedSidebar :nav="NAV" :dot="dot" :version="version" />
+      <GroupedSidebar :nav="NAV" :mini-links="MINI_LINKS" :dot="dot" :version="version" />
     </aside>
 
     <!-- 移动端抽屉 -->
     <div v-if="drawerOpen" class="md:hidden fixed inset-0 z-40">
       <div class="absolute inset-0 bg-c-ink/25" @click="drawerOpen = false" />
       <aside class="relative w-56 h-full bg-c-cream border-r border-c-line">
-        <GroupedSidebar :nav="NAV" :dot="dot" :version="version" @navigate="drawerOpen = false" />
+        <GroupedSidebar :nav="NAV" :mini-links="MINI_LINKS" :dot="dot" :version="version" @navigate="drawerOpen = false" />
       </aside>
     </div>
 
@@ -90,16 +90,16 @@ const NAV = [
   { group: '复盘', path: '/records', label: '历史批改' },
   { group: '复盘', path: '/stats', label: '统计' },
   { group: '复盘', path: '/weakness', label: '错题本' },
-  // 「更新日志」曾经只做侧边栏底部那排小胶囊（和 GitHub/Gitee 三等分，61×28px）。
-  // 那排胶囊间隙只有 6px，点偏一点就落进缝里，症状是"点了没反应"——
-  // 被当成"页面坏了"报过。日志是用户会主动去翻的入口，给它一个正常尺寸的条目。
   { group: '关于', path: '/guide', label: '使用文档' },
-  { group: '关于', path: '/changelog', label: '更新日志' },
-  // 仓库入口升级为「关于」组正式条目（2026-10-08）：原来在侧栏底部当 61×28px 小胶囊，
-  // 和「更新日志」分在两处；用户要求三者放一起。href 字段 = 外部链接，
-  // GroupedSidebar 对带 href 的条目渲染 <a target="_blank"> 而不是 RouterLink。
-  { group: '关于', path: '/ext-github', label: 'GitHub 仓库', href: AUTHOR.github },
-  { group: '关于', path: '/ext-gitee', label: 'Gitee 仓库', href: AUTHOR.gitee },
+]
+
+// 侧栏底部「设置」上方的小展示行（2026-10-08 用户要求：正式导航条目太占地方，
+// 降级回小胶囊；这次三项并排、间距足够，避开当年"点了没反应"的 6px 缝隙问题）。
+// href 字段 = 外部链接（新窗口），否则走路由。
+const MINI_LINKS = [
+  { path: '/changelog', label: '更新日志' },
+  { path: '/ext-github', label: 'GitHub', href: AUTHOR.github },
+  { path: '/ext-gitee', label: 'Gitee', href: AUTHOR.gitee },
 ]
 
 const backendUp = ref(false)

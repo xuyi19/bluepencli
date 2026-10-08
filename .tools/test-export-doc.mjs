@@ -99,9 +99,10 @@ async function docXml(doc) {
   check('复盘：老师意见段在文档里', xml.includes('建议先找全要点再动笔'))
   check('复盘：改进清单在文档里', xml.includes('建议一：多划材料'))
   check('复盘：未定位批注单独列出', xml.includes('未定位批注乙'))
-  check('复盘：用户荧光底色（黄 FDE68A）', xml.includes('FDE68A'), '荧光 shading fill 未找到')
-  check('复盘：老师主题色底（袁东 #3d5a7a 淡化）', xml.includes(tint('#3d5a7a')), '批注 shading fill 未找到')
-  check('复盘：批注文字用老师主题色', xml.includes('w:color w:val="3D5A7A"'))
+  // 黑白打印模式（2026-10-08）：彩色全压灰阶、底色换下划线 —— 断言"黑白"而非"彩色"
+  check('复盘：荧光标记转为下划线（w:u）', xml.includes('<w:u '), '下划线未找到')
+  check('复盘：无彩色残留（老师色 3D5A7A 不出现）', !xml.includes('3D5A7A') && !xml.includes('FDE68A'), '仍有彩色/底色')
+  check('复盘：批注文字为灰阶（2B2B2B）', xml.includes('w:color w:val="2B2B2B"'))
 }
 
 // ─────────────── 词库文档 ───────────────
