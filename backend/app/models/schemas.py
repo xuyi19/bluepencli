@@ -162,6 +162,8 @@ class PracticeRecordIn(BaseModel):
     exam_paper_id: str = ""
     exam_paper_title: str = ""
     exam_paper_no: int | None = None
+    # 题目 id（M9 导出复盘用：凭它找回该题的荧光标记 bp-marks:<qid>）
+    question_id: str = ""
     requirement: str = ""
     material: str = ""
     answer: str = ""

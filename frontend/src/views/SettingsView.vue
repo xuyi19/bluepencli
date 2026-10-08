@@ -187,6 +187,32 @@
       </section>
     </div>
 
+    <!-- ==================== 导出与打印（M9） ==================== -->
+    <section class="rounded-2xl p-6 neu-sm mb-6">
+      <h2 class="text-base font-medium text-c-ink mb-2">导出与打印</h2>
+      <p class="text-xs text-c-muted leading-5 mb-4">
+        练习记录可导出 Word 复盘文档（含你的荧光标记、作答与彩色批注），素材本可导出全册或收藏。
+        导出按「练习复盘 / 素材本」两类分目录存放。
+      </p>
+      <div class="flex flex-wrap items-center gap-2">
+        <input v-model="exportDir" type="text"
+          :placeholder="isTauri ? '默认：程序目录下的「导出文档」' : '网页版直接下载，无需设置路径'"
+          class="flex-1 min-w-[16rem] px-3 py-2.5 rounded-xl text-xs neu-inset outline-none text-c-body" />
+        <button @click="saveExportDir"
+          class="px-4 py-2.5 rounded-xl text-xs font-medium neu-sm text-c-bark hover:translate-y-px transition-transform">
+          保存路径
+        </button>
+        <button v-if="isTauri" @click="openExportDir"
+          class="px-4 py-2.5 rounded-xl text-xs font-medium neu-sm text-c-body hover:translate-y-px transition-transform">
+          打开导出目录
+        </button>
+      </div>
+      <div class="text-xs text-c-muted mt-2 leading-5">
+        <template v-if="isTauri">可填绝对路径（如 E:\复习资料）；留空 = 程序目录下的「导出文档」文件夹。</template>
+        <template v-else>当前是网页版：点「导出」会直接下载 Word 文件到浏览器默认下载位置。</template>
+      </div>
+    </section>
+
     <!-- ==================== 关于 ==================== -->
     <section class="rounded-2xl p-6 neu-sm">
       <div class="flex items-center justify-between mb-3">
@@ -241,6 +267,7 @@ import {
   setBackendUrl,
 } from '../api/backend'
 import { exportAll, importAll, clear, STORES } from '../store/db'
+import { isDesktop, EXPORT_DIR_KEY } from '../utils/exportDoc'
 import { CURRENT_VERSION } from '../data/changelog'
 import { AUTHOR } from '../data/author'
 import { copyAuthorLine } from '../utils/watermark'
@@ -494,5 +521,29 @@ async function doClearAll() {
   if (!ok) return
   for (const s of Object.values(STORES)) await clear(s)
   toast.success('已清空')
+}
+
+// ── M9 导出与打印（2026-10-08）──
+// 桌面版：导出目录存 localStorage（bp-export-dir），相对路径由 Rust 侧相对 exe 解析；
+// 网页版：导出走浏览器下载，此区块只做说明。
+const isTauri = isDesktop()
+const exportDir = ref(localStorage.getItem(EXPORT_DIR_KEY) || '')
+
+function saveExportDir() {
+  try {
+    localStorage.setItem(EXPORT_DIR_KEY, exportDir.value.trim())
+    toast.success('导出路径已保存')
+  } catch {
+    toast.error('保存失败')
+  }
+}
+
+async function openExportDir() {
+  try {
+    const { invoke } = await import('@tauri-apps/api/core')
+    await invoke('reveal_export_dir', { baseDir: exportDir.value.trim(), category: '' })
+  } catch (e) {
+    toast.error(String(e?.message || e))
+  }
 }
 </script>

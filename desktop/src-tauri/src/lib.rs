@@ -46,6 +46,62 @@ fn api_base(state: State<'_, ApiPort>) -> Option<String> {
         .map(|port| format!("http://127.0.0.1:{port}"))
 }
 
+/// M9 导出（2026-10-08）：把前端生成的 Word 文档写到导出目录。
+///
+/// base_dir 为空或相对路径 → 相对 exe 目录（与 data/ 的约定一致），默认建「导出文档」；
+/// 绝对路径原样用（用户在设置里填「项目根目录」这类就是绝对路径）。
+/// 按 category（练习复盘 / 素材本）分子目录。前端选择器见 utils/exportDoc.js。
+#[tauri::command]
+fn save_export_file(
+    base_dir: String,
+    category: String,
+    file_name: String,
+    contents_b64: String,
+) -> Result<String, String> {
+    use base64::Engine as _;
+    // 路径安全：文件名与分类都只能是单段，拒绝穿越 —— 这个 exe 是发给别人的
+    if file_name.contains('\\') || file_name.contains('/') || file_name.contains("..") {
+        return Err(format!("非法文件名：{file_name}"));
+    }
+    let category = category.trim();
+    if category.is_empty() || category.contains('/') || category.contains('\\') || category.contains("..") {
+        return Err(format!("非法分类目录：{category}"));
+    }
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(contents_b64.as_bytes())
+        .map_err(|e| format!("文档数据解码失败：{e}"))?;
+    let base = resolve_export_base(&base_dir);
+    let dir = base.join(category);
+    std::fs::create_dir_all(&dir).map_err(|e| format!("创建目录 {} 失败：{e}", dir.display()))?;
+    let path = dir.join(&file_name);
+    std::fs::write(&path, &bytes).map_err(|e| format!("写文件失败：{e}"))?;
+    log::info!("[蓝笔] 导出：{}", path.display());
+    Ok(path.display().to_string())
+}
+
+/// 在资源管理器里打开导出目录（不存在就先建出来，「打开导出目录」才不落空）。
+#[tauri::command]
+fn reveal_export_dir(base_dir: String, category: String) -> Result<(), String> {
+    let dir = resolve_export_base(&base_dir).join(category.trim());
+    std::fs::create_dir_all(&dir).map_err(|e| format!("创建目录失败：{e}"))?;
+    std::process::Command::new("explorer")
+        .arg(&dir)
+        .spawn()
+        .map_err(|e| format!("打开资源管理器失败：{e}"))?;
+    Ok(())
+}
+
+fn resolve_export_base(base_dir: &str) -> std::path::PathBuf {
+    let t = base_dir.trim();
+    if std::path::Path::new(t).is_absolute() {
+        std::path::PathBuf::from(t)
+    } else if t.is_empty() {
+        preset::Preset::exe_dir().join("导出文档")
+    } else {
+        preset::Preset::exe_dir().join(t)
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -123,7 +179,11 @@ pub fn run() {
 
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![api_base])
+        .invoke_handler(tauri::generate_handler![
+            api_base,
+            save_export_file,
+            reveal_export_dir
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

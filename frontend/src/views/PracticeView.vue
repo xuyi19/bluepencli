@@ -1428,6 +1428,7 @@ async function gradePaper() {
         report: result,
         elapsedMs: result.elapsed,
         examPaper: { id: paperSession.paperId, title: paperSession.examLabel, no: q.no },
+        questionId: q.qid,
       })
       paperSession.recs[q.qid] = rec
       await archiveRecord(rec)
@@ -1822,7 +1823,7 @@ async function startGrade() {
     step.value = 'result'
 
     // 归档：本地必写，后端能连上就同时落 docs/practice/
-    const rec = buildRecord({ form, report: result, elapsedMs: result.elapsed })
+    const rec = buildRecord({ form, report: result, elapsedMs: result.elapsed, questionId: loadedId.value })
     record.value = rec
     archiveState.value = (await archiveRecord(rec)) ? 'docs' : 'local'
     doneToday.value = true

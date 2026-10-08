@@ -50,7 +50,7 @@
 <script setup>
 import { computed } from 'vue'
 import { TEACHERS } from '../agents/teachers'
-import { colorById, findRange, normalizeHighlight } from '../utils/highlight'
+import { colorById, findRange, normalizeHighlight, locateQuote } from '../utils/highlight'
 
 const props = defineProps({
   answer: { type: String, default: '' },
@@ -65,33 +65,10 @@ function metaOf(id) {
   return { name: t?.name || id, color: t?.color || '#5c4033' }
 }
 
-/**
- * 在答案里给 quote 定位。
- * AI 引原文偶尔会差一两个标点或省略后半句，所以除了精确匹配还留两级退让，
- * 全部失败就归入「未能定位」，而不是假装没这条批注。
- */
-function locate(answer, quote) {
-  const q = String(quote || '').trim()
-  if (!q || !answer) return null
-
-  let i = answer.indexOf(q)
-  if (i >= 0) return { start: i, end: i + q.length }
-
-  const trimmed = q
-    .replace(/^[\s，。；：、“”‘’"'（）()【】\[\]…—-]+/, '')
-    .replace(/[\s，。；：、“”‘’"'（）()【】\[\]…—-]+$/, '')
-  if (trimmed && trimmed !== q) {
-    i = answer.indexOf(trimmed)
-    if (i >= 0) return { start: i, end: i + trimmed.length }
-  }
-
-  if (q.length > 12) {
-    const head = q.slice(0, 12)
-    i = answer.indexOf(head)
-    if (i >= 0) return { start: i, end: Math.min(answer.length, i + q.length) }
-  }
-  return null
-}
+// 批注引文定位：与导出文档（utils/exportDoc）共用同一实现（utils/highlight.js）。
+// 2026-10-08 抽出 —— 原先屏与纸各有一份，标点退让字符类一起漏了「」，
+// 护栏抓到后合并。屏与纸的定位规则必须永远一致，改这里就同时改了两端。
+const locate = locateQuote
 
 const marks = computed(() => {
   const out = []

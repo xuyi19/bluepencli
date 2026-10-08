@@ -89,6 +89,33 @@ export function countOccurrences(text, quote) {
 }
 
 /**
+ * 在 answer 里给批注引文 quote 定位（2026-10-08 从 AnnotatedAnswer 抽出共用）。
+ * AI 引原文偶尔会差一两个标点或省略后半句，所以除了精确匹配还留三级退让，
+ * 全部失败返回 null（调用方必须把"未定位"让用户看见，不能静默吞）。
+ * ⚠️ 标点类**必须含「」**：AI 引句爱裹书名角括号（2026-10-08 护栏抓到的真 bug，
+ *    屏幕端与导出端曾各修各的、一起漏）。
+ */
+export function locateQuote(answer, quote) {
+  const q = String(quote || '').trim()
+  if (!q || !answer) return null
+  let i = answer.indexOf(q)
+  if (i >= 0) return { start: i, end: i + q.length }
+  const trimmed = q
+    .replace(/^[\s，。；：、“”‘’"'（）()【】「」[\]…—-]+/, '')
+    .replace(/[\s，。；：、“”‘’"'（）()【】「」[\]…—-]+$/, '')
+  if (trimmed && trimmed !== q) {
+    i = answer.indexOf(trimmed)
+    if (i >= 0) return { start: i, end: i + trimmed.length }
+  }
+  if (q.length > 12) {
+    const head = q.slice(0, 12)
+    i = answer.indexOf(head)
+    if (i >= 0) return { start: i, end: Math.min(answer.length, i + q.length) }
+  }
+  return null
+}
+
+/**
  * 把文本切成 [{ text, mark|null }] 段落，供渲染层上色。
  * 重叠策略：**先到先得**（按起点排序，后到的重叠区间跳过）——
  * 不允许叠色，因为两层半透明叠起来颜色会变得谁也认不出，用户会以为标错了。

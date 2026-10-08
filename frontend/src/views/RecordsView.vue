@@ -70,9 +70,23 @@
                 · {{ MODE_LABEL[detail.mode] || detail.mode }}
               </div>
             </div>
-            <button @click="del(detail.id)" class="text-xs text-c-muted hover:text-[#b4552d] shrink-0">
-              删除
-            </button>
+            <div class="flex items-center gap-3 shrink-0">
+              <span v-if="exportState" class="text-xs max-w-[18rem] truncate"
+                :style="{ color: exportState.startsWith('err') ? '#b4552d' : '#4f7d5e' }"
+                :title="exportState.startsWith('ok:') ? exportState.slice(3) : exportState">
+                {{ exportState === 'busy' ? '正在生成文档…'
+                  : exportState.startsWith('err') ? '导出失败：' + exportState.slice(4)
+                  : exportState === 'ok:web' ? '已开始下载'
+                  : '已保存：' + exportState.slice(3) }}
+              </span>
+              <button @click="doExport" :disabled="exportState === 'busy'"
+                class="text-xs text-c-muted hover:text-c-ink disabled:opacity-40 shrink-0">
+                导出 Word
+              </button>
+              <button @click="del(detail.id)" class="text-xs text-c-muted hover:text-[#b4552d] shrink-0">
+                删除
+              </button>
+            </div>
           </div>
 
           <!-- 分数 -->
@@ -286,6 +300,7 @@ import {
   countChars,
   fmtDateTime,
 } from '../utils/record'
+import { exportReview } from '../utils/exportDoc'
 
 const route = useRoute()
 const records = ref([])
@@ -347,6 +362,31 @@ async function del(id) {
     detail.value = null
   }
   await load()
+}
+
+// ── M9 导出复盘文档（Word）──
+// 网页版直接下载；桌面版写到设置里的导出目录（分类「练习复盘」）。
+// 荧光标记按题存（bp-marks:<qid>），老记录没存 questionId 就如实不带标记导出。
+const exportState = ref('')
+
+async function doExport() {
+  const d = detail.value
+  if (!d || exportState.value === 'busy') return
+  exportState.value = 'busy'
+  try {
+    let marks = { material: [], answer: [] }
+    if (d.questionId) {
+      try {
+        marks = JSON.parse(localStorage.getItem(`bp-marks:${d.questionId}`) || 'null') || marks
+      } catch { /* 坏档当没标记，导出不因此失败 */ }
+    }
+    const res = await exportReview({ ...d, marks })
+    exportState.value = res.ok
+      ? (res.way === 'desktop' ? `ok:${res.path}` : 'ok:web')
+      : `err:${res.error || '未知错误'}`
+  } catch (e) {
+    exportState.value = `err:${e?.message || e}`
+  }
 }
 
 watch(() => route.query.id, load)

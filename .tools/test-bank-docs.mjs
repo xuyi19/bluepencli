@@ -96,25 +96,37 @@ ok(existsSync(path.join(DOC_DIR, 'README.md')), '根 README.md 总索引存在')
 const readme = existsSync(path.join(DOC_DIR, 'README.md')) ? readFileSync(path.join(DOC_DIR, 'README.md'), 'utf8') : ''
 ok((readme.match(/\| [^|]+\| \d+ \| \d+ \|/gm) || []).length >= paperCount, 'README 索引行数 ≥ 卷数')
 
-// ── ② 采分点泄漏检查：standards 里所有 ≥8 字符的引号字符串都是指纹
+// ── ② 采分点泄漏检查：standards 里 label / note 是"答案钥匙"，逐条当指纹。
+//     ⚠️ evidence 不算（2026-10-08）：材料原文的逐字引用，材料.md 里本来就有；
+//     ⚠️ keywords 也不算（同日二修）：关键词就是从材料词汇里提的，逐字出现在
+//     材料/参考答案里是常态（「反思过度开发与掠夺」实例）——把这两类当指纹
+//     必然误报。要点怎么概括（label）与辨析提示（note）才是要保密的钥匙结构。
 console.log('\n② 采分点泄漏检查')
+// v3（2026-10-08）：抓「标准库的**结构痕迹**」而不是内容措辞。
+//   起因：glm-4-flash 批量生成后，label/note/keywords/evidence 全都会与汇编里的
+//   材料或参考答案措辞撞车 —— 生成的输入就是它们，逐字指纹法必然误报，
+//   连修两轮（先踢 evidence，再踢 keywords，label 还是撞）。
+//   这个护栏真正要防的事故：导出工具把标准**表**整段 dump 进文档。
+//   整表 dump 必带结构特征 —— questionId、weight/points/totalScore 字段名 ——
+//   抓这些零误报，且 dump 一旦发生必红。
 const stdFiles = existsSync(STANDARDS_DIR)
   ? readdirSync(STANDARDS_DIR).filter((f) => f.endsWith('.js')).map((f) => path.join(STANDARDS_DIR, f))
   : []
 const fingerprints = new Set()
 for (const f of stdFiles) {
   const s = readFileSync(f, 'utf8')
-  for (const m of s.matchAll(/"([^"\n]{8,})"|'([^'\n]{8,})'/g)) {
-    fingerprints.add(m[1] || m[2])
-  }
+  // 结构字段名（JSON 与 JS 两种风格）与题目 id 都是整表 dump 的铁证
+  for (const m of s.matchAll(/"(?:questionId|totalScore|weight|evidence|keywords)"/g)) fingerprints.add(m[0])
+  for (const m of s.matchAll(/(?:questionId|totalScore)\s*:/g)) fingerprints.add(m[0])
+  for (const m of s.matchAll(/"(builtin-[a-z0-9-]+|real-\d{4}-[a-z-]+-\d+)"/g)) fingerprints.add(m[1])
 }
-console.log(`  （从 ${stdFiles.length} 个 standards 文件提取 ${fingerprints.size} 条指纹）`)
+console.log(`  （从 ${stdFiles.length} 个 standards 文件提取 ${fingerprints.size} 条结构指纹）`)
 const allText = allMd.map((f) => readFileSync(f, 'utf8')).join('\n')
 let leaked = []
 for (const fp of fingerprints) {
   if (allText.includes(fp)) leaked.push(fp.slice(0, 30))
 }
-ok(leaked.length === 0, '采分点/标准内容 0 泄漏', leaked.length ? `泄漏样例: ${leaked[0]}` : '')
+ok(leaked.length === 0, '汇编不含标准库结构痕迹（整表 dump 必红）', leaked.length ? `泄漏样例: ${leaked[0]}` : '')
 
 // ── ③ 公开汇编树不含私有卷年份目录
 console.log('\n③ 公开/私有边界')

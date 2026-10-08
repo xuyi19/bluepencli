@@ -16,6 +16,18 @@
         </p>
       </div>
       <div class="flex items-center gap-2">
+        <span v-if="exportState" class="text-xs max-w-[16rem] truncate"
+          :style="{ color: exportState.startsWith('err') ? '#b4552d' : '#4f7d5e' }"
+          :title="exportState.startsWith('ok:') ? exportState.slice(3) : exportState">
+          {{ exportState === 'busy' ? '正在生成文档…'
+            : exportState.startsWith('err') ? '导出失败：' + exportState.slice(4)
+            : exportState === 'ok:web' ? '已开始下载'
+            : '已保存：' + exportState.slice(3) }}
+        </span>
+        <button @click="doExport"
+          class="px-4 py-2 rounded-xl text-xs font-medium neu-sm text-c-bark hover:translate-y-px transition-transform">
+          {{ exportState === 'busy' ? '正在生成…' : '⬇ 导出 Word' }}
+        </button>
         <button @click="printNow"
           class="px-4 py-2 rounded-xl text-xs font-medium neu-sm text-c-bark hover:translate-y-px transition-transform">
           🖨 打印{{ favOnly ? '收藏' : '当前筛选' }}
@@ -97,6 +109,7 @@
 //     素材收藏是跨题的长期资产。
 import { computed, ref, reactive } from 'vue'
 import { LEXICON_THEMES, LEXICON_ITEMS, LEXICON_COUNT } from '../data/lexicon'
+import { exportLexicon } from '../utils/exportDoc'
 
 const themes = LEXICON_THEMES
 const favOnly = ref(false)
@@ -147,6 +160,23 @@ const totalShown = computed(() => filtered.value.length)
 
 function printNow() {
   window.print()
+}
+
+// ── M9 导出 Word（2026-10-08）──
+// 导出「当前筛选」（收藏 tab / 主题勾选 / 搜索都生效），桌面版写进导出目录的「素材本」分类。
+const exportState = ref('')
+
+async function doExport() {
+  if (exportState.value === 'busy') return
+  exportState.value = 'busy'
+  try {
+    const res = await exportLexicon(groups.value, { favOnly: favOnly.value })
+    exportState.value = res.ok
+      ? (res.way === 'desktop' ? `ok:${res.path}` : 'ok:web')
+      : `err:${res.error || '未知错误'}`
+  } catch (e) {
+    exportState.value = `err:${e?.message || e}`
+  }
 }
 </script>
 

@@ -179,8 +179,23 @@ function parseJson(text) {
   }
 }
 
-/** 把模型给的 points 补成合法标准（缺 totalScore 就用分数之和） */
-function toStandard(questionId, raw, maxScore) {
+/** 匹配用归一：去掉所有空白（材料里的换行/全角空格会让逐字比对假阴性） */
+const norm = (s) => String(s).replace(/\s+/g, '')
+
+/**
+ * 把模型给的 points 补成合法标准（缺 totalScore 就用分数之和）。
+ * ⚠️ evidence 校验（2026-10-08 加）：模型（尤其小模型）爱把原文"顺手"改写一两个字，
+ *    而对照/匹配全靠逐字锚点——改写了就永远匹配不上。所以：
+ *    ① 证据逐条在材料原文里找（去空白后比对），找不到的剔除并记 warning；
+ *    ② 非大作文的点若证据被剔光 → 整点剔除（没有锚点的点不可判）；
+ *    ③ 剩点数 < 2 → 整题判失败（宁缺毋滥，重跑即可）。
+ */
+function toStandard(questionId, raw, maxScore, material) {
+  const mat = norm(material || '')
+  const canVerify = mat.length > 0
+  const warnings = []
+  const droppedEv = []
+  const droppedPt = []
   const points = (raw?.points || [])
     .filter((p) => p && p.label)
     .map((p, i) => ({
@@ -193,6 +208,33 @@ function toStandard(questionId, raw, maxScore) {
     }))
   if (!points.length) return { errors: ['模型没有返回任何采分点'] }
 
+  // 大作文（≥35 分）按约定 evidence 可为空，不参与证据校验
+  const isEssay = maxScore >= 35
+  if (canVerify && !isEssay) {
+    for (const p of points) {
+      const kept = p.evidence.filter((ev) => ev.trim() && mat.includes(norm(ev)))
+      for (const ev of p.evidence) {
+        if (ev.trim() && !kept.includes(ev)) droppedEv.push(`「${ev.slice(0, 14)}…」`)
+      }
+      p.evidence = kept
+    }
+    if (droppedEv.length) warnings.push(`${droppedEv.length} 条证据不在材料原文，已剔除（${droppedEv.join('、')}）`)
+    const before = points.length
+    for (let i = points.length - 1; i >= 0; i--) {
+      if (!points[i].evidence.length) {
+        droppedPt.push(`「${points[i].label.slice(0, 16)}」`)
+        points.splice(i, 1)
+      }
+    }
+    if (droppedPt.length) warnings.push(`${droppedPt.length} 个点证据全失，已剔除（${droppedPt.join('、')}）`)
+    // 重新编号（点序号要连续，下游按 p1..pn 引用）
+    points.forEach((p, i) => (p.id = `p${i + 1}`))
+    if (!points.length) return { errors: ['全部采分点的证据都不在材料原文（疑似模型改写/编造），判失败'] }
+    if (points.length < 2) return { errors: [`有效采分点仅剩 ${points.length} 个（<2），判失败——重跑或换题`] }
+    void before
+  }
+  if (!canVerify && !isEssay) warnings.push('⚠ 无材料可校验证据，本标准未过原文校验')
+
   const sum = points.reduce((s, p) => s + p.weight, 0)
   // 分值对不上是最常见的失败：让模型自己修不准，这里直接按比例归一，
   // 并把"修正过"记进 meta，人工复核时能看见。
@@ -201,6 +243,7 @@ function toStandard(questionId, raw, maxScore) {
     const k = maxScore / sum
     for (const p of points) p.weight = Math.round(p.weight * k * 2) / 2
     normalized = true
+    warnings.push(`分值之和 ${sum} ≠ 满分 ${maxScore}，已按比例归一`)
   }
   const finalSum = points.reduce((s, p) => s + p.weight, 0)
 
@@ -209,10 +252,10 @@ function toStandard(questionId, raw, maxScore) {
       questionId,
       totalScore: finalSum,
       source: 'llm',
-      meta: { normalized, originalSum: sum, model: null, generatedAt: new Date().toISOString() },
+      meta: { normalized, originalSum: sum, model: null, generatedAt: new Date().toISOString(), evidenceVerified: canVerify && !isEssay },
       points,
     },
-    warnings: normalized ? [`分值之和 ${sum} ≠ 满分 ${maxScore}，已按比例归一为 ${finalSum}`] : [],
+    warnings,
   }
 }
 
@@ -337,6 +380,19 @@ async function main() {
   const results = await pool(items, CONCURRENCY, async (it) => {
     const maxScore = it.q.score || 20
     try {
+      // 断点续跑：out/ 里已有**同模型**成功产物就直接复用（汇总落库前被中断不白跑）
+      if (!MOCK) {
+        const cacheFile = join(OUT_DIR, `${it.id}.json`)
+        if (existsSync(cacheFile)) {
+          try {
+            const cached = JSON.parse(readFileSync(cacheFile, 'utf8'))
+            if (cached?.meta?.model === cfg.model && Array.isArray(cached.points) && cached.points.length) {
+              console.log(`  ↻ ${it.id}　缓存复用（${cached.points.length} 个点）`)
+              return { id: it.id, tier: it.tier, standard: cached }
+            }
+          } catch { /* 缓存坏了就正常重跑 */ }
+        }
+      }
       let raw
       if (MOCK) {
         raw = mockStandard(it.q)
@@ -348,7 +404,7 @@ async function main() {
           raw = parseJson(await callLLM(cfg, it.q, it.exam))
         }
       }
-      const { standard, errors, warnings } = toStandard(it.id, raw, maxScore)
+      const { standard, errors, warnings } = toStandard(it.id, raw, maxScore, it.q.material || it.exam?.material || '')
       if (!standard) throw new Error(errors?.join('; ') || '解析失败')
       standard.meta.model = MOCK ? 'mock' : cfg.model
       if (warnings?.length) console.log(`  ⚠ ${it.id}：${warnings.join('；')}`)
