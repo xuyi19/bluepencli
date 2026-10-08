@@ -1,6 +1,6 @@
 // 验证「按题裁材料」两处新 UI 真的渲染、真的能切：
 //   ① 题库页「材料预览」：展开后只显示本题引用的那几则，带「本题用给定资料N」标签；
-//   ② 练习页：材料区有裁剪说明条；「查看整卷材料 ⇄ 只用本题材料」往返切换后内容跟着变；
+//   ② 练习页：材料区有裁剪说明条；「查看整卷 ⇄ 只用本题材料」往返切换后内容跟着变；
 //   ③ 全程无页面异常（Vite HMR websocket 失败是 headless 常态，过滤）。
 //
 // 用法：先 `cd frontend && npm run dev`，再 `node .tools/probe-material-trim-ui.mjs`
@@ -189,7 +189,7 @@ const bar = await pollEval(`document.body.innerText.includes('本题用给定资
 check('练习页出现裁剪说明条', !!bar)
 
 const trimmed = await pollEval(`(() => {
-  const box = document.querySelector('div[class*="26rem"]')
+  const box = document.querySelector('div[class*="32rem"]')
   if (!box) return null
   const labels = box.innerText.match(/^材料\\d+$/gm) || []
   return labels.length === 1 && labels[0] === '材料2' ? labels : null
@@ -198,17 +198,17 @@ check('作答区默认只显示「材料2」一则', !!trimmed, `实际: ${JSON.
 
 // 切到整卷（则数不预设：不同卷 4~7 则不等，只要明显多于 1 则即算整卷）
 await evaluate(`(() => {
-  const btn = [...document.querySelectorAll('button')].find(b => b.textContent.includes('查看整卷材料'))
+  const btn = [...document.querySelectorAll('button')].find(b => b.textContent.includes('查看整卷'))
   if (btn) btn.click()
   return !!btn
 })()`)
 const full = await pollEval(`(() => {
-  const box = document.querySelector('div[class*="26rem"]')
+  const box = document.querySelector('div[class*="32rem"]')
   if (!box) return null
   const labels = box.innerText.match(/^材料\\d+$/gm) || []
   return labels.length >= 3 ? labels.length : null
 })()`)
-check('「查看整卷材料」切回整卷（≥3 则）', !!full, `实际: ${JSON.stringify(full)}`)
+check('「查看整卷」切回整卷（≥3 则）', !!full, `实际: ${JSON.stringify(full)}`)
 const btnFlipped = await evaluate(
   `[...document.querySelectorAll('button')].some(b => b.textContent.includes('只用本题材料'))`)
 check('切换按钮文案翻转', !!btnFlipped)
@@ -220,7 +220,7 @@ await evaluate(`(() => {
   return !!btn
 })()`)
 const back = await pollEval(`(() => {
-  const box = document.querySelector('div[class*="26rem"]')
+  const box = document.querySelector('div[class*="32rem"]')
   if (!box) return null
   const labels = box.innerText.match(/^材料\\d+$/gm) || []
   return labels.length === 1 ? labels : null

@@ -24,6 +24,20 @@
         </p>
       </div>
       <div class="flex items-center gap-2 shrink-0">
+        <!-- 考场倒计时：从独立条挪到页头行内，时间就是这场考试最重要的信息，
+             放在视线落点（右上）而不是单独占一行卡 -->
+        <template v-if="isExamMode && step === 'answer'">
+          <span class="text-xs" :class="examUrgent ? 'text-[#b91c1c] font-medium' : 'text-c-muted'">
+            {{ examRunning ? '剩余' : '待开始' }}
+          </span>
+          <span class="tnum text-base font-semibold"
+            :class="examUrgent ? 'text-[#b91c1c]' : 'text-c-ink'">{{ examClock }}</span>
+          <select v-model.number="examMinutes" @change="resetExamTimer" :disabled="examRunning"
+            class="px-1.5 py-1 rounded-lg text-xs neu-inset outline-none text-c-body disabled:opacity-50"
+            title="考试时长（落笔后自动计时）">
+            <option v-for="m in [15, 20, 30, 40, 60, 90, 120]" :key="m" :value="m">{{ m }}min</option>
+          </select>
+        </template>
         <button v-if="step === 'result'" @click="backToAnswer"
           class="px-4 py-2 rounded-xl text-sm font-medium text-c-body neu-sm
             hover:text-c-bark transition-colors duration-200">
@@ -55,33 +69,8 @@
 
       <!-- 模式说明不再单独占一条卡：模式名在页头标题里已经有了，这里的字全是重复 -->
 
-      <!-- 考场倒计时条：落笔（首次输入）即开始 -->
-      <div v-if="isExamMode"
-        class="rounded-2xl px-5 py-3 mb-4 neu shrink-0 flex items-center justify-between"
-        :style="examUrgent ? 'background:#fdecea' : ''">
-        <div class="flex items-center gap-3">
-          <span class="text-sm font-medium" :style="examUrgent ? 'color:#b91c1c' : 'color:#1f2430'">
-            {{ examRunning ? '剩余时间' : '待开始' }}
-          </span>
-          <span class="tnum text-2xl font-semibold" :style="examUrgent ? 'color:#b91c1c' : 'color:#1f2430'">
-            {{ examClock }}
-          </span>
-        </div>
-        <div class="flex items-center gap-3">
-          <div class="text-xs text-c-muted">
-            {{ examRunning
-              ? (examUrgent ? '最后 5 分钟，抓紧组织答案' : '作答中——交卷前可以继续修改')
-              : '开始输入后自动计时' }}
-          </div>
-          <label class="text-xs text-c-muted flex items-center gap-1.5">
-            时长
-            <select v-model.number="examMinutes" @change="resetExamTimer" :disabled="examRunning"
-              class="px-2 py-1 rounded-lg text-xs neu-inset outline-none text-c-body disabled:opacity-50">
-              <option v-for="m in [15, 20, 30, 40, 60, 90, 120]" :key="m" :value="m">{{ m }} 分钟</option>
-            </select>
-          </label>
-        </div>
-      </div>
+      <!-- 考场倒计时不再单独占一条卡：挪进页头右侧（见下方按钮区），
+           省出一整行给材料面板。examUrgent 的红色警示由页头行内联表达。 -->
 
       <!-- 给定资料 + 题目：并排，仿考场卷面 -->
       <!-- 上排 flex-1：材料在面板内滚、题目作答位置固定不动（答题只滚材料，不滚页面）；
@@ -101,6 +90,11 @@
               </span>
             </span>
             <div class="flex items-center gap-3 shrink-0">
+              <button v-if="trimState.trimmed && !trimState.active" @click="toggleTrim"
+                class="text-xs text-c-muted hover:text-c-bark transition-colors tnum"
+                :title="`本题只问资料${trimState.used.join('、')}，切过去可省 ${trimState.savedPct}% 版面（${trimState.before} → ${trimState.after} 字）`">
+                只用本题材料（省 {{ trimState.savedPct }}%）
+              </button>
               <button @click="openPicker"
                 class="text-xs text-c-muted hover:text-c-bark transition-colors">
                 换一题
@@ -117,30 +111,18 @@
                父级不是 flex 的话 flex-1 无效 → 容器高度=内容高度，长材料直接
                溢出面板、叠到下方作答区上（宽屏 lg 下 max-h 兜底也被关掉，必现）。 -->
           <div v-if="form.material" class="flex-1 min-h-0 flex flex-col">
-            <!-- 说明条要跟**当前用的是哪一份**走：
-                 说"已省去 N 则"却在显示整卷，会让人看不懂到底用了什么（真踩过）。 -->
-            <div v-if="trimState.trimmed"
-              class="flex flex-wrap items-center gap-x-2 gap-y-0.5 mb-3 text-xs leading-5">
-              <template v-if="trimState.active">
-                <span class="font-medium text-c-bark">本题用给定资料{{ trimState.used.join('、') }}</span>
-                <span class="text-c-muted tnum">
-                  整卷共 {{ trimState.dropped + trimState.used.length }} 则，已省去其余 {{ trimState.dropped }} 则（材料 {{ trimState.before }} → {{ trimState.after }} 字，省 {{ trimState.savedPct }}%）
-                </span>
-                <button @click="toggleTrim"
-                  class="underline underline-offset-2 text-c-muted hover:text-c-bark transition-colors">
-                  查看整卷材料
-                </button>
-              </template>
-              <template v-else>
-                <span class="font-medium text-c-bark">当前用的是整卷材料</span>
-                <span class="text-c-muted tnum">
-                  本题只问资料{{ trimState.used.join('、') }}；切成本题材料可省 {{ trimState.savedPct }}%（{{ trimState.before }} → {{ trimState.after }} 字）
-                </span>
-                <button @click="toggleTrim"
-                  class="underline underline-offset-2 text-c-muted hover:text-c-bark transition-colors">
-                  只用本题材料
-                </button>
-              </template>
+            <!-- 已裁剪态只留一行小字说明现状（整卷态的提示挪去了标题行按钮，
+                 一整条横幅太占版面——材料才是这个面板的主角） -->
+            <div v-if="trimState.trimmed && trimState.active"
+              class="flex flex-wrap items-center gap-x-2 gap-y-0.5 mb-2 text-xs leading-5">
+              <span class="font-medium text-c-bark">本题用给定资料{{ trimState.used.join('、') }}</span>
+              <span class="text-c-muted tnum">
+                已省去其余 {{ trimState.dropped }} 则（{{ trimState.before }} → {{ trimState.after }} 字）
+              </span>
+              <button @click="toggleTrim"
+                class="underline underline-offset-2 text-c-muted hover:text-c-bark transition-colors">
+                查看整卷
+              </button>
             </div>
             <textarea v-if="materialEdit" v-model="form.material" rows="14"
               placeholder="把材料原样粘进来（材料 1、材料 2……）"
@@ -184,45 +166,45 @@
             </div>
           </div>
 
-          <label class="block text-[11px] text-c-muted mb-1">题干</label>
+          <label class="block text-[11px] text-c-muted mb-0.5">题干</label>
           <textarea v-model="form.title" rows="2"
             placeholder="例：结合给定资料，围绕「养老刚需也是产业蓝海」自拟题目，写一篇文章"
-            class="w-full px-3 py-2 rounded-xl text-xs neu-inset outline-none resize-none
+            class="w-full px-3 py-1.5 rounded-xl text-xs neu-inset outline-none resize-none
               text-c-body placeholder:text-c-muted leading-6" />
 
-          <label class="block text-[11px] text-c-muted mt-3 mb-1">作答要求</label>
-          <textarea v-model="form.requirement" rows="3"
+          <label class="block text-[11px] text-c-muted mt-2 mb-0.5">作答要求</label>
+          <textarea v-model="form.requirement" rows="2"
             placeholder="例：观点明确，结构完整，语言流畅，1000 字左右"
-            class="w-full px-3 py-2 rounded-xl text-xs neu-inset outline-none resize-none
+            class="w-full px-3 py-1.5 rounded-xl text-xs neu-inset outline-none resize-none
               text-c-body placeholder:text-c-muted leading-6" />
 
-          <div class="grid grid-cols-2 gap-3 mt-3">
+          <div class="grid grid-cols-2 gap-3 mt-2">
             <div>
-              <label class="block text-[11px] text-c-muted mb-1">满分</label>
+              <label class="block text-[11px] text-c-muted mb-0.5">满分</label>
               <input v-model.number="form.maxScore" type="number" min="1"
-                class="w-full px-3 py-2 rounded-xl text-xs neu-inset outline-none text-c-body tnum" />
+                class="w-full px-3 py-1.5 rounded-xl text-xs neu-inset outline-none text-c-body tnum" />
             </div>
             <div>
-              <label class="block text-[11px] text-c-muted mb-1">字数要求</label>
+              <label class="block text-[11px] text-c-muted mb-0.5">字数要求</label>
               <input v-model.number="form.wordLimit" type="number" placeholder="不限"
-                class="w-full px-3 py-2 rounded-xl text-xs neu-inset outline-none
+                class="w-full px-3 py-1.5 rounded-xl text-xs neu-inset outline-none
                   text-c-body placeholder:text-c-muted tnum" />
             </div>
           </div>
 
-          <!-- 提纲：默认收起不占地方；按题目存本机，批改不看它 -->
-          <details class="mt-3 group">
+          <!-- 提纲：默认展开（大编辑区才配得上「先列提纲再动笔」）；按题目存本机，批改不看它。
+               有内容的题强制展开（收起一篇写了一半的提纲纯属添堵）；空题也展开当写作引导 -->
+          <details class="mt-3 group" open>
             <summary class="flex items-center cursor-pointer list-none select-none
               text-xs text-c-muted hover:text-c-bark transition-colors">
               <span class="transition-transform duration-200 group-open:rotate-90 inline-block mr-1">▸</span>
               <span class="font-medium">提纲</span>
               <span class="text-c-muted/70 ml-2">先列提纲再动笔</span>
               <span v-if="outline.trim()" class="tnum ml-auto">{{ outline.length }} 字</span>
-              <span v-else class="ml-auto">展开</span>
             </summary>
-            <textarea v-model="outline" rows="4"
-              placeholder="立论一句 → 分论点（附材料依据）→ 结尾收束。提纲只存在本机，批改不看它。"
-              class="w-full mt-2 px-3 py-2 rounded-xl text-xs neu-inset outline-none resize-none
+            <textarea v-model="outline" rows="8"
+              placeholder="立论一句 → 分论点（附材料依据）→ 结尾收束。&#10;提纲只存在本机，批改不看它。"
+              class="w-full mt-1.5 px-3 py-2 rounded-xl text-xs neu-inset outline-none resize-y
                 text-c-body placeholder:text-c-muted leading-6" />
           </details>
 
@@ -237,7 +219,7 @@
 
       <!-- 我的作答：方格纸，仿考场卷面；标注态可划荧光（编辑/标注两态切换，输入体验不动）。
            lg 下定高、内部滚动 —— 页面本身不动，答题全程只有材料面板在滚 -->
-      <section class="rounded-2xl px-5 py-3.5 neu mb-4 lg:mb-3 shrink-0 lg:h-[268px] lg:flex lg:flex-col">
+      <section class="rounded-2xl px-5 py-3.5 neu mb-4 lg:mb-3 shrink-0 lg:h-[330px] lg:flex lg:flex-col">
         <div class="flex items-center justify-between mb-2 shrink-0">
           <span class="text-sm font-medium text-c-body">我的作答</span>
           <div class="flex items-center gap-3">

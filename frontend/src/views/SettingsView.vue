@@ -45,9 +45,9 @@
         <!-- 服务商预设 -->
         <div>
           <label class="text-xs text-c-muted mb-3 block">服务商预设（点一下自动填地址与模型）</label>
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
             <button v-for="p in PRESETS" :key="p.name" @click="applyPreset(p)"
-              class="px-3 py-3.5 text-xs md:text-sm font-medium rounded-xl transition-all duration-300 text-left"
+              class="px-3 py-3 text-xs md:text-sm font-medium rounded-xl transition-all duration-300 text-left"
               :class="samePreset(p) ? 'neu-inset' : 'neu-sm'">
               <span :class="samePreset(p) ? 'text-c-bark' : 'text-c-body'">{{ p.name }}</span>
               <span class="block text-xs font-normal mt-1 truncate"
@@ -55,12 +55,11 @@
             </button>
           </div>
           <div class="text-xs text-c-muted mt-3">
-            还没有 Key？
-            <a href="https://platform.deepseek.com" target="_blank" rel="noreferrer"
-              class="text-c-bark hover:underline">DeepSeek 注册</a>
-            ·
-            <a href="https://open.bigmodel.cn" target="_blank" rel="noreferrer"
-              class="text-c-bark hover:underline">智谱 GLM 注册</a>
+            还没有 Key？去注册：
+            <template v-for="(p, i) in PRESETS" :key="p.name">
+              <a :href="p.url" target="_blank" rel="noreferrer"
+                class="text-c-bark hover:underline">{{ p.name }}</a><span v-if="i < PRESETS.length - 1" class="mx-1.5 text-c-line">·</span>
+            </template>
           </div>
         </div>
 
@@ -92,10 +91,21 @@
                 font-mono neu-inset outline-none" />
           </div>
           <div>
-            <label class="text-xs text-c-muted mb-2.5 block">模型名称</label>
-            <input v-model="cfg.model" type="text" placeholder="deepseek-chat"
+            <label class="text-xs text-c-muted mb-2.5 block">
+              模型名称
+              <span v-if="activePresetNote" class="text-c-clay">{{ activePresetNote }}</span>
+            </label>
+            <input v-model="cfg.model" type="text" placeholder="deepseek-chat" :list="modelListId"
               class="w-full px-4 py-3 rounded-xl text-xs text-c-body placeholder:text-c-muted
                 font-mono neu-inset outline-none" />
+            <datalist :id="modelListId">
+              <option v-for="m in activePresetModels" :key="m" :value="m" />
+            </datalist>
+            <div v-if="activePresetModels.length" class="text-xs text-c-muted mt-2">
+              常见型号：
+              <button v-for="m in activePresetModels" :key="m" @click="cfg.model = m"
+                class="font-mono text-c-bark hover:underline mr-2">{{ m }}</button>
+            </div>
           </div>
         </div>
 
@@ -236,11 +246,29 @@ import { AUTHOR } from '../data/author'
 import { copyAuthorLine } from '../utils/watermark'
 import WeChatPanel from '../components/WeChatPanel.vue'
 
-// 服务商预设：点了自动填 Base URL 与模型名，省得用户去查文档
+// 服务商预设：点了自动填 Base URL 与模型名，省得用户去查文档。
+// models 是「模型名建议」：选中预设后，模型输入框的下拉里给常见型号（仍可自由手输，
+// 服务商上新模型不用等这里更新——真正发请求用的是文本框里的值）。
 const PRESETS = [
-  { name: 'DeepSeek', base_url: 'https://api.deepseek.com/v1', model: 'deepseek-chat' },
-  { name: '智谱 GLM', base_url: 'https://open.bigmodel.cn/api/paas/v4', model: 'glm-4-flash' },
-  { name: 'OpenAI', base_url: 'https://api.openai.com/v1', model: 'gpt-4o-mini' },
+  { name: 'DeepSeek', base_url: 'https://api.deepseek.com/v1', model: 'deepseek-chat',
+    models: ['deepseek-chat', 'deepseek-reasoner'], url: 'https://platform.deepseek.com' },
+  { name: '智谱 GLM', base_url: 'https://open.bigmodel.cn/api/paas/v4', model: 'glm-4-flash',
+    models: ['glm-4-flash', 'glm-4-plus', 'glm-4-air'], url: 'https://open.bigmodel.cn' },
+  { name: 'Kimi', base_url: 'https://api.moonshot.cn/v1', model: 'moonshot-v1-8k',
+    models: ['moonshot-v1-8k', 'moonshot-v1-32k', 'kimi-k2-0711-preview'], url: 'https://platform.moonshot.cn' },
+  { name: '通义千问', base_url: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'qwen-plus',
+    models: ['qwen-plus', 'qwen-turbo', 'qwen-max'], url: 'https://bailian.console.aliyun.com' },
+  { name: '豆包', base_url: 'https://ark.cn-beijing.volces.com/api/v3', model: 'doubao-seed-1-6-250615',
+    models: ['doubao-seed-1-6-250615', 'doubao-1-5-lite-32k-250115'], url: 'https://www.volcengine.com/product/ark',
+    note: '模型名需换成你的推理接入点 ID' },
+  { name: '硅基流动', base_url: 'https://api.siliconflow.cn/v1', model: 'deepseek-ai/DeepSeek-V3',
+    models: ['deepseek-ai/DeepSeek-V3', 'Qwen/Qwen2.5-72B-Instruct'], url: 'https://cloud.siliconflow.cn' },
+  { name: 'OpenAI', base_url: 'https://api.openai.com/v1', model: 'gpt-4o-mini',
+    models: ['gpt-4o-mini', 'gpt-4o'], url: 'https://platform.openai.com' },
+  { name: 'OpenRouter', base_url: 'https://openrouter.ai/api/v1', model: 'openrouter/auto',
+    models: ['openrouter/auto', 'deepseek/deepseek-chat', 'anthropic/claude-sonnet-4'], url: 'https://openrouter.ai' },
+  { name: 'Grok', base_url: 'https://api.x.ai/v1', model: 'grok-3-mini',
+    models: ['grok-3-mini', 'grok-3'], url: 'https://console.x.ai' },
 ]
 
 const ICONS = {
@@ -372,6 +400,15 @@ async function refreshBackend(force = false) {
 function samePreset(p) {
   return cfg.base_url.replace(/\/+$/, '') === p.base_url.replace(/\/+$/, '')
 }
+
+// 当前命中的预设：给模型名输入框提供「常见型号」建议（datalist + 快捷按钮）
+const modelListId = 'preset-model-suggestions'
+const activePreset = computed(() => PRESETS.find((p) => samePreset(p)))
+const activePresetModels = computed(() => activePreset.value?.models || [])
+const activePresetNote = computed(() => {
+  const n = activePreset.value?.note
+  return n ? `（${n}）` : ''
+})
 
 function applyPreset(p) {
   cfg.base_url = p.base_url
