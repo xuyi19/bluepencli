@@ -157,6 +157,11 @@ class PracticeRecordIn(BaseModel):
     id: str
     created_at: str = ""
     title: str = ""
+    # 整卷考试标记（v0.27.0）：属于哪套卷、第几题；单题练习为空。
+    # ⚠️ 同 practice 页的约定：不声明就 model_dump() 静默丢弃
+    exam_paper_id: str = ""
+    exam_paper_title: str = ""
+    exam_paper_no: int | None = None
     requirement: str = ""
     material: str = ""
     answer: str = ""

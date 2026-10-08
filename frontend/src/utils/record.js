@@ -77,7 +77,7 @@ function parseDateTime(text) {
  * 老记录没有这个字段，读的地方一律按空串处理（`byQuestionType` 会跳过），
  * 不能拿标题去猜题型：标题里出现「概括」两个字，题不一定就是归纳概括题。
  */
-export function buildRecord({ form, report, elapsedMs }) {
+export function buildRecord({ form, report, elapsedMs, examPaper = null }) {
   const teacherIds = report.teacherIds || []
   const maxScore = form.maxScore || 40
   // 双保险：orchestrator 出口已钳，写档前再钳一次（历史教训：合议 20 分题输 66 分）
@@ -86,6 +86,10 @@ export function buildRecord({ form, report, elapsedMs }) {
     id: report.taskId,
     createdAt: Date.now(),
     title: form.title || '未命名练习',
+    // 整卷考试标记：这套记录属于哪套卷、第几题。单题练习为空串/null，历史页据此分组
+    examPaperId: examPaper?.id || '',
+    examPaperTitle: examPaper?.title || '',
+    examPaperNo: examPaper?.no ?? null,
     questionType: form.questionType || '',
     requirement: form.requirement || '',
     material: form.material || '',
@@ -140,6 +144,9 @@ function toBackend(rec) {
     id: rec.id,
     created_at: fmtDateTime(rec.createdAt),
     title: rec.title,
+    exam_paper_id: rec.examPaperId || '',
+    exam_paper_title: rec.examPaperTitle || '',
+    exam_paper_no: rec.examPaperNo ?? null,
     requirement: rec.requirement,
     material: rec.material,
     answer: rec.answer,
@@ -179,6 +186,9 @@ function fromBackend(data) {
     wordLimit: data.word_limit ?? null,
     wordCount: data.word_count || 0,
     maxScore: data.max_score || 40,
+    examPaperId: data.exam_paper_id || '',
+    examPaperTitle: data.exam_paper_title || '',
+    examPaperNo: data.exam_paper_no ?? null,
     mode: data.mode || 'solo',
     teacherIds,
     teachers: meta,

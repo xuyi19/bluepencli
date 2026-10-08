@@ -17,7 +17,9 @@
         </h1>
         <p class="text-c-muted" :class="step === 'answer' ? 'text-xs' : 'text-sm mt-1.5'">
           {{ step === 'answer'
-            ? '先把题答完，再交给老师批改'
+            ? isPaperMode
+              ? `${paperSession.examLabel} · 整卷 ${paperSession.questions.length} 题，已答 ${paperAnsweredCount} 题`
+              : '先把题答完，再交给老师批改'
             : step === 'grading'
               ? '老师正在各自独立阅卷，请稍候'
               : `${fmtDateTime(record?.createdAt)} · ${MODE_LABEL[report?.mode] || ''}` }}
@@ -32,13 +34,15 @@
           </span>
           <span class="tnum text-base font-semibold"
             :class="examUrgent ? 'text-[#b91c1c]' : 'text-c-ink'">{{ examClock }}</span>
-          <select v-model.number="examMinutes" @change="resetExamTimer" :disabled="examRunning"
+          <!-- ⚠️ @change 不许调 resetExamTimer：它会把用户刚选的时长硬改回按题型的默认值
+               （选择永远弹回 30min，"时间固定了"就是这么来的），改时长只重摆钟、不重置选择 -->
+          <select v-model.number="examMinutes" @change="onExamMinutesChange" :disabled="examRunning"
             class="px-1.5 py-1 rounded-lg text-xs neu-inset outline-none text-c-body disabled:opacity-50"
             title="考试时长（落笔后自动计时）">
-            <option v-for="m in [15, 20, 30, 40, 60, 90, 120]" :key="m" :value="m">{{ m }}min</option>
+            <option v-for="m in examMinuteOptions" :key="m" :value="m">{{ m }}min</option>
           </select>
         </template>
-        <button v-if="step === 'result'" @click="backToAnswer"
+        <button v-if="step === 'result' && !isPaperMode" @click="backToAnswer"
           class="px-4 py-2 rounded-xl text-sm font-medium text-c-body neu-sm
             hover:text-c-bark transition-colors duration-200">
           修改作答
@@ -166,31 +170,58 @@
             </div>
           </div>
 
-          <label class="block text-[11px] text-c-muted mb-0.5">题干</label>
-          <textarea v-model="form.title" rows="2"
-            placeholder="例：结合给定资料，围绕「养老刚需也是产业蓝海」自拟题目，写一篇文章"
-            class="w-full px-3 py-1.5 rounded-xl text-xs neu-inset outline-none resize-none
-              text-c-body placeholder:text-c-muted leading-6" />
-
-          <label class="block text-[11px] text-c-muted mt-2 mb-0.5">作答要求</label>
-          <textarea v-model="form.requirement" rows="2"
-            placeholder="例：观点明确，结构完整，语言流畅，1000 字左右"
-            class="w-full px-3 py-1.5 rounded-xl text-xs neu-inset outline-none resize-none
-              text-c-body placeholder:text-c-muted leading-6" />
-
-          <div class="grid grid-cols-2 gap-3 mt-2">
-            <div>
-              <label class="block text-[11px] text-c-muted mb-0.5">满分</label>
-              <input v-model.number="form.maxScore" type="number" min="1"
-                class="w-full px-3 py-1.5 rounded-xl text-xs neu-inset outline-none text-c-body tnum" />
-            </div>
-            <div>
-              <label class="block text-[11px] text-c-muted mb-0.5">字数要求</label>
-              <input v-model.number="form.wordLimit" type="number" placeholder="不限"
-                class="w-full px-3 py-1.5 rounded-xl text-xs neu-inset outline-none
-                  text-c-body placeholder:text-c-muted tnum" />
-            </div>
+          <!-- 整卷考试：题号导航（已答/当前/未答一眼分清，点谁切谁） -->
+          <div v-if="isPaperMode" class="flex flex-wrap gap-1.5 mb-3">
+            <button v-for="(q, i) in paperSession.questions" :key="q.qid" @click="switchPaperQuestion(i)"
+              class="px-2 py-1 rounded-lg text-[11px] tnum transition-all duration-200"
+              :class="i === paperSession.activeIdx
+                ? 'bg-c-bark text-c-cream font-medium'
+                : paperSession.reports[q.qid]
+                  ? 'neu-sm text-[#4f7d5e]'
+                  : (paperSession.answers[q.qid] || '').trim()
+                    ? 'neu-inset text-c-body'
+                    : 'neu-sm text-c-muted hover:text-c-bark'"
+              :title="`第${q.no}题 · ${q.maxScore} 分${(paperSession.answers[q.qid] || '').trim() ? ' · 已答' : ' · 未答'}`">
+              第{{ q.no }}题
+            </button>
           </div>
+
+          <!-- 真题态（卷内题干锁定）：只读展示，比可编辑的 textarea 更小更干净——
+               题干来自真题卷，让用户编辑它只会造成「改了题干，采分点对不上」的暗坑 -->
+          <template v-if="questionLocked">
+            <div class="rounded-xl neu-inset px-2.5 py-1.5 text-[11px] leading-5 text-c-body whitespace-pre-line">{{ form.title }}</div>
+            <div v-if="form.requirement" class="rounded-xl neu-inset px-2.5 py-1.5 text-[11px] leading-5 text-c-muted whitespace-pre-line mt-1.5">{{ form.requirement }}</div>
+            <div class="text-[11px] text-c-muted tnum mt-2">
+              满分 {{ form.maxScore }} 分<template v-if="form.wordLimit"> · 限 {{ form.wordLimit }} 字</template>
+            </div>
+          </template>
+          <template v-else>
+            <label class="block text-[11px] text-c-muted mb-0.5">题干</label>
+            <textarea v-model="form.title" rows="2"
+              placeholder="例：结合给定资料，围绕「养老刚需也是产业蓝海」自拟题目，写一篇文章"
+              class="w-full px-3 py-1.5 rounded-xl text-xs neu-inset outline-none resize-none
+                text-c-body placeholder:text-c-muted leading-6" />
+
+            <label class="block text-[11px] text-c-muted mt-2 mb-0.5">作答要求</label>
+            <textarea v-model="form.requirement" rows="2"
+              placeholder="例：观点明确，结构完整，语言流畅，1000 字左右"
+              class="w-full px-3 py-1.5 rounded-xl text-xs neu-inset outline-none resize-none
+                text-c-body placeholder:text-c-muted leading-6" />
+
+            <div class="grid grid-cols-2 gap-3 mt-2">
+              <div>
+                <label class="block text-[11px] text-c-muted mb-0.5">满分</label>
+                <input v-model.number="form.maxScore" type="number" min="1"
+                  class="w-full px-3 py-1.5 rounded-xl text-xs neu-inset outline-none text-c-body tnum" />
+              </div>
+              <div>
+                <label class="block text-[11px] text-c-muted mb-0.5">字数要求</label>
+                <input v-model.number="form.wordLimit" type="number" placeholder="不限"
+                  class="w-full px-3 py-1.5 rounded-xl text-xs neu-inset outline-none
+                    text-c-body placeholder:text-c-muted tnum" />
+              </div>
+            </div>
+          </template>
 
           <!-- 提纲：默认展开（大编辑区才配得上「先列提纲再动笔」）；按题目存本机，批改不看它。
                有内容的题强制展开（收起一篇写了一半的提纲纯属添堵）；空题也展开当写作引导 -->
@@ -259,7 +290,9 @@
             <button v-if="isExamMode && confirmSubmit" @click="startExam"
               class="flex-1 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-300
                 text-white" style="background:#b91c1c">
-              确认交卷？计时将停止，交给 {{ selected.length }} 位老师批改
+              {{ isPaperMode
+                ? `确认交卷？${paperSession.questions.length} 题统一计时将停止，逐题交给 ${selected.length} 位老师批改`
+                : `确认交卷？计时将停止，交给 ${selected.length} 位老师批改` }}
             </button>
             <button v-else-if="isExamMode" @click="startExam" :disabled="!canGrade"
               class="flex-1 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-300
@@ -275,7 +308,11 @@
             </button>
           </div>
           <div v-if="!canGrade" class="text-xs text-c-muted text-center mt-1.5">
-            {{ !hasKey ? '先到设置页配置 API' : '作答至少 20 字才能提交' }}
+            {{ !hasKey
+              ? '先到设置页配置 API'
+              : isPaperMode
+                ? '先作答至少一道题（20 字以上）才能交卷'
+                : '作答至少 20 字才能提交' }}
           </div>
         </div>
       </div>
@@ -303,6 +340,27 @@
             </div>
             <button @click="closePicker" class="text-c-muted hover:text-c-bark text-xs leading-none shrink-0 ml-3">✕</button>
           </div>
+
+          <!-- 整卷考试（仅考场模式）：一套真题多题连做、统一计时、交卷逐题批改。
+               私有卷在前面（年份新、更该练），与题库页同一排序 -->
+          <template v-if="isExamMode">
+            <div class="flex items-center justify-between mb-2 shrink-0">
+              <span class="text-xs font-medium text-c-body">整卷考试</span>
+              <span class="text-xs text-c-muted">多题连做 · 统一计时 · 交卷逐题批改</span>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4 shrink-0
+              max-h-44 overflow-y-auto pr-1">
+              <button v-for="p in paperCatalog" :key="p.id" @click="startPaper(p)"
+                class="text-left rounded-xl p-3 neu-sm transition-all duration-200 hover:translate-y-px">
+                <div class="text-xs font-medium text-c-body truncate">{{ p.examLabel }}</div>
+                <div class="text-[11px] text-c-muted tnum mt-1">
+                  {{ p.questions.length }} 题 · 材料 {{ p.materialChars }} 字 · 合计 {{ p.totalScore }} 分
+                  <span v-if="p.tier === 'private'" class="text-[#b4552d]">· 私有</span>
+                </div>
+              </button>
+            </div>
+            <div class="text-xs text-c-muted mb-2 shrink-0">单题练习：</div>
+          </template>
 
           <!-- 分类条：全部 / 今日一练 / 动态题型 -->
           <div class="flex flex-wrap items-center gap-1.5 mb-3 shrink-0">
@@ -422,6 +480,11 @@
           <div class="flex items-center gap-2.5">
             <span class="w-2 h-2 rounded-full bg-c-bark animate-pulse" />
             <span class="text-sm font-medium text-c-body">{{ stageText }}</span>
+            <!-- 整卷批改：多题依次过，进度得让人看见，不然像卡死了 -->
+            <span v-if="isPaperMode && paperSession.gradingIdx >= 0" class="text-xs text-c-muted tnum">
+              整卷 {{ paperSession.gradingIdx + 1 }}/{{ paperSession.questions.length }} 题 ·
+              {{ truncate(paperSession.questions[paperSession.gradingIdx]?.stem, 18) }}
+            </span>
           </div>
           <span class="text-xs text-c-muted tnum">{{ elapsed }}s</span>
         </div>
@@ -471,6 +534,28 @@
     <template v-else-if="report">
       <div v-if="error" class="rounded-2xl p-4 mb-6 text-sm text-[#b4552d] leading-6 whitespace-pre-wrap"
         style="background: #f7e9e4">{{ error }}</div>
+
+      <!-- 整卷成绩单：逐题得分 + 合计，点题号切到那道题的完整报告 -->
+      <section v-if="isPaperMode" class="rounded-2xl p-4 mb-6 neu">
+        <div class="flex items-baseline justify-between mb-2.5">
+          <span class="text-sm font-medium text-c-body">整卷成绩 · {{ paperSession.examLabel }}</span>
+          <span class="tnum text-sm text-c-ink">
+            合计 <b>{{ paperTotalScore }}</b> / {{ paperTotalMax }} 分
+            <span v-if="paperUnanswered" class="text-c-muted">· {{ paperUnanswered }} 题未作答</span>
+          </span>
+        </div>
+        <div class="flex flex-wrap gap-1.5">
+          <button v-for="q in paperSession.questions" :key="q.qid" @click="viewPaperReport(q.qid)"
+            class="px-2.5 py-1.5 rounded-lg text-xs tnum transition-all duration-200"
+            :class="paperResultActive === q.qid ? 'bg-c-bark text-c-cream font-medium' : 'neu-sm text-c-body hover:translate-y-px'">
+            第{{ q.no }}题
+            <template v-if="paperSession.reports[q.qid]">
+              {{ paperSession.reports[q.qid].final.finalScore }}/{{ q.maxScore }}
+            </template>
+            <template v-else>未作答</template>
+          </button>
+        </div>
+      </section>
 
       <!-- 分数 -->
       <section class="rounded-2xl p-6 neu mb-6">
@@ -886,7 +971,7 @@ import { mergeKeyPoints, summarizeKeyPoints } from '../utils/grading/keyPoints'
 import { trimMaterial } from '../utils/grading/materialTrim'
 import { buildRecord, archiveRecord, countChars, fmtDateTime, listAllRecords } from '../utils/record'
 import { getAll, STORES } from '../store/db'
-import { BUILTIN_POOL, resolveQuestion } from '../data/questions'
+import { BUILTIN_POOL, REAL_EXAMS, realQuestionId, resolveQuestion } from '../data/questions'
 import { pickDaily, practicedToday } from '../data/daily'
 import { useReadiness } from '../utils/readiness'
 
@@ -1117,7 +1202,11 @@ const overLimit = computed(() => form.wordLimit && countChars(form.answer) > for
 // ⚠️ 这里**不能**再要求 selected.length > 0：老师只在「开始批改」的弹窗里选，
 // 若按钮因"没选老师"而禁用，用户就再也点不开那个弹窗 —— 选人的入口被自己锁死。
 // 老师的校验下沉到弹窗的确认按钮（选不满就点不动、点了也有明确提示）。
-const canGrade = computed(() => hasKey.value && form.answer.trim().length > 20)
+const canGrade = computed(() =>
+  hasKey.value &&
+  (isPaperMode.value
+    ? paperAnsweredCount.value > 0          // 整卷：答了至少一题就能交卷（未答的跳过批改）
+    : form.answer.trim().length > 20))
 
 // ── 考场模式：倒计时 + 交卷确认 + 超时自动交卷 ──
 // 设计取舍：落笔（首次输入）才计时，贴真实考场的「发卷后开始」；
@@ -1156,6 +1245,212 @@ const examClock = computed(() => {
 })
 const examUrgent = computed(() => isExamMode.value && examRunning.value && examRemain.value <= 300)
 
+// ── 整卷考试：一套真题多题连做、一个倒计时，交卷后逐题批改 ──
+// 会话只在内存里活这一次：换卷/换单题/切模式都清空，已在批改记录里留底的不受影响
+const paperSession = reactive({
+  paperId: '',
+  examLabel: '',     // 「2014 年国考 · 副省级」
+  questions: [],     // [{qid, no, type, stem, requirement, maxScore, wordLimit}]
+  answers: {},       // qid → 作答正文
+  reports: {},       // qid → 批改结果（交卷后逐题填）
+  recs: {},          // qid → 已存档记录（结果页切换视图用）
+  activeIdx: 0,
+  gradingIdx: -1,    // 批改进度：正在批第几题（-1 = 非批改态）
+})
+const paperResultActive = ref('')   // 结果页当前展示的是哪道题
+const isPaperMode = computed(() => !!paperSession.paperId)
+const activePaperQ = computed(() => paperSession.questions[paperSession.activeIdx] || null)
+const paperAnsweredCount = computed(() =>
+  paperSession.questions.filter((q) => (paperSession.answers[q.qid] || '').trim()).length)
+const paperGradedList = computed(() => paperSession.questions.filter((q) => paperSession.reports[q.qid]))
+const paperUnanswered = computed(() => paperSession.questions.length - paperGradedList.value.length)
+const paperTotalScore = computed(() =>
+  paperGradedList.value.reduce((s, q) => s + (paperSession.reports[q.qid].final?.finalScore || 0), 0))
+const paperTotalMax = computed(() =>
+  paperGradedList.value.reduce((s, q) => s + (q.maxScore || 0), 0))
+/** 真题态锁题干：整卷 + 卷内真题的题干/要求只读；自拟、自建、仿真仍可编辑 */
+const questionLocked = computed(() => isPaperMode.value || loadedMeta.kind === '真题')
+
+const paperCatalog = computed(() =>
+  REAL_EXAMS.map((e) => ({
+    id: e.id,
+    tier: e.tier,
+    examLabel: !e.system || e.system === '国考'
+      ? `${e.year} 年国考 · ${e.paper}`
+      : `${e.year} ${e.system} · ${e.paper}卷`,
+    materialChars: e.materialChars,
+    totalScore: e.questions.reduce((s, q) => s + (q.score || 0), 0),
+    questions: e.questions,
+  })))
+
+function paperDefaultMinutes() {
+  return paperSession.questions.length >= 5 ? 150 : 120
+}
+
+/**
+ * 进整卷：材料用整卷（真题语义），题干/要求/分值全部来自卷子且锁定只读。
+ * 时长默认 = 5 题 150 分钟、4 题以下 120（选项 60~180 可调，落笔才计时）。
+ */
+async function startPaper(paper) {
+  showPickerModal.value = false
+  const full = await loadFullPaper(paper)
+  if (!full?.material) {
+    toast.error('这套卷的正文没能载入，换一套试试')
+    return
+  }
+  clearRun()
+  paperSession.paperId = paper.id
+  paperSession.examLabel = paper.examLabel
+  paperSession.questions = paper.questions.map((q) => ({
+    qid: realQuestionId(paper.id, q.no),
+    no: q.no,
+    type: q.type || '',
+    stem: q.stem,
+    requirement: q.requirement || '',
+    maxScore: q.score || 20,
+    wordLimit: q.wordLimit ?? null,
+  }))
+  paperSession.answers = {}
+  paperSession.reports = {}
+  paperSession.recs = {}
+  paperSession.activeIdx = 0
+  paperResultActive.value = ''
+  form.material = full.material       // 整卷材料，不做本题裁剪
+  resetTrim()
+  applyPaperQuestion(0, { resetAnswer: true })
+  resetExamTimer()
+  nextTick(() => window.scrollTo({ top: 0, behavior: 'smooth' }))
+}
+
+/** 整卷材料：懒加载任意一题的正文，拿它带的整卷 material（比再开一个导出口稳） */
+async function loadFullPaper(paper) {
+  const first = paper.questions[0]
+  if (!first) return null
+  return resolveQuestion({ id: realQuestionId(paper.id, first.no), needLoad: true })
+}
+
+/** 切到整卷里的第 idx 题：form 装题干/要求，作答从会话里恢复 */
+function applyPaperQuestion(idx, { resetAnswer = false } = {}) {
+  const q = paperSession.questions[idx]
+  if (!q) return
+  paperSession.activeIdx = idx
+  form.title = q.stem
+  form.requirement = q.requirement
+  form.maxScore = q.maxScore
+  form.wordLimit = q.wordLimit
+  form.questionType = q.type
+  form.answer = resetAnswer ? '' : (paperSession.answers[q.qid] || '')
+  loadedId.value = q.qid
+  Object.assign(loadedMeta, { type: q.type, exam: paperSession.examLabel, difficulty: 0, kind: '真题', topics: [] })
+  materialEdit.value = false
+  answerMarkMode.value = false
+  loadMarks(q.qid)
+  loadOutline(q.qid)
+  nextTick(() => window.scrollTo({ top: 0, behavior: 'smooth' }))
+}
+
+function switchPaperQuestion(idx) {
+  if (idx === paperSession.activeIdx) return
+  applyPaperQuestion(idx)
+}
+
+/** 结果页切到某道题的完整报告（form 一并回放，结果页的字数/分值才对得上） */
+function viewPaperReport(qid) {
+  const result = paperSession.reports[qid]
+  if (!result) return
+  paperResultActive.value = qid
+  report.value = result
+  record.value = paperSession.recs[qid] || record.value
+  const q = paperSession.questions.find((x) => x.qid === qid)
+  if (q) {
+    form.title = q.stem
+    form.requirement = q.requirement
+    form.maxScore = q.maxScore
+    form.wordLimit = q.wordLimit
+    form.questionType = q.type
+    form.answer = paperSession.answers[q.qid] || ''
+    loadedId.value = q.qid
+  }
+}
+
+/**
+ * 整卷交卷：逐题依次批改（跳过未作答的题——考试里空题就是 0 分，批空答案没有意义）。
+ * 每题独立成记录（带整卷标记），结果页用成绩单卡在各题报告间切换。
+ */
+async function gradePaper() {
+  const answerable = paperSession.questions.filter((q) => (paperSession.answers[q.qid] || '').trim().length > 20)
+  if (!answerable.length) {
+    toast.warning('还没有作答内容，答完至少一道题再交卷')
+    confirmSubmit.value = false
+    return
+  }
+  if (!selected.value.length) {
+    selected.value = [...DEFAULT_TEACHERS]
+    toast.warning('未选择老师，已按默认三位（袁东 / 周泰然 / 白鹭）批改')
+  }
+  stopExamTimer()
+  answerSeconds.value = Math.max(0, examMinutes.value * 60 - examRemain.value)
+  clearRun()
+  step.value = 'grading'
+  elapsed.value = 0
+  timer = setInterval(() => { elapsed.value++ }, 1000)
+  controller = new AbortController()
+
+  try {
+    for (let i = 0; i < paperSession.questions.length; i++) {
+      const q = paperSession.questions[i]
+      const ans = (paperSession.answers[q.qid] || '').trim()
+      if (ans.length <= 20) continue            // 未作答：跳过批改
+      if (controller.signal.aborted) break
+      paperSession.gradingIdx = i
+      // 这道题装进 form（runGrading 从 form 取题干/材料/作答）
+      form.title = q.stem
+      form.requirement = q.requirement
+      form.maxScore = q.maxScore
+      form.wordLimit = q.wordLimit
+      form.questionType = q.type
+      form.answer = paperSession.answers[q.qid]
+      loadedId.value = q.qid
+      Object.keys(teacherProgress).forEach((k) => delete teacherProgress[k])
+      for (const id of selected.value) teacherProgress[id] = { state: 'waiting', text: '' }
+
+      const result = await runGrading({
+        paper: { ...form, questionId: q.qid, questionType: q.type },
+        teacherIds: [...selected.value],
+        deep: deep.value,
+        signal: controller.signal,
+        onProgress: gradingProgressHandler,
+      })
+      paperSession.reports[q.qid] = result
+      const rec = buildRecord({
+        form,
+        report: result,
+        elapsedMs: result.elapsed,
+        examPaper: { id: paperSession.paperId, title: paperSession.examLabel, no: q.no },
+      })
+      paperSession.recs[q.qid] = rec
+      await archiveRecord(rec)
+    }
+  } catch (e) {
+    if (e.name !== 'AbortError') {
+      error.value = e.message
+    }
+  } finally {
+    clearInterval(timer)
+    paperSession.gradingIdx = -1
+  }
+
+  const firstGraded = paperGradedList.value[0]
+  if (!firstGraded) {
+    step.value = 'answer'
+    return
+  }
+  doneToday.value = true
+  viewPaperReport(firstGraded.qid)
+  step.value = 'result'
+  if (error.value) toast.warning('整卷批改中有题目出错，已展示完成的部分')
+}
+
 /** 按题型给默认时长：大作文 60、贯彻执行 40、其余 30 */
 function defaultMinutes() {
   if (form.questionType === '大作文') return 60
@@ -1165,11 +1460,20 @@ function defaultMinutes() {
 
 function resetExamTimer() {
   stopExamTimer()
-  examMinutes.value = defaultMinutes()
+  examMinutes.value = isPaperMode.value ? paperDefaultMinutes() : defaultMinutes()
   examRemain.value = examMinutes.value * 60
   examRunning.value = false
   confirmSubmit.value = false
 }
+
+/** 用户改时长：只重摆钟，保留选择（resetExamTimer 会按题型覆盖选择，两者职责不同） */
+function onExamMinutesChange() {
+  stopExamTimer()
+  examRemain.value = examMinutes.value * 60
+  confirmSubmit.value = false
+}
+
+const examMinuteOptions = computed(() => (isPaperMode.value ? [60, 90, 120, 150, 180] : [15, 20, 30, 40, 60, 90, 120]))
 
 function startExamTimer() {
   if (!isExamMode.value || examRunning.value) return
@@ -1180,7 +1484,8 @@ function startExamTimer() {
     if (examRemain.value <= 0) {
       stopExamTimer()
       toast.warning('考试时间到，自动交卷')
-      startGrade()   // 超时自动交卷（不经过二次确认，也不弹选老师——不能拦自动流程）
+      // 超时自动交卷（不经过二次确认，也不弹选老师——不能拦自动流程）
+      isPaperMode.value ? gradePaper() : startGrade()
     }
   }, 500)
 }
@@ -1201,7 +1506,7 @@ async function startExam() {
   confirmSubmit.value = false
   // 考场交卷**不弹选老师**：倒计时还在走/刚停，中途弹窗选人既打断节奏也不合考场语义。
   // 用开考前就定好的老师组合直接批改（超时自动交卷同此路径）。
-  await startGrade()
+  isPaperMode.value ? await gradePaper() : await startGrade()
 }
 
 // 落笔即计时：训练模式无感，考场模式首次输入触发
@@ -1209,6 +1514,15 @@ watch(
   () => form.answer,
   (v, ov) => {
     if (isExamMode.value && !examRunning.value && v && v.length > 0 && !ov) startExamTimer()
+  }
+)
+
+// 整卷作答实时存进会话：切题、交卷都从这里取，不依赖「切走前记得保存」
+watch(
+  () => form.answer,
+  (v) => {
+    const q = paperSession.questions[paperSession.activeIdx]
+    if (isPaperMode.value && q) paperSession.answers[q.qid] = v
   }
 )
 
@@ -1384,6 +1698,11 @@ async function applyQuestion(q, { resetAnswer = true } = {}) {
     return
   }
   q = full
+  // 从整卷切回单题：会话作废（记录已带整卷标记留底，不丢数据）
+  paperSession.paperId = ''
+  paperSession.questions = []
+  paperSession.reports = {}
+  paperSession.recs = {}
   form.title = q.title || ''
   applyTrim(q)
   form.requirement = q.requirement || ''
@@ -1413,6 +1732,10 @@ async function applyQuestion(q, { resetAnswer = true } = {}) {
 /** 空白作答：清掉题目，只留输入框，方便粘贴自己的材料 */
 function startBlank() {
   resetExamTimer()
+  paperSession.paperId = ''
+  paperSession.questions = []
+  paperSession.reports = {}
+  paperSession.recs = {}
   form.title = ''
   form.material = ''
   resetTrim()
@@ -1464,6 +1787,28 @@ function start() {
   showTeacherPicker.value = true
 }
 
+/** 批改进度统一处理：单题批改与整卷逐题批改共用一套 UI 反馈 */
+function gradingProgressHandler(ev) {
+  if (ev.type === 'stage') {
+    stage.value = ev.stage
+    if (ev.stage !== 'debate' && ev.stage !== 'fusion') stageText2.value = ''
+  } else if (ev.type === 'teacher:start') {
+    teacherProgress[ev.teacherId] = { ...teacherProgress[ev.teacherId], state: 'grading', text: '' }
+  } else if (ev.type === 'teacher:delta') {
+    teacherProgress[ev.teacherId] = { ...teacherProgress[ev.teacherId], state: 'grading', text: ev.text }
+  } else if (ev.type === 'teacher:done') {
+    const p = ev.result
+    teacherProgress[ev.teacherId] = {
+      state: 'done',
+      text: ev.raw,
+      score: p?.score ?? '—',
+      max: p?.maxScore ?? '—',
+    }
+  } else if (ev.type === 'stage:delta') {
+    stageText2.value = ev.text
+  }
+}
+
 async function startGrade() {
   showTeacherPicker.value = false
 
@@ -1472,9 +1817,7 @@ async function startGrade() {
   if (!selected.value.length) {
     selected.value = [...DEFAULT_TEACHERS]
     toast.warning('未选择老师，已按默认三位（袁东 / 周泰然 / 白鹭）批改')
-  }
-
-  stopExamTimer()
+  }  stopExamTimer()
   answerSeconds.value = isExamMode.value
     ? Math.max(0, examMinutes.value * 60 - examRemain.value)
     : 0
@@ -1497,26 +1840,7 @@ async function startGrade() {
       teacherIds: [...selected.value],
       deep: deep.value,
       signal: controller.signal,
-      onProgress: (ev) => {
-        if (ev.type === 'stage') {
-          stage.value = ev.stage
-          if (ev.stage !== 'debate' && ev.stage !== 'fusion') stageText2.value = ''
-        } else if (ev.type === 'teacher:start') {
-          teacherProgress[ev.teacherId] = { ...teacherProgress[ev.teacherId], state: 'grading', text: '' }
-        } else if (ev.type === 'teacher:delta') {
-          teacherProgress[ev.teacherId] = { ...teacherProgress[ev.teacherId], state: 'grading', text: ev.text }
-        } else if (ev.type === 'teacher:done') {
-          const p = ev.result
-          teacherProgress[ev.teacherId] = {
-            state: 'done',
-            text: ev.raw,
-            score: p?.score ?? '—',
-            max: p?.maxScore ?? '—',
-          }
-        } else if (ev.type === 'stage:delta') {
-          stageText2.value = ev.text
-        }
-      },
+      onProgress: gradingProgressHandler,
     })
 
     report.value = result
