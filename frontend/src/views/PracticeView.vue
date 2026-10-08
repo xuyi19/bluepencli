@@ -969,6 +969,7 @@ import { runGrading } from '../agents/orchestrator'
 import { resolveStandard } from '../agents/grading/standardResolver'
 import { mergeKeyPoints, summarizeKeyPoints } from '../utils/grading/keyPoints'
 import { trimMaterial } from '../utils/grading/materialTrim'
+import { materialBlocks } from '../utils/materialBlocks'
 import { buildRecord, archiveRecord, countChars, fmtDateTime, listAllRecords } from '../utils/record'
 import { getAll, STORES } from '../store/db'
 import { BUILTIN_POOL, REAL_EXAMS, realQuestionId, resolveQuestion } from '../data/questions'
@@ -1566,33 +1567,7 @@ const pickList = computed(() => {
 const pct = (a, b) => (b ? Math.min(100, Math.round((a / b) * 100)) : 0)
 const truncate = (s, n) => (String(s || '').length > n ? String(s).slice(0, n) + '…' : s)
 
-/**
- * 把给定资料按「材料1 / 材料2」拆成块。
- * 真题材料就是这种分则结构，拆开渲染比一整块 textarea 好读得多。
- * 不在行首出现的「材料」二字（正文里提到）不会被误切——只认整行匹配。
- */
-function materialBlocks(text) {
-  const src = String(text || '')
-  if (!src.trim()) return []
-  const blocks = []
-  let cur = null
-  for (const line of src.split('\n')) {
-    const m = line.match(/^材料\s*([0-9一二三四五六七八九十]+)\s*$/)
-    if (m) {
-      cur = { label: `材料${m[1]}`, body: [] }
-      blocks.push(cur)
-      continue
-    }
-    if (!cur) {
-      cur = { label: '', body: [] }
-      blocks.push(cur)
-    }
-    cur.body.push(line)
-  }
-  return blocks
-    .map((b) => ({ label: b.label, body: b.body.join('\n').trim() }))
-    .filter((b) => b.label || b.body)
-}
+// materialBlocks 抽到 utils/materialBlocks.js（M4 精读训练页共用同一实现）
 
 const stageText = computed(() => {
   const map = {
