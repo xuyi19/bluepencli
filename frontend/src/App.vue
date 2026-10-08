@@ -60,6 +60,7 @@ import { backendInfo, probeBackend } from './api/backend'
 import { useReadiness } from './utils/readiness'
 import { attachDesktopSession } from './utils/desktopSession'
 import { CURRENT_VERSION } from './data/changelog'
+import { AUTHOR } from './data/author'
 import GroupedSidebar from './components/GroupedSidebar.vue'
 import ToastHost from './components/ToastHost.vue'
 import WeChatHost from './components/WeChatHost.vue'
@@ -94,6 +95,11 @@ const NAV = [
   // 被当成"页面坏了"报过。日志是用户会主动去翻的入口，给它一个正常尺寸的条目。
   { group: '关于', path: '/guide', label: '使用文档' },
   { group: '关于', path: '/changelog', label: '更新日志' },
+  // 仓库入口升级为「关于」组正式条目（2026-10-08）：原来在侧栏底部当 61×28px 小胶囊，
+  // 和「更新日志」分在两处；用户要求三者放一起。href 字段 = 外部链接，
+  // GroupedSidebar 对带 href 的条目渲染 <a target="_blank"> 而不是 RouterLink。
+  { group: '关于', path: '/ext-github', label: 'GitHub 仓库', href: AUTHOR.github },
+  { group: '关于', path: '/ext-gitee', label: 'Gitee 仓库', href: AUTHOR.gitee },
 ]
 
 const backendUp = ref(false)

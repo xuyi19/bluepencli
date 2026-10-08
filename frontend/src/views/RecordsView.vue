@@ -79,7 +79,11 @@
                   : exportState === 'ok:web' ? '已开始下载'
                   : '已保存：' + exportState.slice(3) }}
               </span>
-              <button @click="doExport" :disabled="exportState === 'busy'"
+              <button @click="doExport('pdf')" :disabled="exportState === 'busy'"
+                class="text-xs text-c-muted hover:text-c-ink disabled:opacity-40 shrink-0">
+                导出 PDF
+              </button>
+              <button @click="doExport('docx')" :disabled="exportState === 'busy'"
                 class="text-xs text-c-muted hover:text-c-ink disabled:opacity-40 shrink-0">
                 导出 Word
               </button>
@@ -300,7 +304,7 @@ import {
   countChars,
   fmtDateTime,
 } from '../utils/record'
-import { exportReview } from '../utils/exportDoc'
+import { exportReview, exportReviewPdf } from '../utils/exportDoc'
 
 const route = useRoute()
 const records = ref([])
@@ -364,12 +368,12 @@ async function del(id) {
   await load()
 }
 
-// ── M9 导出复盘文档（Word）──
+// ── M9 导出复盘文档（Word / PDF，2026-10-08 起 PDF 与 Word 同一份内容模型）──
 // 网页版直接下载；桌面版写到设置里的导出目录（分类「练习复盘」）。
 // 荧光标记按题存（bp-marks:<qid>），老记录没存 questionId 就如实不带标记导出。
 const exportState = ref('')
 
-async function doExport() {
+async function doExport(format = 'docx') {
   const d = detail.value
   if (!d || exportState.value === 'busy') return
   exportState.value = 'busy'
@@ -380,7 +384,9 @@ async function doExport() {
         marks = JSON.parse(localStorage.getItem(`bp-marks:${d.questionId}`) || 'null') || marks
       } catch { /* 坏档当没标记，导出不因此失败 */ }
     }
-    const res = await exportReview({ ...d, marks })
+    const res = format === 'pdf'
+      ? await exportReviewPdf({ ...d, marks })
+      : await exportReview({ ...d, marks })
     exportState.value = res.ok
       ? (res.way === 'desktop' ? `ok:${res.path}` : 'ok:web')
       : `err:${res.error || '未知错误'}`

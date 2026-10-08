@@ -4,9 +4,9 @@
 // Gitee : https://gitee.com/xuyi_19/bluepencil
 // 许可: AGPL-3.0 · 转发或修改请保留本署名
 // ──────────────────────────────────────────────────────────────
-// M9 导出与纸质复盘（2026-10-08）
+// M9 导出与纸质复盘（2026-10-08，同日加 PDF 通道）
 //
-// 导出的是**纯文字 Word 文档**（.docx），不是界面截图 —— 给用户拿去打印。
+// 导出的是**纯文字文档**（Word .docx / PDF），不是界面截图 —— 给用户拿去打印。
 //   · 网页版：浏览器直接下载；
 //   · 桌面版：写到设置里的导出目录（localStorage `bp-export-dir`，相对路径相对 exe），
 //     按「练习复盘 / 素材本」分类建子目录。Rust 侧命令见 desktop/src-tauri/src/lib.rs。
@@ -17,7 +17,14 @@
 //   · 我自己划的荧光 = 各标记色的淡底色（与批注色分得清）；
 //   · 多位老师引同一句 → 各自的批注在各自的终点依次内联，颜色各随各的老师。
 //
-// docx 走动态 import —— 不点导出不加载，主包体积零增长。
+// 架构（2026-10-08）：「内容模型」一份、渲染器两个。
+//   buildXxxModel() 产出与格式无关的节点数组（runs + 段距 + 标题线），
+//   Word 走 docx、PDF 走 @react-pdf/renderer —— 两格式内容永远一致，
+//   以后改排版只改模型层，不会出现"Word 改了 PDF 没改"的漂移。
+//
+// docx / react-pdf 都走动态 import —— 不点导出不加载，主包体积零增长。
+// PDF 中文字体：思源宋体 GB2312 子集（public/fonts/，~2.8MB×2 字重），
+//   第一次导出 PDF 时才由 @react-pdf/renderer 加载。
 
 import { HIGHLIGHT_COLORS, splitByMarks, normalizeHighlight, findRange, locateQuote } from './highlight'
 import { materialBlocks } from './materialBlocks'
@@ -35,7 +42,7 @@ export function isDesktop() {
 
 // ─────────────────────────── 颜色 ───────────────────────────
 
-/** 荧光色 → 打印用实底淡色（Word 不支持半透明，给等效浅色） */
+/** 荧光色 → 打印用实底淡色（Word/PDF 都不支持半透明文字底，给等效浅色） */
 export const MARK_FILL = {
   yellow: 'FDE68A',
   green: 'BBF7D0',
@@ -123,46 +130,33 @@ function fmtCn(ts) {
   return `${d.getFullYear()} 年 ${d.getMonth() + 1} 月 ${d.getDate()} 日`
 }
 
-// ─────────────────────────── 复盘文档 ───────────────────────────
+// ─────────────────────────── 内容模型 ───────────────────────────
+// 节点 = { runs:[Run], before?, after?, border? }   before/after 单位 twip（1pt=20）
+// Run  = { text, color?, size?, bold?, fill? }      size 半点（五号=21）；颜色 RRGGBB 无 #
 
-const BODY_SIZE = 21 // 10.5pt（五号）
-const NOTE_SIZE = 15 // 7.5pt —— 批注小字
+const BODY_SIZE = 18 // 9pt（小五）—— 整体调小省纸
+const NOTE_SIZE = 16 // 8pt —— 批注小字（有同色浅底保底，8pt 打印仍可辨）
+
+function mkNode(runs, opts = {}) {
+  return { runs, before: opts.before || 0, after: opts.after ?? 120, border: !!opts.border }
+}
 
 /**
- * 组装「练习复盘」文档，返回 docx Document。
+ * 组装「练习复盘」内容模型。
  * data 字段（与 record.js 的 buildRecord 输出对齐）：
  *   title, createdAt, mode, finalScore, maxScore, level, requirement, material, answer,
  *   questionType, results[{teacherId,score,maxScore,summary,advice,annotations}],
  *   summary, suggestions, credibility, marks {material, answer}
  */
-export async function buildReviewDocument(data) {
-  const { Document, Paragraph, TextRun, ShadingType, BorderStyle } = await import('docx')
+export function buildReviewModel(data) {
   const marks = data.marks || {}
   const matMarks = Array.isArray(marks.material) ? marks.material : []
   const ansMarks = Array.isArray(marks.answer) ? marks.answer : []
-  const children = []
-
-  const base = { font: '宋体', size: BODY_SIZE, color: '2B2B2B' }
-  const mkRun = (o) =>
-    new TextRun({
-      ...base,
-      ...(o.fill ? { shading: { type: ShadingType.CLEAR, fill: o.fill } } : {}),
-      ...o,
-    })
-  const para = (runs, opts = {}) =>
-    new Paragraph({
-      children: runs,
-      spacing: { before: opts.before || 0, after: opts.after ?? 120, line: 320 },
-    })
-  const heading = (text) =>
-    new Paragraph({
-      children: [new TextRun({ text, bold: true, size: 24, color: '1F3A2E', font: '宋体' })],
-      spacing: { before: 280, after: 120 },
-      border: { bottom: { style: BorderStyle.SINGLE, size: 4, color: 'C9C4B4' } },
-    })
+  const R = (o) => ({ size: BODY_SIZE, color: '2B2B2B', ...o })
+  const nodes = []
 
   // ── 题头 ──
-  children.push(para([mkRun({ text: `复盘 · ${data.title || '未命名练习'}`, bold: true, size: 30 })], { after: 80 }))
+  nodes.push(mkNode([R({ text: `复盘 · ${data.title || '未命名练习'}`, bold: true, size: 26 })], { after: 80 }))
   const modeLabel = { practice: '练习', real: '真题', exam: '考场', paper: '整卷考试' }[data.mode] || data.mode || ''
   const metaBits = [
     data.createdAt ? fmtCn(data.createdAt) : '',
@@ -171,39 +165,34 @@ export async function buildReviewDocument(data) {
     `得分 ${data.finalScore ?? '—'} / ${data.maxScore ?? '—'}`,
     data.level || '',
   ].filter(Boolean)
-  children.push(para([mkRun({ text: metaBits.join('　｜　'), color: '8A8578', size: 18 })], { after: 200 }))
+  nodes.push(mkNode([R({ text: metaBits.join('　｜　'), color: '8A8578', size: 16 })], { after: 200 }))
 
   // ── 一、题目与作答要求 ──
-  children.push(heading('一、题目与作答要求'))
-  children.push(para([mkRun({ text: data.requirement || '（本记录未存作答要求）', size: 20, color: data.requirement ? '4A4A4A' : 'AAAAAA' })]))
+  nodes.push(mkNode([R({ text: '一、题目与作答要求', bold: true, size: 21, color: '1F3A2E' })], { before: 280, border: true }))
+  nodes.push(mkNode([R({ text: data.requirement || '（本记录未存作答要求）', size: 18, color: data.requirement ? '4A4A4A' : 'AAAAAA' })]))
 
   // ── 二、给定资料（含我的标记） ──
-  children.push(heading('二、给定资料'))
+  nodes.push(mkNode([R({ text: '二、给定资料', bold: true, size: 21, color: '1F3A2E' })], { before: 280, border: true }))
   if (matMarks.length) {
-    children.push(para([mkRun({ text: '（底色 = 你自己划的荧光标记）', color: '8A8578', size: 16 })], { after: 100 }))
+    nodes.push(mkNode([R({ text: '（底色 = 你自己划的荧光标记）', color: '8A8578', size: 14 })], { after: 100 }))
   }
   if (data.material) {
     for (const b of materialBlocks(data.material)) {
       if (b.label) {
-        children.push(para([mkRun({ text: b.label, bold: true, size: 20, color: '5B5B4A' })], { before: 140, after: 80 }))
+        nodes.push(mkNode([R({ text: b.label, bold: true, size: 18, color: '5B5B4A' })], { before: 140, after: 80 }))
       }
       for (const line of b.body.split('\n')) {
         if (!line.trim()) continue
         const segs = splitByMarks(line, matMarks)
-        children.push(
-          para(
-            segs.map((s) => mkRun({ text: s.text, ...(s.mark ? { fill: MARK_FILL[s.mark.color] || MARK_FILL.yellow } : {}) })),
-            { after: 100 }
-          )
-        )
+        nodes.push(mkNode(segs.map((s) => R({ text: s.text, ...(s.mark ? { fill: MARK_FILL[s.mark.color] || MARK_FILL.yellow } : {}) })), { after: 100 }))
       }
     }
   } else {
-    children.push(para([mkRun({ text: '（本记录未存材料原文）', color: 'AAAAAA', size: 18 })]))
+    nodes.push(mkNode([R({ text: '（本记录未存材料原文）', color: 'AAAAAA', size: 16 })]))
   }
 
   // ── 三、我的作答（老师批注内联） ──
-  children.push(heading('三、我的作答（老师批注内联标注）'))
+  nodes.push(mkNode([R({ text: '三、我的作答（老师批注内联标注）', bold: true, size: 21, color: '1F3A2E' })], { before: 280, border: true }))
   const answer = data.answer || ''
 
   // 收集批注区间（可定位/不可定位分开——和屏幕端 AnnotatedAnswer 同一套规则）
@@ -245,15 +234,15 @@ export async function buildReviewDocument(data) {
   }
   for (const [color, n] of byTeacher) {
     const name = annRanges.find((r) => r.colorHex === color)?.teacherName || ''
-    legendRuns.push(mkRun({ text: `■ ${name}`, color, bold: true, size: 16 }))
-    legendRuns.push(mkRun({ text: ` ${n} 处　`, color: '8A8578', size: 16 }))
+    legendRuns.push(R({ text: `■ ${name}`, color, bold: true, size: 14 }))
+    legendRuns.push(R({ text: ` ${n} 处　`, color: '8A8578', size: 14 }))
   }
-  if (hlRanges.length) legendRuns.push(mkRun({ text: '□ 底色 = 我的荧光', color: '8A8578', size: 16 }))
-  if (legendRuns.length) children.push(para(legendRuns, { after: 140 }))
+  if (hlRanges.length) legendRuns.push(R({ text: '□ 底色 = 我的荧光', color: '8A8578', size: 14 }))
+  if (legendRuns.length) nodes.push(mkNode(legendRuns, { after: 140 }))
 
   // 正文：区间按换行切开后逐行事件化游走
   if (!answer) {
-    children.push(para([mkRun({ text: '（无作答内容）', color: 'AAAAAA' })]))
+    nodes.push(mkNode([R({ text: '（无作答内容）', color: 'AAAAAA' })]))
   } else {
     const lineStarts = [0]
     for (let i = 0; i < answer.length; i++) if (answer[i] === '\n') lineStarts.push(i + 1)
@@ -270,7 +259,7 @@ export async function buildReviewDocument(data) {
     lines.forEach((line, li) => {
       const rs = lineRanges[li]
       if (!rs.length) {
-        children.push(para([mkRun({ text: line })], { after: 100 }))
+        nodes.push(mkNode([R({ text: line })], { after: 100 }))
         return
       }
       // 事件化：open/close 扫描；批注在 close 时内联同色小字
@@ -286,7 +275,7 @@ export async function buildReviewDocument(data) {
       for (const ev of events) {
         if (ev.pos > cursor) {
           const top = active.find((r) => r.isAnn) || active[0]
-          runs.push(mkRun({ text: line.slice(cursor, ev.pos), ...(top ? { fill: top.isAnn ? tint(top.colorHex) : top.fill } : {}) }))
+          runs.push(R({ text: line.slice(cursor, ev.pos), ...(top ? { fill: top.isAnn ? tint(top.colorHex) : top.fill } : {}) }))
           cursor = ev.pos
         }
         if (ev.kind === 'open') active.push(ev.r)
@@ -294,55 +283,217 @@ export async function buildReviewDocument(data) {
           active = active.filter((r) => r !== ev.r)
           if (ev.r.isAnn) {
             const noteText = `　〔${ev.r.teacherName}·${ev.r.type}〕${ev.r.comment}${ev.r.fix ? '　改：' + ev.r.fix : ''}`
-            runs.push(mkRun({ text: noteText, color: ev.r.colorHex, size: NOTE_SIZE }))
+            runs.push(R({
+              text: noteText, color: ev.r.colorHex, size: NOTE_SIZE,
+              fill: tint(ev.r.colorHex, 0.9), // 同色浅底：小字在纸上更像"便签"，一眼扫到
+            }))
           }
         }
       }
       if (cursor < line.length) {
         const top = active.find((r) => r.isAnn) || active[0]
-        runs.push(mkRun({ text: line.slice(cursor), ...(top ? { fill: top.isAnn ? tint(top.colorHex) : top.fill } : {}) }))
+        runs.push(R({ text: line.slice(cursor), ...(top ? { fill: top.isAnn ? tint(top.colorHex) : top.fill } : {}) }))
       }
-      children.push(para(runs, { after: 100 }))
+      nodes.push(mkNode(runs, { after: 100 }))
     })
   }
 
   // 未能定位的批注 —— 单独列出来，不能默默吞掉（与屏幕端同规矩）
   if (unlocated.length) {
-    children.push(para([mkRun({ text: '以下批注未能定位到原文片段（AI 引句与作答有出入）：', color: '8A8578', size: 16 })], { before: 160, after: 60 }))
+    nodes.push(mkNode([R({ text: '以下批注未能定位到原文片段（AI 引句与作答有出入）：', color: '8A8578', size: 14 })], { before: 160, after: 60 }))
     for (const a of unlocated) {
-      children.push(para([mkRun({ text: `■ ${a.teacherName}·${a.type}　`, color: a.colorHex, bold: true, size: 16 }), mkRun({ text: a.comment + (a.fix ? '　改：' + a.fix : ''), size: 18, color: '4A4A4A' })], { after: 60 }))
+      nodes.push(mkNode([R({ text: `■ ${a.teacherName}·${a.type}　`, color: a.colorHex, bold: true, size: 14 }), R({ text: a.comment + (a.fix ? '　改：' + a.fix : ''), size: 16, color: '4A4A4A' })], { after: 60 }))
     }
   }
 
   // ── 四、老师意见 ──
-  children.push(heading('四、老师意见'))
-  if (data.summary) children.push(para([mkRun({ text: `总评：${data.summary}`, size: 20 })]))
+  nodes.push(mkNode([R({ text: '四、老师意见', bold: true, size: 21, color: '1F3A2E' })], { before: 280, border: true }))
+  if (data.summary) nodes.push(mkNode([R({ text: `总评：${data.summary}`, size: 18 })]))
   for (const r of data.results || []) {
     const meta = teacherMeta(r.teacherId)
     const head = `${meta.name}　${r.error ? '（批改失败）' : `${r.score ?? '—'} / ${r.maxScore ?? '—'} 分`}`
-    children.push(para([mkRun({ text: head, bold: true, color: meta.color })], { before: 140, after: 60 }))
+    nodes.push(mkNode([R({ text: head, bold: true, color: meta.color })], { before: 140, after: 60 }))
     const body = r.advice || r.summary || ''
-    if (body) children.push(para([mkRun({ text: body, size: 20, color: '3A3A3A' })]))
+    if (body) nodes.push(mkNode([R({ text: body, size: 18, color: '3A3A3A' })]))
   }
   if (Array.isArray(data.suggestions) && data.suggestions.length) {
-    children.push(para([mkRun({ text: '改进清单', bold: true, size: 20 })], { before: 180, after: 60 }))
+    nodes.push(mkNode([R({ text: '改进清单', bold: true, size: 18 })], { before: 180, after: 60 }))
     for (const s of data.suggestions) {
-      children.push(para([mkRun({ text: `· ${typeof s === 'string' ? s : s.text || ''}`, size: 20, color: '3A3A3A' })], { after: 60 }))
+      nodes.push(mkNode([R({ text: `· ${typeof s === 'string' ? s : s.text || ''}`, size: 18, color: '3A3A3A' })], { after: 60 }))
     }
   }
   if (data.credibility?.label) {
-    children.push(
-      para([mkRun({ text: `批改可信度：${data.credibility.label}${data.credibility.note ? '（' + data.credibility.note + '）' : ''}`, color: '8A8578', size: 16 })], { before: 180 })
-    )
+    nodes.push(mkNode([R({ text: `批改可信度：${data.credibility.label}${data.credibility.note ? '（' + data.credibility.note + '）' : ''}`, color: '8A8578', size: 14 })], { before: 180 }))
   }
 
+  return nodes
+}
+
+/**
+ * 组装「规范词库 / 素材本」内容模型。
+ * @param themes LEXICON_THEMES（[{key,name,items:[{formal,plain}]}]）
+ * @param opts.favOnly 只导收藏；favSet 收藏 id 集合（Set）
+ */
+export function buildLexiconModel(themes, { favOnly = false, favSet = null } = {}) {
+  const nodes = []
+  const R = (o) => ({ size: 21, color: '2B2B2B', ...o })
+
+  const total = themes.reduce((s, t) => s + t.items.length, 0)
+  nodes.push(mkNode([R({ text: '蓝笔申论 · 规范词库', bold: true, size: 26 })], { after: 60 }))
+  nodes.push(
+    mkNode([R({ text: `${fmtCn(Date.now())} 导出 · 共 ${total} 条 · 主题与文章库九大主题对齐 · 背一组规范词，顶刷十篇时评`, color: '8A8578', size: 14 })], { after: 200 })
+  )
+
+  let n = 0
+  for (const t of themes) {
+    const items = favOnly && favSet ? t.items.filter((it) => favSet.has(it.id)) : t.items
+    if (!items.length) continue
+    n += items.length
+    nodes.push(mkNode([R({ text: `${t.name}（${items.length} 条）`, bold: true, size: 21, color: '1F3A2E' })], { before: 260, border: true }))
+    for (const it of items) {
+      nodes.push(
+        mkNode([
+          R({ text: it.plain, color: '8A8578', size: 16 }),
+          R({ text: '　→　', color: 'B0AA9A', size: 16 }),
+          R({ text: it.formal, bold: true }),
+        ], { after: 90 })
+      )
+    }
+  }
+  if (!n) nodes.push(mkNode([R({ text: favOnly ? '收藏夹是空的 —— 先在词库里点 ⭐ 收藏几条' : '（无内容）', color: 'AAAAAA' })]))
+
+  return nodes
+}
+
+// ─────────────────────────── Word 渲染器（docx） ───────────────────────────
+
+export async function buildReviewDocument(data) {
+  const { Document } = await import('docx')
+  return renderDocxDocument(buildReviewModel(data))
+}
+
+export async function buildLexiconDocument(themes, opts = {}) {
+  const { Document } = await import('docx')
+  return renderDocxDocument(buildLexiconModel(themes, opts))
+}
+
+async function renderDocxDocument(nodes) {
+  const { Document, Paragraph, TextRun, ShadingType, BorderStyle } = await import('docx')
+  const children = nodes.map((node) => {
+    const runs = node.runs.map((r) =>
+      new TextRun({
+        text: r.text,
+        size: r.size || BODY_SIZE,
+        color: r.color || '2B2B2B',
+        ...(r.bold ? { bold: true } : {}),
+        ...(r.fill ? { shading: { type: ShadingType.CLEAR, fill: r.fill } } : {}),
+        font: '宋体',
+      })
+    )
+    return new Paragraph({
+      children: runs,
+      spacing: { before: node.before, after: node.after, line: 280 },
+      ...(node.border
+        ? { border: { bottom: { style: BorderStyle.SINGLE, size: 4, color: 'C9C4B4' } } }
+        : {}),
+    })
+  })
   return new Document({
-    styles: { default: { document: { run: { font: '宋体', size: BODY_SIZE, color: '2B2B2B' }, paragraph: { spacing: { line: 320 } } } } },
-    sections: [{ children }],
+    styles: { default: { document: { run: { font: '宋体', size: BODY_SIZE, color: '2B2B2B' }, paragraph: { spacing: { line: 280 } } } } },
+    sections: [{ properties: { page: { margin: { top: 1000, bottom: 1000, left: 1100, right: 1100 } } }, children }],
   })
 }
 
-/** 高层入口：记录 → 复盘文档 → 保存/下载 */
+// ─────────────────────────── PDF 渲染器（@react-pdf/renderer） ───────────────────────────
+// 中文字体：思源宋体 CN 子集（GB2312+ASCII+常用符号，~2.8MB/字重），放 public/fonts/，
+// 第一次导出 PDF 才加载。fontkit 读 OTF；bold 用独立字重文件（不做伪粗）。
+// CJK 换行：react-pdf 默认把无空格长句当一个词 → 注册逐字 hyphenation 才能正常折行。
+
+const PDF_FONT_BASE = (typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL) || '/'
+// node 环境（护栏测试）没有静态服务：从本模块位置推出 public/fonts 的本地绝对路径。
+// @react-pdf/font 用 is-url 判 src：http(s)/file:// 都走 fetch（node 的 fetch 不支持 file://），
+// 只有普通本地路径才走 fs —— 所以这里手工把 file URL 转回 'E:/...' 形式，不引 node 模块
+// （顶层 import 'node:url' 会进浏览器 bundle，炸构建）。
+const PDF_FONT_DIR_PATH = (() => {
+  if (typeof window !== 'undefined') return ''
+  const p = decodeURIComponent(new URL('../../public/fonts/', import.meta.url).pathname)
+  return p.replace(/^\/([A-Za-z]:)/, '$1')
+})()
+const pdfFontSrc = (file) =>
+  typeof window !== 'undefined'
+    ? `${PDF_FONT_BASE}fonts/${file}`
+    : PDF_FONT_DIR_PATH + file
+
+let pdfFontRegistered = false
+
+async function ensurePdfFont() {
+  if (pdfFontRegistered) return
+  const { Font } = await import('@react-pdf/renderer')
+  Font.register({
+    family: 'BPSerif',
+    fonts: [
+      { src: pdfFontSrc('bp-serif-regular.otf'), fontWeight: 400 },
+      { src: pdfFontSrc('bp-serif-bold.otf'), fontWeight: 700 },
+    ],
+  })
+  // 中文逐字断行：无空格长句被当成一个"词"，不逐字拆就溢出页面
+  Font.registerHyphenationCallback((word) => word.split(''))
+  pdfFontRegistered = true
+}
+
+export async function renderPdfBlob(nodes, title) {
+  await ensurePdfFont()
+  const R = await import('@react-pdf/renderer')
+  const { createElement: h } = await import('react')
+  const pt = (twip) => (twip || 0) / 20
+
+  const children = nodes.map((node, ni) => {
+    const runs = node.runs.map((r, ri) =>
+      h(R.Text, {
+        key: ri,
+        style: {
+          color: r.color ? `#${r.color}` : '#2B2B2B',
+          backgroundColor: r.fill ? `#${r.fill}` : undefined,
+          fontWeight: r.bold ? 700 : 400,
+          fontSize: (r.size || BODY_SIZE) / 2,
+        },
+      }, r.text)
+    )
+    const spacing = { marginTop: pt(node.before), marginBottom: pt(node.after), lineHeight: 1.45 }
+    if (node.border) {
+      // 标题：底下一条分隔线（Word 端是段落 bottom border）
+      return h(R.View, {
+        key: ni,
+        style: { ...spacing, borderBottomWidth: 1, borderBottomColor: '#C9C4B4', paddingBottom: 4 },
+      }, h(R.Text, null, runs))
+    }
+    return h(R.Text, { key: ni, style: spacing }, runs)
+  })
+
+  const doc = h(
+    R.Document,
+    { title, author: '许一（蓝笔申论）', creator: '蓝笔申论 BluePencil' },
+    h(
+      R.Page,
+      {
+        size: 'A4',
+        style: {
+          paddingVertical: 44, paddingHorizontal: 46,
+          fontFamily: 'BPSerif', fontSize: BODY_SIZE / 2, color: '#2B2B2B',
+        },
+      },
+      children
+    )
+  )
+  // v4 API：pdf(doc) 实例，浏览器 toBlob()；node（护栏测试）toBuffer()
+  const instance = R.pdf(doc)
+  if (instance.toBlob) return instance.toBlob()
+  return instance.toBuffer()
+}
+
+// ─────────────────────────── 高层入口 ───────────────────────────
+
+/** 复盘 · Word */
 export async function exportReview(data) {
   const { Packer } = await import('docx')
   const doc = await buildReviewDocument(data)
@@ -352,63 +503,30 @@ export async function exportReview(data) {
   return { ...res, fileName: name }
 }
 
-// ─────────────────────────── 素材本文档 ───────────────────────────
-
-/**
- * 组装「规范词库 / 素材本」文档。
- * @param themes LEXICON_THEMES（[{key,name,items:[{formal,plain}]}]）
- * @param opts.favOnly 只导收藏；favSet 收藏 id 集合（Set）
- */
-export async function buildLexiconDocument(themes, { favOnly = false, favSet = null } = {}) {
-  const { Document, Paragraph, TextRun, BorderStyle } = await import('docx')
-  const children = []
-  const mkRun = (o) => new TextRun({ font: '宋体', size: 21, color: '2B2B2B', ...o })
-  const para = (runs, opts = {}) =>
-    new Paragraph({ children: runs, spacing: { before: opts.before || 0, after: opts.after ?? 100, line: 320 } })
-
-  const total = themes.reduce((s, t) => s + t.items.length, 0)
-  children.push(para([mkRun({ text: '蓝笔申论 · 规范词库', bold: true, size: 30 })], { after: 60 }))
-  children.push(
-    para([mkRun({ text: `${fmtCn(Date.now())} 导出 · 共 ${total} 条 · 主题与文章库九大主题对齐 · 背一组规范词，顶刷十篇时评`, color: '8A8578', size: 16 })], { after: 200 })
-  )
-
-  let n = 0
-  for (const t of themes) {
-    const items = favOnly && favSet ? t.items.filter((it) => favSet.has(it.id)) : t.items
-    if (!items.length) continue
-    n += items.length
-    children.push(
-      new Paragraph({
-        children: [mkRun({ text: `${t.name}（${items.length} 条）`, bold: true, size: 24, color: '1F3A2E' })],
-        spacing: { before: 260, after: 100 },
-        border: { bottom: { style: BorderStyle.SINGLE, size: 4, color: 'C9C4B4' } },
-      })
-    )
-    for (const it of items) {
-      children.push(
-        para([
-          mkRun({ text: it.plain, color: '8A8578', size: 18 }),
-          mkRun({ text: '　→　', color: 'B0AA9A', size: 18 }),
-          mkRun({ text: it.formal, bold: true }),
-        ], { after: 90 })
-      )
-    }
-  }
-  if (!n) children.push(para([mkRun({ text: favOnly ? '收藏夹是空的 —— 先在词库里点 ⭐ 收藏几条' : '（无内容）', color: 'AAAAAA' })]))
-
-  return new Document({
-    styles: { default: { document: { run: { font: '宋体', size: 21, color: '2B2B2B' }, paragraph: { spacing: { line: 320 } } } } },
-    sections: [{ children }],
-  })
+/** 复盘 · PDF（内容与 Word 同一份模型，样式等价） */
+export async function exportReviewPdf(data) {
+  const blob = await renderPdfBlob(buildReviewModel(data), `复盘 · ${data.title || '练习'}`)
+  const name = safeName(`复盘-${data.title || '练习'}-${dateTag(data.createdAt)}`) + '.pdf'
+  const res = await exportBlob(name, '练习复盘', blob)
+  return { ...res, fileName: name }
 }
 
-/** 高层入口：词库 → 文档 → 保存/下载 */
+/** 词库 · Word */
 export async function exportLexicon(themes, opts = {}) {
   const { Packer } = await import('docx')
   const doc = await buildLexiconDocument(themes, opts)
   const blob = await Packer.toBlob(doc)
   const scope = opts.favOnly ? '我的收藏' : '全册'
   const name = safeName(`规范词库-${scope}-${dateTag()}`) + '.docx'
+  const res = await exportBlob(name, '素材本', blob)
+  return { ...res, fileName: name }
+}
+
+/** 词库 · PDF */
+export async function exportLexiconPdf(themes, opts = {}) {
+  const scope = opts.favOnly ? '我的收藏' : '全册'
+  const blob = await renderPdfBlob(buildLexiconModel(themes, opts), `蓝笔申论 · 规范词库（${scope}）`)
+  const name = safeName(`规范词库-${scope}-${dateTag()}`) + '.pdf'
   const res = await exportBlob(name, '素材本', blob)
   return { ...res, fileName: name }
 }

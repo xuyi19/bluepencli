@@ -44,18 +44,30 @@
       <div v-for="g in groups" :key="g.title || '_top'">
         <div v-if="g.title" class="px-3 mb-1 text-[11px] font-medium text-c-muted tracking-widest">{{ g.title }}</div>
         <div class="space-y-0.5">
-          <RouterLink v-for="item in g.items" :key="item.path" :to="item.path"
-            @click="emit('navigate')"
-            class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm
-              transition-colors duration-300 ease-in-out"
-            :class="isActive(item.path)
-              ? 'bg-c-barkSoft text-c-bark font-medium'
-              : 'text-c-body hover:bg-c-barkSoft/60'">
-            <svg class="w-[17px] h-[17px] shrink-0 opacity-70" viewBox="0 0 24 24" fill="none"
-              stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"
-              aria-hidden="true" v-html="iconOf(item.path)" />
-            <span>{{ item.label }}</span>
-          </RouterLink>
+          <template v-for="item in g.items" :key="item.path">
+            <!-- 带 href 的条目 = 外部链接（GitHub/Gitee 仓库），新窗口打开；其余走路由 -->
+            <a v-if="item.href" :href="item.href" target="_blank" rel="noopener"
+              @click="emit('navigate')"
+              class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm
+                transition-colors duration-300 ease-in-out text-c-body hover:bg-c-barkSoft/60">
+              <svg class="w-[17px] h-[17px] shrink-0 opacity-70" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"
+                aria-hidden="true" v-html="iconOf(item.path)" />
+              <span>{{ item.label }}</span>
+            </a>
+            <RouterLink v-else :to="item.path"
+              @click="emit('navigate')"
+              class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm
+                transition-colors duration-300 ease-in-out"
+              :class="isActive(item.path)
+                ? 'bg-c-barkSoft text-c-bark font-medium'
+                : 'text-c-body hover:bg-c-barkSoft/60'">
+              <svg class="w-[17px] h-[17px] shrink-0 opacity-70" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"
+                aria-hidden="true" v-html="iconOf(item.path)" />
+              <span>{{ item.label }}</span>
+            </RouterLink>
+          </template>
         </div>
       </div>
     </nav>
@@ -78,33 +90,9 @@
         <span>加微信 / 交流群</span>
       </button>
 
-      <!-- 开源入口：GitHub / Gitee。
-           放侧边栏而不是首页页脚 —— 这是"关于这个项目"的信息，任何时候都该够得着，
-           不该只在首页出现。两个挤在 200px 里，所以用等宽小胶囊而不是大按钮。
-           （「更新日志」曾在这里当第三个胶囊，61×28px、间隙只有 6px，
-           点偏一点就落进缝里，症状是"点了没反应"。已提升成上方导航里的正式条目。） -->
-      <div class="flex items-center gap-1.5 px-0.5">
-        <a :href="AUTHOR.github" target="_blank" rel="noopener" title="GitHub 仓库"
-          class="flex-1 h-7 rounded-lg border border-c-line flex items-center justify-center gap-1
-            text-[11px] text-c-muted leading-none transition-colors duration-300 ease-in-out
-            hover:text-c-bark hover:bg-c-barkSoft hover:border-transparent">
-          <svg class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-            <path d="M12 .3a12 12 0 00-3.8 23.4c.6.1.8-.3.8-.6v-2c-3.3.7-4-1.6-4-1.6-.6-1.4-1.4-1.8-1.4-1.8-1-.7.1-.7.1-.7 1.2 0 1.9 1.2 1.9 1.2 1 1.8 2.8 1.3 3.5 1 0-.8.4-1.3.7-1.6-2.7-.3-5.5-1.3-5.5-6 0-1.2.5-2.3 1.2-3.1-.1-.4-.5-1.7.1-3.5 0 0 1-.3 3.3 1.2a11.5 11.5 0 016 0c2.3-1.5 3.3-1.2 3.3-1.2.7 1.8.3 3.1.1 3.5.8.8 1.2 1.9 1.2 3.1 0 4.7-2.8 5.7-5.5 6 .4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6A12 12 0 0012 .3"/>
-          </svg>
-          <span>GitHub</span>
-        </a>
-
-        <a :href="AUTHOR.gitee" target="_blank" rel="noopener" title="Gitee 仓库"
-          class="flex-1 h-7 rounded-lg border border-c-line flex items-center justify-center gap-1
-            text-[11px] text-c-muted leading-none transition-colors duration-300 ease-in-out
-            hover:text-c-bark hover:bg-c-barkSoft hover:border-transparent">
-          <svg class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-            stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.9a3.4 3.4 0 00-.9-2.6c3.1-.4 6.4-1.5 6.4-7A5.4 5.4 0 0020 4.8 5.1 5.1 0 0019.9 1S18.7.7 16 2.5a13.4 13.4 0 00-7 0C6.3.7 5.1 1 5.1 1A5.1 5.1 0 005 4.8a5.4 5.4 0 00-1.5 3.7c0 5.4 3.3 6.6 6.4 7A3.4 3.4 0 009 18.1V22"/>
-          </svg>
-          <span>Gitee</span>
-        </a>
-      </div>
+      <!-- 开源入口已升级为上方「关于」组的正式条目（与更新日志并排），
+           底部不再放重复的胶囊。微信入口保留在此（它是动作不是页面）。 -->
+      <div class="h-1.5" />
 
       <RouterLink to="/settings"
         @click="emit('navigate')"
@@ -171,6 +159,8 @@ const ICONS = {
   '/stats': '<path d="M18 20V10M12 20V4M6 20v-6"/>',
   '/weakness': '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>',
   '/changelog': '<path d="M8 6h13M8 12h13M8 18h13"/><path d="M3 6h.01M3 12h.01M3 18h.01"/>',
+  '/ext-github': '<path d="M12 .3a12 12 0 00-3.8 23.4c.6.1.8-.3.8-.6v-2c-3.3.7-4-1.6-4-1.6-.6-1.4-1.4-1.8-1.4-1.8-1-.7.1-.7.1-.7 1.2 0 1.9 1.2 1.9 1.2 1 1.8 2.8 1.3 3.5 1 0-.8.4-1.3.7-1.6-2.7-.3-5.5-1.3-5.5-6 0-1.2.5-2.3 1.2-3.1-.1-.4-.5-1.7.1-3.5 0 0 1-.3 3.3 1.2a11.5 11.5 0 016 0c2.3-1.5 3.3-1.2 3.3-1.2.7 1.8.3 3.1.1 3.5.8.8 1.2 1.9 1.2 3.1 0 4.7-2.8 5.7-5.5 6 .4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6A12 12 0 0012 .3"/>',
+  '/ext-gitee': '<path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.9a3.4 3.4 0 00-.9-2.6c3.1-.4 6.4-1.5 6.4-7A5.4 5.4 0 0020 4.8 5.1 5.1 0 0019.9 1S18.7.7 16 2.5a13.4 13.4 0 00-7 0C6.3.7 5.1 1 5.1 1A5.1 5.1 0 005 4.8a5.4 5.4 0 00-1.5 3.7c0 5.4 3.3 6.6 6.4 7A3.4 3.4 0 009 18.1V22"/>',
   '/settings': '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09A1.65 1.65 0 008 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 003.68 15a1.65 1.65 0 00-1.51-1H2a2 2 0 110-4h.09A1.65 1.65 0 003.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"/>',
 }
 function iconOf(path) {

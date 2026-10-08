@@ -16,7 +16,7 @@ const req = createRequire(new URL('../frontend/package.json', import.meta.url))
 const { Packer } = req('docx')
 const { unzipSync, strFromU8 } = req('fflate')
 
-const { buildReviewDocument, buildLexiconDocument, locateQuote, tint, MARK_FILL } = await import(
+const { buildReviewDocument, buildLexiconDocument, buildReviewModel, buildLexiconModel, renderPdfBlob, locateQuote, tint, MARK_FILL } = await import(
   '../frontend/src/utils/exportDoc.js'
 )
 
@@ -118,6 +118,60 @@ async function docXml(doc) {
 
   const xmlEmpty = await docXml(await buildLexiconDocument(themes, { favOnly: true, favSet: new Set() }))
   check('词库：空收藏如实提示不空白', xmlEmpty.includes('收藏夹是空的'))
+}
+
+// ─────────────── PDF 通道（2026-10-08）───────────────
+// 同一份内容模型的第二个渲染器。断言用户可感知的结果：
+// PDF 头合法、思源宋体两个字重都嵌入、页数合理、内容流解压后含作答文字。
+{
+  const zlib = await import('node:zlib')
+
+  async function pdfText(pdfOrBuf) {
+    const buf = pdfOrBuf instanceof Buffer ? pdfOrBuf : Buffer.from(await pdfOrBuf.arrayBuffer())
+    const latin = buf.toString('latin1')
+    let all = ''
+    const re = /stream\r?\n/g
+    let m
+    while ((m = re.exec(latin))) {
+      const start = m.index + m[0].length
+      const end = latin.indexOf('endstream', start)
+      if (end < 0) break
+      try { all += zlib.inflateSync(buf.subarray(start, end)).toString('latin1') } catch { /* 非内容流跳过 */ }
+    }
+    return { buf, latin, all }
+  }
+
+  const reviewData = {
+    title: 'PDF护栏题', createdAt: Date.now(), mode: 'practice', finalScore: 12, maxScore: 20,
+    requirement: '观点明确，条理清楚。',
+    material: '给定资料一：基层治理需要坚持问题导向。',
+    answer: '基层治理要坚持问题导向。\n同时压实各级责任。',
+    results: [{ teacherId: 'yuandong', score: 12, maxScore: 20, summary: '尚可',
+      annotations: [{ quote: '坚持问题导向', type: '亮点', comment: '表述规范', fix: '补一句对策' }] }],
+    marks: { material: [], answer: [] },
+  }
+
+  // PDF 里的中文是 CID/十六进制，拿不到明文 —— 模型层断言内容一致（这才是"内容不漂移"的真源）
+  const model = buildReviewModel(reviewData)
+  const modelText = model.map((n) => n.runs.map((r) => r.text).join('')).join('\n')
+  check('PDF：内容模型含作答原文', modelText.includes('基层治理要坚持问题导向'))
+  check('PDF：内容模型含批注内联小字', modelText.includes('〔袁东·亮点〕表述规范'))
+  check('PDF：内容模型含改法', modelText.includes('改：补一句对策'))
+
+  const { buf, latin, all } = await pdfText(await renderPdfBlob(model, '复盘 · PDF护栏题'))
+  check('PDF：文件头合法（%PDF-）', latin.startsWith('%PDF-'))
+  check('PDF：思源宋体 Regular 已嵌入', latin.includes('SourceHanSerifCN-Regular'))
+  check('PDF：思源宋体 Bold 已嵌入', latin.includes('SourceHanSerifCN-Bold'))
+  check('PDF：字体文件已内嵌（FontFile）', latin.includes('/FontFile'))
+  check('PDF：页数 ≥ 1', (latin.match(/\/Type \/Page[^s]/g) || []).length >= 1)
+  // 作答行本身是 ASCII 无，但「wang」图例/分数是 latin 可见的；内容流解压后非空即可
+  check('PDF：内容流解压后非空', all.length > 200, `len=${all.length}`)
+
+  const lexNodes = buildLexiconModel([
+    { key: 't1', name: '民生保障', items: [{ formal: '兜牢民生底线', plain: '基本生活要保住' }] },
+  ])
+  const lex = await pdfText(await renderPdfBlob(lexNodes, '规范词库'))
+  check('PDF：词库文档也走同一渲染器', lex.latin.startsWith('%PDF-') && lex.buf.length > 20000)
 }
 
 console.log(`\n结果：${pass} 通过 / ${fail} 失败`)

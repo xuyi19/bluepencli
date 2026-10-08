@@ -2,10 +2,11 @@
   <div class="w-full max-w-5xl">
 
     <h1 class="text-xl font-semibold text-c-ink mb-1">设置</h1>
-    <p class="text-sm text-c-muted mb-8">配置大模型 API。Key 只保存在这台电脑的浏览器里，不上传服务器</p>
+    <p class="text-sm text-c-muted mb-8">导出打印、API 配置与数据管理。Key 只保存在这台电脑上，不上传服务器</p>
 
-    <!-- ==================== 状态总览 ==================== -->
-    <section class="rounded-2xl p-5 md:p-6 neu mb-6">
+    <!-- ==================== 状态总览（点击打开 API 配置弹窗） ==================== -->
+    <section class="rounded-2xl p-5 md:p-6 neu mb-6 cursor-pointer hover:translate-y-px transition-transform"
+      @click="showApiModal = true">
       <div class="flex items-center gap-4">
         <div class="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0"
           :style="{ background: ready ? '#dce2cf' : '#f2ebe2' }">
@@ -15,10 +16,15 @@
             <path d="M10.3 3.9L1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z" />
           </svg>
         </div>
-        <div class="min-w-0">
+        <div class="min-w-0 flex-1">
           <div class="font-medium text-c-ink">{{ ready ? 'API 已就绪' : '尚未配置 API' }}</div>
           <div class="text-xs text-c-muted mt-1 leading-5">{{ readyHint }}</div>
         </div>
+        <button class="px-4 py-2 rounded-xl text-xs font-medium shrink-0 transition-colors duration-300"
+          :class="ready ? 'neu-sm text-c-body hover:text-c-bark' : 'bg-c-bark text-c-cream'"
+          @click.stop="showApiModal = true">
+          {{ ready ? '修改配置' : '去配置' }}
+        </button>
       </div>
 
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-5 mt-5 border-t border-c-line">
@@ -30,124 +36,29 @@
       </div>
     </section>
 
-    <!-- ==================== API 配置 ==================== -->
-    <section class="rounded-2xl p-6 md:p-8 neu mb-6">
-      <div class="flex items-center justify-between mb-6">
-        <h2 class="text-base font-medium text-c-ink">API 配置</h2>
-        <button @click="showAdvanced = !showAdvanced"
-          class="text-xs text-c-muted hover:text-c-bark transition-colors">
-          {{ showAdvanced ? '收起高级' : '高级设置' }}
+    <!-- ==================== 导出与打印（M9，放第一位） ==================== -->
+    <section class="rounded-2xl p-6 neu mb-6">
+      <h2 class="text-base font-medium text-c-ink mb-2">导出与打印</h2>
+      <p class="text-xs text-c-muted leading-5 mb-4">
+        练习记录可导出 Word / PDF 复盘文档（含你的荧光标记、作答与彩色批注，两种格式内容一致），
+        素材本可导出全册或收藏。导出按「练习复盘 / 素材本」两类分目录存放。
+      </p>
+      <div class="flex flex-wrap items-center gap-2">
+        <input v-model="exportDir" type="text"
+          :placeholder="isTauri ? '默认：程序目录下的「导出文档」' : '网页版直接下载，无需设置路径'"
+          class="flex-1 min-w-[16rem] px-3 py-2.5 rounded-xl text-xs neu-inset outline-none text-c-body" />
+        <button @click="saveExportDir"
+          class="px-4 py-2.5 rounded-xl text-xs font-medium neu-sm text-c-bark hover:translate-y-px transition-transform">
+          保存路径
+        </button>
+        <button v-if="isTauri" @click="openExportDir"
+          class="px-4 py-2.5 rounded-xl text-xs font-medium neu-sm text-c-body hover:translate-y-px transition-transform">
+          打开导出目录
         </button>
       </div>
-
-      <div class="space-y-6">
-
-        <!-- 服务商预设 -->
-        <div>
-          <label class="text-xs text-c-muted mb-3 block">服务商预设（点一下自动填地址与模型）</label>
-          <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            <button v-for="p in PRESETS" :key="p.name" @click="applyPreset(p)"
-              class="px-3 py-3 text-xs md:text-sm font-medium rounded-xl transition-all duration-300 text-left"
-              :class="samePreset(p) ? 'neu-inset' : 'neu-sm'">
-              <span :class="samePreset(p) ? 'text-c-bark' : 'text-c-body'">{{ p.name }}</span>
-              <span class="block text-xs font-normal mt-1 truncate"
-                :class="samePreset(p) ? 'text-c-bark' : 'text-c-muted'">{{ p.model }}</span>
-            </button>
-          </div>
-          <div class="text-xs text-c-muted mt-3">
-            还没有 Key？去注册：
-            <template v-for="(p, i) in PRESETS" :key="p.name">
-              <a :href="p.url" target="_blank" rel="noreferrer"
-                class="text-c-bark hover:underline">{{ p.name }}</a><span v-if="i < PRESETS.length - 1" class="mx-1.5 text-c-line">·</span>
-            </template>
-          </div>
-        </div>
-
-        <!-- API Key -->
-        <div>
-          <label class="text-xs text-c-muted mb-2.5 block">
-            API Key
-            <span v-if="serverKey" class="text-c-muted">（服务端已托管，可留空）</span>
-            <span v-else class="text-c-clay">*</span>
-          </label>
-          <div class="relative">
-            <input v-model="cfg.api_key" :type="showKey ? 'text' : 'password'" placeholder="sk-..."
-              class="w-full px-4 py-3 pr-16 rounded-xl text-sm text-c-body placeholder:text-c-muted
-                font-mono neu-inset outline-none" />
-            <button @click="showKey = !showKey"
-              class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-c-muted hover:text-c-bark">
-              {{ showKey ? '隐藏' : '显示' }}
-            </button>
-          </div>
-          <div class="text-xs text-c-muted mt-2">只保存在浏览器 localStorage，不会上传服务器</div>
-        </div>
-
-        <!-- Base URL / 模型 -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label class="text-xs text-c-muted mb-2.5 block">Base URL</label>
-            <input v-model="cfg.base_url" type="text" placeholder="https://api.deepseek.com/v1"
-              class="w-full px-4 py-3 rounded-xl text-xs text-c-body placeholder:text-c-muted
-                font-mono neu-inset outline-none" />
-          </div>
-          <div>
-            <label class="text-xs text-c-muted mb-2.5 block">
-              模型名称
-              <span v-if="activePresetNote" class="text-c-clay">{{ activePresetNote }}</span>
-            </label>
-            <input v-model="cfg.model" type="text" placeholder="deepseek-chat" :list="modelListId"
-              class="w-full px-4 py-3 rounded-xl text-xs text-c-body placeholder:text-c-muted
-                font-mono neu-inset outline-none" />
-            <datalist :id="modelListId">
-              <option v-for="m in activePresetModels" :key="m" :value="m" />
-            </datalist>
-            <div v-if="activePresetModels.length" class="text-xs text-c-muted mt-2">
-              常见型号：
-              <button v-for="m in activePresetModels" :key="m" @click="cfg.model = m"
-                class="font-mono text-c-bark hover:underline mr-2">{{ m }}</button>
-            </div>
-          </div>
-        </div>
-
-        <!-- 高级：自定义服务端地址 -->
-        <div v-if="showAdvanced" class="rounded-xl p-4 md:p-5 neu-inset space-y-3">
-          <div>
-            <label class="text-xs text-c-muted mb-2 block">自定义服务端地址（可选）</label>
-            <input v-model="backendUrl" type="text" placeholder="留空则自动探测"
-              class="w-full px-4 py-3 rounded-xl text-xs text-c-body placeholder:text-c-muted
-                font-mono neu-inset outline-none" />
-            <div class="text-xs text-c-muted mt-2 leading-5">
-              当前通道：<span :style="{ color: channel.color }">{{ channel.label }}</span>。
-              填域名即可，程序会自动补 /api/v1。
-            </div>
-          </div>
-          <button @click="saveBackend"
-            class="px-4 py-2 rounded-xl text-xs font-medium neu-sm text-c-body hover:text-c-bark">
-            保存并重新探测
-          </button>
-        </div>
-      </div>
-
-      <div v-if="testResult" class="mt-6 p-4 rounded-xl text-xs leading-6"
-        :class="testResult.ok ? 'bg-[#e8ecdf] text-[#4f7d5e]' : 'bg-[#f7e9e4] text-[#b4552d]'">
-        <div class="whitespace-pre-wrap">{{ testResult.msg }}</div>
-      </div>
-
-      <div class="flex flex-wrap gap-3 mt-8 pt-6 border-t border-c-line">
-        <button @click="clearConfig"
-          class="px-5 py-3 rounded-xl text-sm font-medium neu-sm text-c-muted hover:text-c-clay">
-          清空
-        </button>
-        <button @click="test" :disabled="testing || !ready"
-          class="px-5 py-3 rounded-xl text-sm font-medium neu-sm text-c-body
-            hover:text-c-bark disabled:opacity-50">
-          {{ testing ? '测试中…' : '测试连接' }}
-        </button>
-        <button @click="save" :disabled="!ready"
-          class="flex-1 min-w-[8rem] px-5 py-3 rounded-xl text-sm font-medium text-c-cream
-            bg-c-bark disabled:opacity-50 transition-colors duration-300">
-          保存配置
-        </button>
+      <div class="text-xs text-c-muted mt-2 leading-5">
+        <template v-if="isTauri">可填绝对路径（如 E:\复习资料）；留空 = 程序目录下的「导出文档」文件夹。</template>
+        <template v-else>当前是网页版：点「导出」会直接下载 Word 文件到浏览器默认下载位置。</template>
       </div>
     </section>
 
@@ -186,32 +97,6 @@
         <input ref="fileInput" type="file" accept=".json" class="hidden" @change="doImport" />
       </section>
     </div>
-
-    <!-- ==================== 导出与打印（M9） ==================== -->
-    <section class="rounded-2xl p-6 neu-sm mb-6">
-      <h2 class="text-base font-medium text-c-ink mb-2">导出与打印</h2>
-      <p class="text-xs text-c-muted leading-5 mb-4">
-        练习记录可导出 Word 复盘文档（含你的荧光标记、作答与彩色批注），素材本可导出全册或收藏。
-        导出按「练习复盘 / 素材本」两类分目录存放。
-      </p>
-      <div class="flex flex-wrap items-center gap-2">
-        <input v-model="exportDir" type="text"
-          :placeholder="isTauri ? '默认：程序目录下的「导出文档」' : '网页版直接下载，无需设置路径'"
-          class="flex-1 min-w-[16rem] px-3 py-2.5 rounded-xl text-xs neu-inset outline-none text-c-body" />
-        <button @click="saveExportDir"
-          class="px-4 py-2.5 rounded-xl text-xs font-medium neu-sm text-c-bark hover:translate-y-px transition-transform">
-          保存路径
-        </button>
-        <button v-if="isTauri" @click="openExportDir"
-          class="px-4 py-2.5 rounded-xl text-xs font-medium neu-sm text-c-body hover:translate-y-px transition-transform">
-          打开导出目录
-        </button>
-      </div>
-      <div class="text-xs text-c-muted mt-2 leading-5">
-        <template v-if="isTauri">可填绝对路径（如 E:\复习资料）；留空 = 程序目录下的「导出文档」文件夹。</template>
-        <template v-else>当前是网页版：点「导出」会直接下载 Word 文件到浏览器默认下载位置。</template>
-      </div>
-    </section>
 
     <!-- ==================== 关于 ==================== -->
     <section class="rounded-2xl p-6 neu-sm">
@@ -252,6 +137,140 @@
         <WeChatPanel compact show-actions />
       </div>
     </section>
+
+    <!-- ==================== API 配置弹窗 ==================== -->
+    <!-- 配置不是常驻大卡：设置页第一位给导出打印，API 收进弹窗，点状态卡即弹出。
+         未配置时进页自动弹一次（服务端托管 Key 的机器不弹）。 -->
+    <div v-if="showApiModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30"
+      @click.self="showApiModal = false">
+      <div class="w-full max-w-2xl rounded-2xl bg-c-paper shadow-[0_18px_50px_rgba(92,64,51,0.25)]
+        flex flex-col max-h-[86vh]">
+
+        <div class="flex items-center justify-between px-6 pt-5 pb-3 shrink-0">
+          <div>
+            <span class="text-sm font-medium text-c-body">API 配置</span>
+            <span class="text-xs text-c-muted ml-2">填好保存即可开始批改</span>
+          </div>
+          <button @click="showApiModal = false"
+            class="text-c-muted hover:text-c-bark text-xs leading-none">✕</button>
+        </div>
+
+        <div class="overflow-y-auto px-6 pb-2 min-h-0 space-y-6">
+
+          <!-- 服务商预设 -->
+          <div>
+            <label class="text-xs text-c-muted mb-3 block">服务商预设（点一下自动填地址与模型）</label>
+            <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              <button v-for="p in PRESETS" :key="p.name" @click="applyPreset(p)"
+                class="px-3 py-3 text-xs md:text-sm font-medium rounded-xl transition-all duration-300 text-left"
+                :class="samePreset(p) ? 'neu-inset' : 'neu-sm'">
+                <span :class="samePreset(p) ? 'text-c-bark' : 'text-c-body'">{{ p.name }}</span>
+                <span class="block text-xs font-normal mt-1 truncate"
+                  :class="samePreset(p) ? 'text-c-bark' : 'text-c-muted'">{{ p.model }}</span>
+              </button>
+            </div>
+            <div class="text-xs text-c-muted mt-3">
+              还没有 Key？去注册：
+              <template v-for="(p, i) in PRESETS" :key="p.name">
+                <a :href="p.url" target="_blank" rel="noreferrer"
+                  class="text-c-bark hover:underline">{{ p.name }}</a><span v-if="i < PRESETS.length - 1" class="mx-1.5 text-c-line">·</span>
+              </template>
+            </div>
+          </div>
+
+          <!-- API Key -->
+          <div>
+            <label class="text-xs text-c-muted mb-2.5 block">
+              API Key
+              <span v-if="serverKey" class="text-c-muted">（服务端已托管，可留空）</span>
+              <span v-else class="text-c-clay">*</span>
+            </label>
+            <div class="relative">
+              <input v-model="cfg.api_key" :type="showKey ? 'text' : 'password'" placeholder="sk-..."
+                class="w-full px-4 py-3 pr-16 rounded-xl text-sm text-c-body placeholder:text-c-muted
+                  font-mono neu-inset outline-none" />
+              <button @click="showKey = !showKey"
+                class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-c-muted hover:text-c-bark">
+                {{ showKey ? '隐藏' : '显示' }}
+              </button>
+            </div>
+            <div class="text-xs text-c-muted mt-2">只保存在本机，不会上传服务器</div>
+          </div>
+
+          <!-- Base URL / 模型 -->
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label class="text-xs text-c-muted mb-2.5 block">Base URL</label>
+              <input v-model="cfg.base_url" type="text" placeholder="https://api.deepseek.com/v1"
+                class="w-full px-4 py-3 rounded-xl text-xs text-c-body placeholder:text-c-muted
+                  font-mono neu-inset outline-none" />
+            </div>
+            <div>
+              <label class="text-xs text-c-muted mb-2.5 block">
+                模型名称
+                <span v-if="activePresetNote" class="text-c-clay">{{ activePresetNote }}</span>
+              </label>
+              <input v-model="cfg.model" type="text" placeholder="deepseek-chat" :list="modelListId"
+                class="w-full px-4 py-3 rounded-xl text-xs text-c-body placeholder:text-c-muted
+                  font-mono neu-inset outline-none" />
+              <datalist :id="modelListId">
+                <option v-for="m in activePresetModels" :key="m" :value="m" />
+              </datalist>
+              <div v-if="activePresetModels.length" class="text-xs text-c-muted mt-2">
+                常见型号：
+                <button v-for="m in activePresetModels" :key="m" @click="cfg.model = m"
+                  class="font-mono text-c-bark hover:underline mr-2">{{ m }}</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 高级：自定义服务端地址 -->
+          <div v-if="showAdvanced" class="rounded-xl p-4 md:p-5 neu-inset space-y-3">
+            <div>
+              <label class="text-xs text-c-muted mb-2 block">自定义服务端地址（可选）</label>
+              <input v-model="backendUrl" type="text" placeholder="留空则自动探测"
+                class="w-full px-4 py-3 rounded-xl text-xs text-c-body placeholder:text-c-muted
+                  font-mono neu-inset outline-none" />
+              <div class="text-xs text-c-muted mt-2 leading-5">
+                当前通道：<span :style="{ color: channel.color }">{{ channel.label }}</span>。
+                填域名即可，程序会自动补 /api/v1。
+              </div>
+            </div>
+            <button @click="saveBackend"
+              class="px-4 py-2 rounded-xl text-xs font-medium neu-sm text-c-body hover:text-c-bark">
+              保存并重新探测
+            </button>
+          </div>
+
+          <div v-if="testResult" class="p-4 rounded-xl text-xs leading-6"
+            :class="testResult.ok ? 'bg-[#e8ecdf] text-[#4f7d5e]' : 'bg-[#f7e9e4] text-[#b4552d]'">
+            <div class="whitespace-pre-wrap">{{ testResult.msg }}</div>
+          </div>
+        </div>
+
+        <div class="flex flex-wrap gap-3 px-6 py-4 border-t border-c-line shrink-0">
+          <button @click="showAdvanced = !showAdvanced"
+            class="px-4 py-3 rounded-xl text-xs text-c-muted hover:text-c-bark transition-colors">
+            {{ showAdvanced ? '收起高级' : '高级设置' }}
+          </button>
+          <div class="flex-1" />
+          <button @click="clearConfig"
+            class="px-5 py-3 rounded-xl text-sm font-medium neu-sm text-c-muted hover:text-c-clay">
+            清空
+          </button>
+          <button @click="test" :disabled="testing || !ready"
+            class="px-5 py-3 rounded-xl text-sm font-medium neu-sm text-c-body
+              hover:text-c-bark disabled:opacity-50">
+            {{ testing ? '测试中…' : '测试连接' }}
+          </button>
+          <button @click="save" :disabled="!ready"
+            class="px-6 py-3 rounded-xl text-sm font-medium text-c-cream
+              bg-c-bark disabled:opacity-50 transition-colors duration-300">
+            保存并关闭
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -311,6 +330,9 @@ const testing = ref(false)
 const testResult = ref(null)
 const fileInput = ref(null)
 
+// API 配置弹窗：设置页不再常驻大卡。未配置（无本机 Key 且无服务端托管）时进页自动弹一次。
+const showApiModal = ref(false)
+
 const backendUrl = ref('')
 const backendAvailable = ref(false)
 const backendMeta = ref(null)
@@ -333,7 +355,7 @@ const readyHint = computed(() => {
     return `由服务端统一提供（${serverKey.value.model}），本机什么都不用填`
   }
   if (cfg.api_key) return `当前模型：${cfg.model || '未设置'}`
-  return '填入下方 API Key 即可开始批改'
+  return '点击打开配置窗口，填入 API Key 即可开始批改'
 })
 
 const channel = computed(() =>
@@ -364,7 +386,7 @@ const summary = computed(() => [
     hint: serverKey.value
       ? 'Key 不下发到浏览器'
       : cfg.api_key
-        ? '仅存 localStorage'
+        ? '仅存本机'
         : '批改功能不可用',
     color: cfg.api_key || serverKey.value ? '#4f7d5e' : '#b4552d',
   },
@@ -374,21 +396,21 @@ const steps = computed(() =>
   serverKey.value
     ? [
         '服务端已经配好了模型，本机不用填任何东西，直接去「练习批改」开始用',
-        '想换成自己的账号：点上面的服务商预设自动填地址与模型，再粘贴自己的 Key',
-        '点「测试连接」验证通路，通过后点「保存配置」',
+        '想换成自己的账号：点上方状态卡打开配置窗口，点服务商预设自动填地址与模型，再粘贴自己的 Key',
+        '点「测试连接」验证通路，通过后点「保存并关闭」',
       ]
     : [
         '注册 DeepSeek 或智谱账号，在控制台创建 API Key',
-        '点上面的服务商预设，自动填充 Base URL 与模型名',
+        '点上方状态卡打开配置窗口，点服务商预设自动填充 Base URL 与模型名',
         '粘贴你的 API Key，点「测试连接」验证',
-        '点「保存配置」，即可开始使用',
+        '点「保存并关闭」，即可开始使用',
       ]
 )
 
 const note = computed(() =>
   serverKey.value
-    ? 'API Key 由服务端统一提供，不会下发到浏览器——上面的输入框留空即可正常批改。'
-    : '你的 API Key 只保存在浏览器 localStorage，不上传服务器。更换设备需要重新配置。'
+    ? 'API Key 由服务端统一提供，不会下发到浏览器——配置窗口里的输入框留空即可正常批改。'
+    : '你的 API Key 只保存在本机，不上传服务器。更换设备需要重新配置。'
 )
 
 const DATA_ACTIONS = [
@@ -413,6 +435,8 @@ onMounted(async () => {
   cfg.model = saved.model || PRESETS[0].model
   backendUrl.value = getBackendUrl()
   await refreshBackend()
+  // 服务端托管 Key 时 ready=true 不打扰；本机也没 Key 才自动弹配置窗口
+  if (!ready.value) showApiModal.value = true
 })
 
 async function refreshBackend(force = false) {
@@ -460,6 +484,7 @@ function persist() {
 function save() {
   persist()
   testResult.value = null
+  showApiModal.value = false
   toast.success('配置已保存')
 }
 
