@@ -51,12 +51,13 @@ export default createRouter({
     { path: '/teachers', name: 'teachers', component: TeachersView },
     { path: '/articles', name: 'articles', component: ArticlesView },
     { path: '/questions', name: 'questions', component: QuestionsView },
-    { path: '/practice', name: 'practice', component: PracticeView },
+    // compact: 答题三态共用的「一屏布局」页 —— App.vue 的 main 据此收紧上下 padding
+    { path: '/practice', name: 'practice', component: PracticeView, meta: { compact: true } },
     // 考场模式：与练习批改共用组件，靠路由名切成计时形态
     // （同一份作答/批改逻辑，避免"两份实现漂移"）
     // 真题模式：按原卷给全材料（练"在整卷里找资料"），与练习批改共用同一份作答与批改逻辑
-    { path: '/real', name: 'real', component: PracticeView },
-    { path: '/exam', name: 'exam', component: PracticeView },
+    { path: '/real', name: 'real', component: PracticeView, meta: { compact: true } },
+    { path: '/exam', name: 'exam', component: PracticeView, meta: { compact: true } },
     { path: '/records', name: 'records', component: RecordsView },
     { path: '/stats', name: 'stats', component: StatsView },
     { path: '/weakness', name: 'weakness', component: WeaknessView },

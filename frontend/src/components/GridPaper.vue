@@ -27,8 +27,8 @@
 <template>
   <div class="w-full">
     <!-- 工具条：字数 / 行数 / 每行格数 -->
-    <div class="flex items-center justify-between gap-3 mb-2 px-1">
-      <div class="flex items-center gap-3 text-xs text-c-muted">
+    <div class="flex items-center justify-between gap-3 mb-1 px-1 text-[11px]">
+      <div class="flex items-center gap-3 text-c-muted">
         <span class="tnum"><b class="text-c-body font-medium">{{ charCount }}</b> 字</span>
         <span class="tnum"><b class="text-c-body font-medium">{{ lineCount }}</b> 行</span>
         <span v-if="wordLimit" class="tnum"
@@ -36,7 +36,7 @@
           / {{ wordLimit }} 字
         </span>
       </div>
-      <span class="text-xs text-c-muted">每行 {{ cols }} 字</span>
+      <span class="text-c-muted">每行 {{ cols }} 字</span>
     </div>
 
     <!-- 纸 -->

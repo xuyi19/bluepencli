@@ -31,9 +31,9 @@
 // ⚠️ 端口是**随机高位端口**，且启动前拍一次"哪些端口已被占"的基线：
 //    项目里已经吃过"探针连到别人残留实例上、还报全绿"的亏。
 
-import { spawn } from 'node:child_process'
-import { existsSync, readdirSync, statSync } from 'node:fs'
-import { dirname, join, resolve } from 'node:path'
+import { execFileSync, spawn } from 'node:child_process'
+import { existsSync, readdirSync, rmSync, statSync } from 'node:fs'
+import { basename, dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -85,6 +85,25 @@ function findExe() {
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+
+/** 当前所有 127.0.0.1 上的 TCP 监听端口（netstat 解析；失败返回空集 = 上层轮询自然超时变红） */
+function listeningPorts() {
+  const set = new Set()
+  try {
+    const out = execFileSync('netstat', ['-ano'], { encoding: 'utf8' })
+    for (const line of out.split('\n')) {
+      const m = line.match(/^\s*TCP\s+127\.0\.0\.1:(\d+)\s/)
+      if (m) set.add(Number(m[1]))
+    }
+  } catch {}
+  return set
+}
+
+// 每次探针都用**全新**的 WebView2 用户数据目录：
+//   ① 判据归因干净 —— profile 里的落盘痕迹（IndexedDB 来源等）一定是本轮进程留下的，
+//      不会被历史运行污染（本项目吃过"连到别人残留实例还报全绿"的亏）；
+//   ② CDP 降级模式的 F3/F4 判据全靠"全新 profile 才出现的痕迹"。
+const FRESH_PROFILE = join('C:', 'Windows', 'Temp', `bp-probe-profile-${Date.now()}-${Math.floor(Math.random() * 1e6)}`)
 
 /** 拉 CDP 的 target 列表（HTTP 端点，不需要 WS） */
 async function fetchTargets(timeoutMs = 1200) {
@@ -173,11 +192,17 @@ check(
   before ? `⚠️ ${CDP_PORT} 上已有 ${before.length} 个 target —— 可能是残留实例` : `端口 ${CDP_PORT} 空闲`
 )
 
+// ⚠️ 网关端口基线必须拍在 spawn 之前（md-parity 的教训：拍晚了，网关在这期间
+//    已经监听上，端口进了基线，"只认新增"永远找不到它）。
+const netstatBaseline = listeningPorts()
+
 const child = spawn(exe, [], {
   env: {
     ...process.env,
     // 让 WebView2 开 CDP 端口，这样探针能问页面自己"你到底加载了什么"
     WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${CDP_PORT}`,
+    // 全新用户数据目录：落盘痕迹归因于本轮（见上方 FRESH_PROFILE 注释）
+    WEBVIEW2_USER_DATA_FOLDER: FRESH_PROFILE,
   },
   stdio: 'ignore',
   detached: false,
@@ -186,13 +211,16 @@ const child = spawn(exe, [], {
 /** 不管后面断言成败，都要把进程收干净 —— 残留实例是本项目历史上的老坑 */
 function cleanup() {
   if (KEEP) {
-    console.log(`\n（--keep：进程保留，PID ${child.pid}）`)
+    console.log(`\n（--keep：进程保留，PID ${child.pid}；profile 保留在 ${FRESH_PROFILE}）`)
     return
   }
   try {
     child.kill('SIGKILL')
   } catch {}
   // Windows 上 SIGKILL 不一定收掉由它拉起的 WebView2 子进程，交给系统回收
+  try {
+    rmSync(FRESH_PROFILE, { recursive: true, force: true })
+  } catch {}
 }
 
 let targets = null
@@ -247,7 +275,120 @@ if (!page) {
   page = (targets || []).filter((t) => t.type === 'page' && t.webSocketDebuggerUrl)[0] || null
 }
 
-check('CDP 端口通了（WebView2 已启动）', !!targets, targets ? `${targets.length} 个 target` : '40 秒内没起来')
+if (targets) {
+  check('CDP 端口通了（WebView2 已启动）', true, `${targets.length} 个 target`)
+} else {
+  // 降级模式里这条不算红：WebView2 是否真的起来了已由 F1（子进程挂在被测 exe
+  // 名下）与 F3（应用落盘痕迹）行为级覆盖，CDP 只是其曾经的观测手段。
+  console.log('· CDP 端口没起来（WebView2 运行时过滤了调试参数）—— 转入行为级降级判据')
+}
+
+// ──────────────────────────────────────────────────────────────
+// CDP 降级模式（2026-09-24 新增）
+//
+// WebView2 运行时 153.0.4234.48 起，--remote-debugging-port 被运行时过滤：
+// 实测环境变量（WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS）与注册表策略
+// （Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments）两条官方通道
+// 注入的该参数都不再出现在 browser 进程命令行里（同版运行时当天上午 CDP 还能用，
+// 参数被剥是运行侧行为，不是本项目代码变了；WEBVIEW2_USER_DATA_FOLDER 等其他
+// 变量仍然生效，证明不是环境变量没传进去）。
+//
+// CDP 做不了，但「内嵌前端真的加载了」可以用**落盘痕迹**判（行为级，不依赖
+// WebView2 内部行为，只依赖应用自己的副作用）：
+//   F1  WebView2 子进程存在，且 --webview-exe-name 指向被测 exe
+//   F2  本地网关健康检查通过（netstat 基线 → 只认新增端口 → /api/v1/health）
+//   F3  全新 profile 里出现 http_tauri.localhost_0.indexeddb.*
+//       —— Vue 应用启动即开 IndexedDB，这痕迹只有应用 JS 跑起来才会留下
+//   F4  profile 里没有 http_localhost_5273_* 的痕迹
+//       —— devUrl 假绿（cargo build 直连 5273）会留下它，这是防假绿的核心
+// DOM 级深断言（#app 节点数、页面内文字）在降级模式下做不了，如实标注。
+// ──────────────────────────────────────────────────────────────
+if (!targets) {
+  console.log('')
+  console.log('  ↳ CDP 不可用（WebView2 运行时过滤了 --remote-debugging-port），降级为行为级判据。')
+
+  // F1：WebView2 子进程挂在被测 exe 名下
+  let wvCmd = ''
+  try {
+    const ps =
+      `[Console]::OutputEncoding=[System.Text.Encoding]::UTF8; ` +
+      `(Get-CimInstance Win32_Process -Filter "Name='msedgewebview2.exe'" | ` +
+      `Where-Object { $_.CommandLine -like '*--webview-exe-name=${basename(exe)}*' } | ` +
+      `Select-Object -First 1).CommandLine`
+    wvCmd = execFileSync('powershell', ['-NoProfile', '-Command', ps], { encoding: 'utf8' })
+  } catch (e) {
+    console.log('  [debug] F1 PS 异常：' + String(e).slice(0, 200))
+  }
+  if (process.env.PROBE_DEBUG) console.log('  [debug] F1 PS 输出长度:', wvCmd.length)
+  check('F1 WebView2 已启动（挂在被测 exe 名下）', /msedgewebview2\.exe/i.test(wvCmd))
+
+  // F2：网关健康检查（基线在 spawn 前拍好）
+  let gwBody = null
+  {
+    const gwDeadline = Date.now() + 30000
+    let polled = 0
+    while (Date.now() < gwDeadline && !gwBody) {
+      const all = listeningPorts()
+      if (process.env.PROBE_DEBUG && polled === 0) console.log('  [debug] F2 首轮 netstat 监听数:', all.size, '基线:', netstatBaseline.size)
+      const fresh = [...all].filter((p) => !netstatBaseline.has(p))
+      polled++
+      for (const port of fresh) {
+        try {
+          const res = await fetch(`http://127.0.0.1:${port}/api/v1/health`, { signal: AbortSignal.timeout(800) })
+          const body = await res.json().catch(() => null)
+          if (res.ok && body?.app === '蓝笔申论') {
+            gwBody = body
+            break
+          }
+        } catch {}
+      }
+      if (!gwBody) await sleep(700)
+    }
+    if (process.env.PROBE_DEBUG) console.log('  [debug] F2 轮询', polled, '轮，fresh 端口均未通过健康检查' )
+  }
+  check(
+    'F2 本地网关健康检查（Rust 服务就绪）',
+    !!gwBody,
+    gwBody ? `app=${gwBody.app} v${gwBody.version}` : '30 秒内没有新增端口通过健康检查'
+  )
+
+  // F3/F4：全新 profile 的 IndexedDB 来源痕迹
+  let sawTauri = false
+  let sawDevUrl = false
+  {
+    const idbDir = join(FRESH_PROFILE, 'EBWebView', 'Default', 'IndexedDB')
+    const dl = Date.now() + 30000
+    while (Date.now() < dl && !sawTauri) {
+      try {
+        for (const d of existsSync(idbDir) ? readdirSync(idbDir) : []) {
+          if (/^http_tauri\.localhost_0\.indexeddb/.test(d)) sawTauri = true
+          if (/^http_localhost_5273/.test(d)) sawDevUrl = true
+        }
+      } catch {}
+      if (sawDevUrl) break
+      if (!sawTauri) await sleep(800)
+    }
+  }
+  check(
+    'F3 Vue 应用已启动（全新 profile 出现 tauri.localhost 的 IndexedDB 痕迹）',
+    sawTauri,
+    sawTauri ? 'http_tauri.localhost_0.indexeddb.leveldb' : '30 秒内没出现 —— 应用 JS 没跑起来'
+  )
+  check(
+    'F4 不是 devUrl 假绿（profile 里没有 localhost:5273 的痕迹）',
+    !sawDevUrl,
+    sawDevUrl ? '发现 http_localhost_5273_* —— 这是 cargo build 直连 devUrl 的产物！' : '无 5273 痕迹'
+  )
+
+  cleanup()
+  console.log('')
+  const failed = results.filter((r) => !r.ok)
+  console.log(
+    `Tauri 桌面版渲染探针（CDP 降级模式）：${results.length - failed.length} passed, ${failed.length} failed`
+  )
+  if (failed.length) console.log('未通过：' + failed.map((f) => f.name).join(' / '))
+  process.exit(failed.length ? 1 : 0)
+}
 
 // ⚠️ 可能有**多个** page target：单实例插件（Windows）会额外创建一个辅助窗口
 //    用于跨进程通信，它的 URL 是 `about:blank`。

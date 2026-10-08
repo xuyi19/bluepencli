@@ -1,15 +1,21 @@
 <template>
-  <div :class="step === 'answer' ? 'w-full max-w-5xl' : 'w-full'">
+  <!-- 答题态：root 高度锁为「视口 - main 上下 padding(16×2)」。
+       常数只跟 App.vue 的 compact padding 挂钩——页头/横幅高度怎么变，
+       都在 root 内部用 flex(min-h-0 链) 消化，不会再把布局顶出视口。
+       （不能用 flex-1 撑：column flex 容器 height:auto 时会被内容反向撑大。） -->
+  <div :class="step === 'answer'
+    ? 'w-full max-w-5xl lg:h-[calc(100vh-32px)] lg:flex lg:flex-col lg:min-h-0'
+    : 'w-full'">
 
     <!-- ==================== 页头 ==================== -->
     <!-- 答题态用更紧的下边距：整页要在一屏里放下（材料独滚），省出来的都是作答空间 -->
     <div class="flex items-end justify-between gap-4"
-      :class="step === 'answer' ? 'mb-4' : 'mb-8'">
-      <div class="min-w-0">
+      :class="step === 'answer' ? 'mb-3' : 'mb-8'">
+      <div class="min-w-0" :class="step === 'answer' ? 'flex items-baseline gap-3 flex-wrap' : ''">
         <h1 class="text-xl font-semibold text-c-ink">
           {{ step === 'answer' ? modeTitle : step === 'grading' ? '批改中' : '批改结果' }}
         </h1>
-        <p class="text-sm text-c-muted mt-1.5">
+        <p class="text-c-muted" :class="step === 'answer' ? 'text-xs' : 'text-sm mt-1.5'">
           {{ step === 'answer'
             ? '先把题答完，再交给老师批改'
             : step === 'grading'
@@ -42,8 +48,10 @@
     <template v-if="step === 'answer'">
 
       <!-- 答题壳：宽屏下一屏放下（材料独滚、题目与作答固定），不再整页滚动。
-           高度 = 视口 - 顶栏 padding - 页头；内部 grid flex-1 吃掉剩余空间。 -->
-      <div class="lg:flex lg:flex-col lg:h-[calc(100vh-172px)] lg:min-h-[600px]">
+           高度不用手算 calc(100vh-Npx)：App.vue 的 main 是 flex-col，
+           答题态下根节点 flex-1、这里也 flex-1+min-h-0 —— min-h-0 是整条链的关键，
+           少了它内容自然高会反向把布局撑爆（材料段实测撑到 1106px）。 -->
+      <div class="lg:flex lg:flex-col lg:flex-1 lg:min-h-0">
 
       <!-- 模式说明不再单独占一条卡：模式名在页头标题里已经有了，这里的字全是重复 -->
 
@@ -81,7 +89,7 @@
       <!-- ⚠️ lg:grid-rows-[minmax(0,1fr)] 不是装饰：grid 行轨道默认 auto，会被长材料
            撑高（容器设了 height 也拦不住，轨道溢出容器），材料直接画出面板、
            叠到下方作答区上，sticky 提交条悬在材料中间 —— 内滚链条在这一环断掉。 -->
-      <div class="grid grid-cols-1 lg:grid-cols-7 lg:grid-rows-[minmax(0,1fr)] gap-4 lg:gap-x-6 lg:mb-4 mb-4 lg:flex-1 lg:min-h-[380px]">
+      <div class="grid grid-cols-1 lg:grid-cols-7 lg:grid-rows-[minmax(0,1fr)] gap-4 lg:gap-x-5 lg:mb-3 mb-4 lg:flex-1 lg:min-h-[380px]">
 
         <!-- 左：给定资料（材料才是大头，占 5/7） -->
         <section class="lg:col-span-5 rounded-2xl p-5 neu flex flex-col lg:min-h-0">
@@ -229,10 +237,15 @@
 
       <!-- 我的作答：方格纸，仿考场卷面；标注态可划荧光（编辑/标注两态切换，输入体验不动）。
            lg 下定高、内部滚动 —— 页面本身不动，答题全程只有材料面板在滚 -->
-      <section class="rounded-2xl p-5 neu mb-4 shrink-0 lg:h-[268px] lg:flex lg:flex-col">
-        <div class="flex items-center justify-between mb-3 shrink-0">
+      <section class="rounded-2xl px-5 py-3.5 neu mb-4 lg:mb-3 shrink-0 lg:h-[268px] lg:flex lg:flex-col">
+        <div class="flex items-center justify-between mb-2 shrink-0">
           <span class="text-sm font-medium text-c-body">我的作答</span>
           <div class="flex items-center gap-3">
+            <button v-if="!answerMarkMode" @click="answerMarkMode = form.answer.trim() ? true : answerMarkMode"
+              :disabled="!form.answer.trim()" :title="form.answer.trim() ? '用荧光笔圈出关键词、关键句（不影响作答）' : '先写点内容再标注'"
+              class="text-xs text-c-muted hover:text-c-bark underline underline-offset-2 transition-colors disabled:opacity-40 disabled:no-underline disabled:cursor-not-allowed">
+              🖍️ 荧光标注
+            </button>
             <span v-if="markCount" class="text-xs text-c-muted tnum">已标 {{ markCount }} 处</span>
             <span v-if="overLimit" class="text-xs tnum text-[#b4552d]">
               超出 {{ countChars(form.answer) - form.wordLimit }} 字
@@ -240,13 +253,6 @@
           </div>
         </div>
         <div class="mx-auto w-full max-w-[760px] lg:flex-1 lg:min-h-0 lg:overflow-y-auto">
-          <div v-if="!answerMarkMode" class="mb-1.5 flex justify-end">
-            <button @click="answerMarkMode = form.answer.trim() ? true : answerMarkMode"
-              :disabled="!form.answer.trim()" :title="form.answer.trim() ? '用荧光笔圈出关键词、关键句（不影响作答）' : '先写点内容再标注'"
-              class="text-xs text-c-muted hover:text-c-bark underline underline-offset-2 transition-colors disabled:opacity-40 disabled:no-underline disabled:cursor-not-allowed">
-              🖍️ 荧光标注
-            </button>
-          </div>
           <GridPaper v-if="!answerMarkMode" v-model="form.answer" :word-limit="form.wordLimit || 0" />
           <div v-else>
             <div class="mb-1.5 flex items-center justify-between text-xs text-c-muted">
@@ -265,28 +271,28 @@
 
       <!-- 提交：常驻底部，长作答不用滚回去找按钮 -->
       <div class="sticky bottom-0 z-10 shrink-0 pb-1">
-        <div class="rounded-2xl p-3 neu backdrop-blur">
+        <div class="rounded-2xl px-3 py-2.5 neu backdrop-blur">
           <div class="flex items-center gap-3">
             <!-- 考场模式：交卷两段确认（防误触）；超时自动交卷不走这里 -->
             <button v-if="isExamMode && confirmSubmit" @click="startExam"
-              class="flex-1 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300
+              class="flex-1 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-300
                 text-white" style="background:#b91c1c">
               确认交卷？计时将停止，交给 {{ selected.length }} 位老师批改
             </button>
             <button v-else-if="isExamMode" @click="startExam" :disabled="!canGrade"
-              class="flex-1 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300
+              class="flex-1 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-300
                 disabled:opacity-40 disabled:cursor-not-allowed neu-sm"
               :class="canGrade ? 'text-c-bark hover:translate-y-px' : 'text-c-muted'">
               交卷（{{ examClock }}）
             </button>
             <button v-else @click="start" :disabled="!canGrade"
-              class="flex-1 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300
+              class="flex-1 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-300
                 disabled:opacity-40 disabled:cursor-not-allowed neu-sm"
               :class="canGrade ? 'text-c-bark hover:translate-y-px' : 'text-c-muted'">
               答完了，开始批改{{ selected.length ? `（${selected.length} 位老师）` : '' }}
             </button>
           </div>
-          <div v-if="!canGrade" class="text-xs text-c-muted text-center mt-2">
+          <div v-if="!canGrade" class="text-xs text-c-muted text-center mt-1.5">
             {{ !hasKey ? '先到设置页配置 API' : '作答至少 20 字才能提交' }}
           </div>
         </div>
@@ -498,9 +504,30 @@
             <div class="text-xs text-c-muted mt-2.5 leading-5">{{ report.final.roundtableNote }}</div>
             <!-- 批改依据（结果冻结）：这份分是用哪版标准、哪版提示词、哪个模型算的。
                  写出来是有意的——只给分数不给来路，用户没法判断该不该信。 -->
-            <div v-if="provenanceText" class="text-xs text-c-muted mt-1.5 leading-5">
-              批改依据：{{ provenanceText }}
-            </div>
+            <!-- 溯源卡：这份分是用哪组参数算的，摊开到字段级供核对。
+                 只给一行「根据某标准」的压缩文本，用户既不知道是哪一版标准，也不知道老师们用的什么温度，
+                 更没法拿它去复算 —— 可复算的前提是参数可见，所以这里全部展开。 -->
+            <details v-if="report.provenance" class="mt-2.5 group">
+              <summary
+                class="text-xs text-c-muted cursor-pointer hover:text-c-bark transition-colors list-none leading-5">
+                <span class="inline-block mr-1 transition-transform duration-300 group-open:rotate-90">▸</span>
+                批改依据：{{ provenanceText }}
+              </summary>
+              <div class="mt-2 rounded-xl p-3 neu-inset">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-1">
+                  <div v-for="row in provenanceRows" :key="row.k"
+                    class="flex items-baseline justify-between gap-3 text-xs leading-6">
+                    <span class="text-c-muted shrink-0">{{ row.k }}</span>
+                    <span class="text-c-body text-right">{{ row.v }}</span>
+                  </div>
+                </div>
+                <div class="text-xs text-c-muted mt-2 pt-2 border-t border-c-line leading-6">
+                  复算：上面这组参数已随记录冻结（存档 json 的 provenance 字段）。
+                  按同一组参数重跑，采分点命中与客观校验结论必然一致；分数因温度采样会有小幅浮动 ——
+                  这是模型本身的性质，不是记录丢了什么。
+                </div>
+              </div>
+            </details>
             <div v-if="archiveState" class="text-xs mt-2"
               :class="archiveState === 'docs' ? 'text-[#4f7d5e]' : 'text-c-muted'">
               {{ archiveState === 'docs'
@@ -980,6 +1007,37 @@ const provenanceText = computed(() => {
   if (p.deep) bits.push('深度模式')
   return bits.join(' · ')
 })
+/**
+ * 溯源卡的行 —— 与上面那行压缩文本同源，只是摊到字段级。
+ * 复算时要对的是这些具体值（哪一版标准、哪个模型、各老师什么温度），不是一句"根据某标准"。
+ */
+const provenanceRows = computed(() => {
+  const p = report.value?.provenance
+  if (!p) return []
+  const srcLabel =
+    { manual: '人工校准标准', llm: '模型预解析标准', none: '无标准（裸判）' }[p.standardSource] || p.standardSource || '无标准'
+  const rows = [
+    {
+      k: '评分标准',
+      v: [srcLabel, p.standardVersion ? `v${p.standardVersion}` : '', p.standardPoints ? `${p.standardPoints} 个采分点` : '']
+        .filter(Boolean).join(' · '),
+    },
+  ]
+  if (p.promptVersion) rows.push({ k: '提示词版本', v: p.promptVersion })
+  if (p.model) rows.push({ k: '模型', v: p.model })
+  const temps = p.temperatures || {}
+  const teachers = Object.keys(temps).map((id) => `${TEACHERS[id]?.name || id} ${temps[id]}`)
+  if (teachers.length) rows.push({ k: '阅卷老师（温度）', v: teachers.join('、') })
+  rows.push({
+    k: '评分来源',
+    v: { single: '单人直采', weighted: '加权合议', fusion: '分歧复核后合议' }[p.scoreSource] || p.scoreSource || '—',
+  })
+  rows.push({ k: '深度模式', v: p.deep ? '开（注入讲义原文）' : '关' })
+  if (p.frozenAt)
+    rows.push({ k: '冻结时间', v: new Date(p.frozenAt).toLocaleString('zh-CN', { hour12: false }) })
+  return rows
+})
+
 const followupText = ref('')
 const sampleText = ref('')
 const sampling = ref(false)

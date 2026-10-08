@@ -42,9 +42,21 @@ const check = (name, ok, detail = '') => {
   console.log(`${ok ? '✓' : '✗'} ${name}${detail ? `   —— ${detail}` : ''}`)
 }
 
-const CDP_PORT = 9300 + Math.floor(Math.random() * 400)
-const CDP_URL = `http://127.0.0.1:${CDP_PORT}`
+// 网关地址不再走 CDP（见主流程里的说明），这里只留一个监听端口枚举器。
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+
+/** 当前所有 127.0.0.1 上的 TCP 监听端口（netstat 解析；失败返回空集 = 上层轮询自然超时变红） */
+function listeningPorts() {
+  const set = new Set()
+  try {
+    const out = execFileSync('netstat', ['-ano'], { encoding: 'utf8' })
+    for (const line of out.split('\n')) {
+      const m = line.match(/^\s*TCP\s+127\.0\.0\.1:(\d+)\s/)
+      if (m) set.add(Number(m[1]))
+    }
+  } catch {}
+  return set
+}
 
 const PY = existsSync(join(ROOT, 'backend', '.venv', 'Scripts', 'python.exe'))
   ? join(ROOT, 'backend', '.venv', 'Scripts', 'python.exe')
@@ -196,63 +208,6 @@ sys.stdout.buffer.write(render_markdown(data).encode('utf-8'))
 
 // ─────────────────────────── Rust 侧渲染（经真实接口） ───────────────────────────
 
-async function fetchTargets(timeoutMs = 1200) {
-  try {
-    const res = await fetch(`${CDP_URL}/json`, { signal: AbortSignal.timeout(timeoutMs) })
-    if (!res.ok) return null
-    const list = await res.json()
-    return Array.isArray(list) ? list : null
-  } catch {
-    return null
-  }
-}
-
-function evaluate(wsUrl, expression, timeoutMs = 10000) {
-  return new Promise((done) => {
-    let ws
-    const timer = setTimeout(() => {
-      try {
-        ws?.close()
-      } catch {}
-      done({ ok: false, error: 'CDP 超时' })
-    }, timeoutMs)
-    try {
-      ws = new WebSocket(wsUrl)
-    } catch (e) {
-      clearTimeout(timer)
-      return done({ ok: false, error: String(e) })
-    }
-    const finish = (p) => {
-      clearTimeout(timer)
-      try {
-        ws.close()
-      } catch {}
-      done(p)
-    }
-    ws.onerror = () => finish({ ok: false, error: 'WS 失败' })
-    ws.onopen = () =>
-      ws.send(
-        JSON.stringify({
-          id: 1,
-          method: 'Runtime.evaluate',
-          params: { expression, returnByValue: true, awaitPromise: true },
-        })
-      )
-    ws.onmessage = (ev) => {
-      try {
-        const msg = JSON.parse(typeof ev.data === 'string' ? ev.data : '')
-        if (msg.id !== 1) return
-        if (msg.result?.exceptionDetails) {
-          return finish({ ok: false, error: msg.result.exceptionDetails.text })
-        }
-        finish({ ok: true, value: msg.result?.result?.value })
-      } catch (e) {
-        finish({ ok: false, error: String(e) })
-      }
-    }
-  })
-}
-
 async function api(base, path, options = {}) {
   try {
     const res = await fetch(`${base}/api/v1${path}`, {
@@ -321,14 +276,19 @@ console.log('\n【Rust 侧（经真实接口）】')
     process.exit(1)
   }
 }
+// ⚠️ 基线必须拍在 spawn 之前：spawn 后还要等 3 秒秒退检测，网关在这段时间里
+//    早就监听上了 —— 基线拍晚了会把真实网关端口算进"基线"，后面"只认新增"永远找不到它。
+const baseline = listeningPorts()
 const child = spawn(exe, [], {
-  env: {
-    ...process.env,
-    WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${CDP_PORT}`,
-  },
+  env: { ...process.env },
   stdio: 'ignore',
   detached: false,
 })
+child.on('error', (e) => console.log('  [debug] spawn error:', String(e)))
+if (process.env.MDP_DEBUG) {
+  console.log('  [debug] spawned pid:', child.pid)
+  child.on('exit', (code) => console.log('  [debug] child exit:', code))
+}
 // 秒退检测：单实例互斥的第二实例会 exit 0 退出（实测被作者自己开着的软件坑过）
 const earlyExit = new Promise((resolve) => {
   child.once('exit', (code) => resolve({ early: true, code }))
@@ -344,42 +304,45 @@ if (probe.early) {
   process.exit(1)
 }
 
-let page = null
-const deadline = Date.now() + 90000   // 编排环境（test-all）负载重时 WebView2 启动慢，40s 不够用
-while (Date.now() < deadline) {
-  const targets = await fetchTargets()
-  const ready = (targets || []).find((t) => t.type === 'page' && t.url && t.url !== 'about:blank')
-  if (ready) {
-    page = ready
-    break
-  }
-  await sleep(700)
-}
-if (!page) {
-  try {
-    child.kill('SIGKILL')
-  } catch {}
-  console.log('✗ 页面没起来，无法比对')
-  process.exit(1)
-}
+// 网关地址怎么拿？曾经走 CDP：给 WebView2 传 --remote-debugging-port，进页面 invoke('api_base')。
+// 2026-09-24 晚实测：同一份代码、同一份 exe，下午 CDP 探针还全绿，晚上该参数就不再出现在
+// WebView2 browser 进程的命令行里（端口根本不开，宿主与 WebView2 全部正常）——
+// 「没改代码却红」的环境漂移不该由测试承担。而网关本来就是 TCP 服务：
+// 拍监听基线 → spawn → 只认新增端口 → 健康检查确认是蓝笔（app + version）。
+// 依赖的只有网关本身，不依赖 WebView2 的任何内部行为。
+// （基线 baseline 已在 spawn 前拍好，见上方注释）
 
-// api_base 探测带重试：页面 URL 就绪 ≠ Tauri SDK 已注入。
-// 系统负载重时 __TAURI_INTERNALS__ 注入晚于首次 evaluate，直接读会假失败
-// （实测：发布探针全绿、md-parity 稳定红，就是这条竞态）。
 let BASE = ''
-for (let i = 0; i < 15 && !BASE; i++) {
-  const got = await evaluate(
-    page.webSocketDebuggerUrl,
-    `(async () => window.__TAURI_INTERNALS__ ? await window.__TAURI_INTERNALS__.invoke('api_base') : '')()`
-  )
-  if (got.ok && got.value) BASE = got.value
-  else await sleep(1000)
+let lastFresh = []
+const deadline = Date.now() + 30000
+while (Date.now() < deadline && !BASE) {
+  const fresh = [...listeningPorts()].filter((p) => !baseline.has(p))
+  lastFresh = fresh
+  if (process.env.MDP_DEBUG && fresh.length) console.log('  [debug] fresh ports:', fresh.join(','))
+  for (const port of fresh) {
+    try {
+      const res = await fetch(`http://127.0.0.1:${port}/api/v1/health`, { signal: AbortSignal.timeout(800) })
+      const body = await res.json().catch(() => null)
+      if (res.ok && body?.app === '蓝笔申论') {
+        BASE = `http://127.0.0.1:${port}`
+        check('网关健康检查（app=蓝笔申论）', true, `port ${port} · v${body.version}`)
+        break
+      }
+    } catch {}
+  }
+  if (!BASE) await sleep(700)
 }
 if (!BASE) {
   try {
     child.kill('SIGKILL')
   } catch {}
-  console.log('✗ 拿不到本地服务地址（等了 15 秒）')
+  console.log('✗ 拿不到本地服务地址（30 秒内没有出现健康检查通过的监听端口）')
+  console.log('  诊断：基线 ' + baseline.size + ' 个监听 / spawn 后新增 [' + (lastFresh.join(',') || '无') + ']')
+  console.log('  新增里连网关都没有 = exe 没起来或网关没起；有网关但健康检查不过 = 接口或编码问题。')
+  try {
+    const tl = execFileSync('tasklist', ['/FI', 'IMAGENAME eq bluepencil.exe'], { encoding: 'utf8' })
+    console.log('  进程表：' + (tl.split('\n').filter((l) => /bluepencil/i.test(l)).join(' ; ') || '(无 bluepencil 进程)'))
+  } catch {}
   process.exit(1)
 }
 console.log(`  ✓ 本地服务 ${BASE}`)

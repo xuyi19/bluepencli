@@ -49,7 +49,10 @@ page.on('pageerror', (e) => {
 await page.goto(URL, { waitUntil: 'networkidle2', timeout: 60000 })
 await new Promise((r) => setTimeout(r, 1500))
 
-// ── 1. 确保页面里有题（今天题自动载入；没有就走选题器） ──
+// ── 1. 确保页面里有题 + 弹窗真正关掉 ──
+// ⚠️ v0.25.0 起进页自动弹选题窗，**同时**自动载入今日一练 —— 有材料 ≠ 弹窗关了。
+//    探针曾在这里被骗过：材料在弹窗后面渲染好了，"有材料就跳过选题"导致弹窗
+//    整场开着，程序化步骤穿透遮罩全绿，真鼠标步骤全被遮罩吃掉（选区恒 0）。
 async function hasMaterial() {
   return page.evaluate(() => document.querySelectorAll('[data-hl-block] p').length)
 }
@@ -68,6 +71,20 @@ if (!(await hasMaterial())) {
     card?.click()
   })
 }
+// 弹窗还开着就真正关掉：优先点一张题卡（走真实选择路径，applyQuestion 收尾关窗），
+// 没有卡就点右上角 ✕
+const modalOpen0 = await page.evaluate(() => !!document.querySelector('.fixed.inset-0.z-50'))
+if (modalOpen0) {
+  await page.evaluate(() => {
+    const overlay = document.querySelector('.fixed.inset-0.z-50')
+    const card = overlay?.querySelector('.space-y-2 > button')
+    if (card) card.click()
+    else overlay?.querySelector('button')?.click()
+  })
+  await new Promise((r) => setTimeout(r, 1200))
+}
+const modalGone = await page.evaluate(() => !document.querySelector('.fixed.inset-0.z-50'))
+check('选题弹窗已关闭（真鼠标步骤的前提）', modalGone)
 // applyQuestion 是 async（材料要异步载入正文），轮询等材料真的出现
 let blockCount = 0
 for (let i = 0; i < 20; i++) {
@@ -121,9 +138,21 @@ async function paintIn(containerSel, swatchIdx) {
   }, swatchIdx)
   await new Promise((r) => setTimeout(r, 300))
 }
+const modalState = async (tag) => {
+  if (!process.env.PROBE_DEBUG) return
+  const s = await page.evaluate(() => ({
+    modal: !!document.querySelector('.fixed.inset-0.z-50'),
+    hasMat: document.querySelectorAll('[data-hl-block] p').length,
+    active: document.activeElement?.tagName + '.' + String(document.activeElement?.className || '').slice(0, 30),
+  }))
+  console.log(`  [debug@${tag}]`, JSON.stringify(s))
+}
+await modalState('选题后')
+
 await paintIn('.max-h-\\[32rem\\] .hl-root, [data-hl-block]', 0) // 黄
 await paintIn('.max-h-\\[32rem\\] .hl-root, [data-hl-block]', 1) // 绿
 await paintIn('.max-h-\\[32rem\\] .hl-root, [data-hl-block]', 2) // 蓝
+await modalState('材料划完后')
 
 const saved = await page.evaluate(() => {
   const key = Object.keys(localStorage).find((k) => k.startsWith('bp-marks:'))
@@ -141,7 +170,11 @@ check('页面上渲染出 3 个 <mark>', markEls === 3, `实际 ${markEls} 个`)
 // 页面有 3 个 textarea（评分标准/考场说明等），直选 GridPaper 那个
 const ta = await page.$('textarea.grid-paper')
 if (!ta) { check('找到作答输入框', false, '页面上没有 textarea.grid-paper'); process.exit(1) }
-await ta.click()
+// ⚠️ 别用 ta.click()：一屏布局下 textarea 定高内滚，几何中心在折叠线之下，
+//    puppeteer 为够到它先滚页面，那一击会落在别的元素上（实测把「换题」点了，
+//    选题弹窗弹出来盖住全屏，后面真鼠标拖拽全部落在遮罩上 → 选区恒 0）。
+//    聚焦用 focus，打字仍是真实键盘事件。
+await page.evaluate(() => document.querySelector('textarea.grid-paper').focus())
 await ta.type(
   '基层减负首先要减掉形式主义、官僚主义这个"包袱"。材料中反映的"指尖上的形式主义"' +
   '正是典型表现：政务APP过多、打卡留痕泛滥，基层干部把大量时间耗在截图转发上，' +
@@ -157,6 +190,7 @@ const btnState = await page.evaluate(() => {
   return { found: !!btn, disabled: btn?.disabled ?? null }
 })
 check('「荧光标注」按钮存在且可用', btnState.found && !btnState.disabled, JSON.stringify(btnState))
+await modalState('进标注态后')
 await page.evaluate(() => {
   const btn = [...document.querySelectorAll('button')].find((b) => b.textContent.includes('荧光标注'))
   btn?.click()
@@ -213,34 +247,108 @@ await page.evaluate(() => {
   sec?.scrollIntoView({ block: 'center' })
 })
 await new Promise((r) => setTimeout(r, 500))
+// ⚠️ 两段式定位：材料是内滚容器（v0.25.0 一屏布局），目标文本可能折在滚动折叠线外；
+//    scrollIntoView 若遇 smooth 滚动是异步的，边滚边量会拿到旧坐标 —— 鼠标事件全落空。
+//    所以：先滚 → 等稳 → 再量。扫描所有文本节点（跳过已划标记的），找第一段
+//    「矩形完整落在视口内」的 8 字区间。
+await page.evaluate(() => {
+  const sec = [...document.querySelectorAll('section')].find((s) => s.querySelector('[data-hl-block]'))
+  const ps = [...(sec?.querySelectorAll('[data-hl-block] p') || [])]
+  // 优先挑「已可见」的段；没有就把最长段滚进视野
+  const inView = ps.filter((el) => {
+    const r = el.getBoundingClientRect()
+    return r.top >= 0 && r.bottom <= innerHeight && el.textContent.trim().length >= 40
+  })
+  if (inView.length === 0) ps.sort((a, b) => b.textContent.length - a.textContent.length)[0]?.scrollIntoView({ block: 'center' })
+})
+await new Promise((r) => setTimeout(r, 700))
 const dragBox = await page.evaluate(() => {
   const sec = [...document.querySelectorAll('section')].find((s) => s.querySelector('[data-hl-block]'))
   if (!sec) return null
   const ps = [...sec.querySelectorAll('[data-hl-block] p')]
-  const p = ps.sort((a, b) => b.textContent.length - a.textContent.length)[0]
-  const walker = document.createTreeWalker(p, NodeFilter.SHOW_TEXT)
-  let node = walker.nextNode()
-  while (node && node.textContent.trim().length < 10) node = walker.nextNode()
-  if (!node) return null
-  // 避开已有标记的区间（6..24 已被程序化划过），从 40 字往后拖
-  const r = document.createRange()
-  const start = Math.min(40, node.textContent.length - 12)
-  r.setStart(node, start)
-  r.setEnd(node, start + 8)
-  const rect = r.getBoundingClientRect()
-  return { x1: rect.left + 2, y1: rect.top + rect.height / 2, x2: rect.right + 6, y2: rect.top + rect.height / 2 }
+  const scroller = sec.querySelector('[class*="overflow-y-auto"]') || sec
+  // 可视区中部（上下各让 64px）：贴近容器上下边会触发选择拖拽的**自动滚动**，
+  // 实测拖拽点距顶 ~60px 时，8 步拖拽把容器从 scrollTop=288 滚到 2，
+  // 内容从光标底下滚过、选区跟着涨到 348 字
+  const sr = scroller.getBoundingClientRect()
+  const topBound = sr.top + 64
+  const botBound = sr.bottom - 64
+  for (const p of ps) {
+    const walker = document.createTreeWalker(p, NodeFilter.SHOW_TEXT)
+    let node
+    while ((node = walker.nextNode())) {
+      if (node.textContent.trim().length < 12) continue
+      if (node.parentElement?.tagName === 'MARK') continue // 已划过标记的区间不再拖
+      const len = node.textContent.length
+      for (let start = 0; start + 8 <= len; start += 6) {
+        const r = document.createRange()
+        r.setStart(node, start)
+        r.setEnd(node, start + 8)
+        const rect = r.getBoundingClientRect()
+        if (rect.top < topBound || rect.bottom > botBound || rect.width <= 0) continue
+        // ⚠️ 视口内 ≠ 可见：内滚容器滚出去的内容布局坐标仍可能落在视口里，
+        //    但被 overflow 裁剪着 —— 真鼠标按那里只会拖到别的元素。
+        //    用命中测试做最终裁决：落点必须真在这个段落的文字上。
+        const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2)
+        if (hit && (hit === p || p.contains(hit))) {
+          // 以 range 中点为锚、±12px 短拖：从矩形左缘起拖会以段首为锚
+          // （缩进/字距让左缘落在文字之外），实测一拖选了 351 字
+          const mx = rect.left + rect.width / 2
+          return { x1: mx - 12, y1: rect.top + rect.height / 2, x2: mx + 12, y2: rect.top + rect.height / 2 }
+        }
+      }
+    }
+  }
+  return null
 })
 if (dragBox) {
+  if (process.env.PROBE_DEBUG) {
+    const hit = await page.evaluate(({ x, y }) => {
+      const el = document.elementFromPoint(x, y)
+      const sec = [...document.querySelectorAll('section')].find((s) => s.querySelector('[data-hl-block]'))
+      const scroller = sec?.querySelector('[class*="overflow-y-auto"]')
+      return {
+        tag: el?.tagName, cls: String(el?.className || '').slice(0, 60),
+        scrollY: Math.round(scrollY), matScrollTop: Math.round(scroller?.scrollTop || -1),
+        rect: null,
+      }
+    }, { x: dragBox.x1, y: dragBox.y1 })
+    console.log('  [debug] 拖拽起点命中:', JSON.stringify(hit), 'dragBox:', JSON.stringify(dragBox))
+  }
   await page.mouse.move(dragBox.x1, dragBox.y1)
   await page.mouse.down()
+  if (process.env.PROBE_DEBUG) {
+    const d = await page.evaluate(() => {
+      const s = window.getSelection()
+      const sec = [...document.querySelectorAll('section')].find((x) => x.querySelector('[data-hl-block]'))
+      const sc = sec?.querySelector('[class*="overflow-y-auto"]')
+      return { afterDown: s?.toString().length, off: s?.anchorOffset, top: Math.round(sc?.scrollTop ?? -1) }
+    })
+    console.log('  [debug] down后:', JSON.stringify(d))
+  }
   for (let i = 1; i <= 8; i++) {
     await page.mouse.move(dragBox.x1 + ((dragBox.x2 - dragBox.x1) * i) / 8, dragBox.y1)
     await new Promise((r) => setTimeout(r, 30))
+  }
+  if (process.env.PROBE_DEBUG) {
+    const d = await page.evaluate(() => {
+      const s = window.getSelection()
+      const sec = [...document.querySelectorAll('section')].find((x) => x.querySelector('[data-hl-block]'))
+      const sc = sec?.querySelector('[class*="overflow-y-auto"]')
+      return { afterMoves: s?.toString().length, off: s?.anchorOffset, focusOff: s?.focusOffset, top: Math.round(sc?.scrollTop ?? -1) }
+    })
+    console.log('  [debug] moves后:', JSON.stringify(d))
   }
   await page.mouse.up()
   await new Promise((r) => setTimeout(r, 500))
   const rm = await page.evaluate(() => ({
     selLen: window.getSelection()?.toString().length || 0,
+    selText: (window.getSelection()?.toString() || '').slice(0, 24),
+    anchorEl: (() => {
+      const s = window.getSelection()
+      const el = s?.anchorNode?.parentElement
+      return el ? el.tagName + '.' + String(el.className || '').slice(0, 30) : '(无)'
+    })(),
     palette: !!document.querySelector('.hl-palette'),
     near: (() => {
       const sel = window.getSelection()
@@ -252,7 +360,7 @@ if (dragBox) {
       return Math.round(Math.hypot(p.x - r.x, p.y - r.bottom))
     })(),
   }))
-  check('真鼠标拖拽弹出色板', rm.palette, `选区 ${rm.selLen} 字` + (rm.near >= 0 ? `，距选区 ${rm.near}px` : ''))
+  check('真鼠标拖拽弹出色板', rm.palette, `选区 ${rm.selLen} 字"${rm.selText}" 锚点=${rm.anchorEl}` + (rm.near >= 0 ? `，距选区 ${rm.near}px` : ''))
   check('真鼠标路径色板也在选区旁', rm.near >= 0 && rm.near < 300, `距选区 ${rm.near}px`)
   if (rm.palette) {
     await page.evaluate(() => document.querySelectorAll('.hl-palette .hl-swatch')[4]

@@ -49,9 +49,15 @@ export function getStandard(questionId) {
   return ALL_STANDARDS[questionId] || null
 }
 
-/** 有标准的题目数（设置页/统计页显示"标准覆盖率"用） */
+/**
+ * 有标准的题目数（设置页/统计页显示"标准覆盖率"用）。
+ *
+ * ⚠️ 必须过滤空壳再计数：私有卷没导入时，`@private-standards` 会给出一个 `_` 键的空占位对象，
+ *    直接 Object.keys().length 会把它算成一条标准 —— 数字看着正常，覆盖率却虚高。
+ *    判据用「有没有采分点」而不是「键在不在」：没有采分点的标准等于没有标准。
+ */
 export function standardCount() {
-  return Object.keys(ALL_STANDARDS).length
+  return Object.values(ALL_STANDARDS).filter((s) => s && (s.points || []).length > 0).length
 }
 
 // TODO(后续)：.bpq 私有包可携带采分点标准（作者侧导出时一并打包），

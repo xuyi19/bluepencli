@@ -114,6 +114,29 @@
       </div>
     </section>
 
+    <!-- ③b 分数溯源：结果页那行「批改依据」不是装饰，是复算的锚点 -->
+    <section class="rounded-2xl p-6 neu mb-6">
+      <h2 class="font-serif text-lg text-c-ink mb-4">这个分是怎么来的</h2>
+      <div class="space-y-3 text-xs text-c-muted leading-6">
+        <p>
+          分数下方有一行<span class="text-c-body font-medium">「批改依据」</span>，点开能看到这份批改用的全部参数：
+          哪一版评分标准（有几个采分点）、哪一版提示词、哪个模型、每位老师各自的温度、
+          最终分是怎么合出来的（单人直采 / 加权合议 / 分歧复核后合议）、以及冻结时间。
+          这组参数会<span class="text-c-body font-medium">随记录一起存档</span>，不会只剩一个孤零零的数字。
+        </p>
+        <p>
+          <span class="text-sm font-medium text-c-body">重跑一次会一样吗？</span>
+          采分点命中、客观校验（字数 / 段落 / 结构 / 照抄）这些由代码算的部分，
+          <span class="text-c-body">必然一致</span>；老师给的分与批注措辞会因为采样温度有小幅浮动——
+          这是模型本身的性质，不是记录丢了什么。想少一点浮动，用单人模式或多位老师合议。
+        </p>
+        <p class="text-c-muted/90">
+          想看完整的五层流水线（哪部分交给代码、哪部分交给模型、可信度六信号怎么算），
+          见仓库内 <span class="text-c-body">docs/项目文档/可复算与溯源手册.md</span>。
+        </p>
+      </div>
+    </section>
+
     <!-- ④ 荧光标注 -->
     <section class="rounded-2xl p-6 neu mb-6">
       <h2 class="font-serif text-lg text-c-ink mb-4">荧光标注</h2>

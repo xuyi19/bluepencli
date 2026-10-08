@@ -88,9 +88,47 @@ t('归档里标准来源有中文标签', /人工校准/.test(recsvc) && /无标
 console.log('\n⑥ 结果页看得见（可复算才不是口号）')
 t('PracticeView 有 provenanceText', /const provenanceText = computed/.test(pv))
 t('模板显示「批改依据」', /批改依据：/.test(pv))
-t('空 provenance 时不显示（老记录不炸）', /v-if="provenanceText"/.test(pv))
+// v0.25.0 起：那行压缩文本升级成可展开的溯源卡，判空条件随之改为 report.provenance
+t('空 provenance 时不显示（老记录不炸）', /<details v-if="report\.provenance"/.test(pv))
+t('可展开到字段级（provenanceRows）', /const provenanceRows = computed/.test(pv))
+t('模板逐条渲染字段', /v-for="row in provenanceRows"/.test(pv))
+// 压缩文本只说"根据某标准"，用户复算要对的是具体值，这四行必须真的露出来
+for (const k of ['评分标准', '阅卷老师（温度）', '评分来源', '冻结时间']) {
+  t(`溯源卡含「${k}」行`, pv.includes(`k: '${k}'`))
+}
+// 诚实边界：温度为 0.1~0.4，重跑必然有浮动。不写这句等于承诺了做不到的确定性。
+t('写明分数会小幅浮动（不许暗示逐位可复现）', /温度采样会有小幅浮动/.test(pv))
 
-console.log('\n⑦ 行为级：PROMPT_VERSION 能真的被读到')
+console.log('\n⑦ 使用文档与溯源手册（写给人看的那一半）')
+{
+  const guide = read('frontend/src/views/GuideView.vue')
+  t('使用文档页有「这个分是怎么来的」一节', guide.includes('这个分是怎么来的'))
+  t('使用文档指向溯源手册', guide.includes('可复算与溯源手册'))
+  const mpath = 'docs/项目文档/可复算与溯源手册.md'
+  let m = ''
+  try {
+    m = read(mpath)
+  } catch {
+    /* 不存在时下面三条各自变红 */
+  }
+  t('溯源手册存在', !!m, mpath)
+  t('手册含五层流水线', m.includes('纯代码校验层'))
+  t('手册含复算边界（会浮动的部分）', /会小幅浮动/.test(m))
+  t('手册写明当前缺口（标准覆盖率）', /覆盖率/.test(m))
+}
+
+console.log('\n⑧ 标准覆盖率统计不许虚高')
+{
+  const idx = read('frontend/src/data/standards/index.js')
+  // 私有卷未导入时 @private-standards 会给出一个 `_` 键的空占位对象，
+  // 数键会把它算成一条标准 —— 数字看着正常，覆盖率却虚高一格。
+  t(
+    'standardCount 按「有采分点」过滤而非数键',
+    /Object\.values\(ALL_STANDARDS\)\.filter\(\(s\)\s*=>\s*s\s*&&\s*\(s\.points \|\| \[\]\)\.length > 0\)/.test(idx)
+  )
+}
+
+console.log('\n⑨ 行为级：PROMPT_VERSION 能真的被读到')
 // skills.js 顺着依赖链会碰到省略后缀的 import（'./teachers'）与别名，
 // 必须先注册 vite 解析器才能被 Node 加载（见 .tools/vite-alias.mjs 的说明）。
 try {

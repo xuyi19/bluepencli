@@ -34,8 +34,12 @@
       </aside>
     </div>
 
-    <!-- 主区：内边距统一在这里给，各 view 不再各写一套 -->
-    <main class="md:ml-56 min-w-0 min-h-screen px-6 md:px-10 py-10">
+    <!-- 主区：内边距统一在这里给，各 view 不再各写一套。
+         flex-col 是给答题页「一屏布局」用的：子页面在答题态把自己 flex-1，
+         不再靠手算 calc(100vh-Npx) 猜页头高度（页头一变就溢出视口）。
+         compact 路由（答题三态）把上下 padding 收到 16px，给材料区腾地方。 -->
+    <main class="md:ml-56 min-w-0 min-h-screen px-6 md:px-10 py-10 flex flex-col"
+      :class="route.meta.compact ? 'lg:pt-4 lg:pb-4' : ''">
       <RouterView />
     </main>
 
@@ -51,7 +55,7 @@
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { RouterView } from 'vue-router'
+import { RouterView, useRoute } from 'vue-router'
 import { backendInfo, probeBackend } from './api/backend'
 import { useReadiness } from './utils/readiness'
 import { attachDesktopSession } from './utils/desktopSession'
@@ -59,6 +63,8 @@ import { CURRENT_VERSION } from './data/changelog'
 import GroupedSidebar from './components/GroupedSidebar.vue'
 import ToastHost from './components/ToastHost.vue'
 import WeChatHost from './components/WeChatHost.vue'
+
+const route = useRoute() // compact meta：答题三态收 main 上下 padding
 
 // 导航数据：分组由 group 字段标定，避免再写一份冗余数组。
 // group 为空串 = 不渲染组头（首页是入口不是分类）。

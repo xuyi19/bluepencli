@@ -177,6 +177,27 @@ const text = await evaluate('document.body.innerText')
 console.log('===== 结果页文本 =====')
 console.log(text.slice(0, 2600))
 
+// 5.1) 溯源卡：展开读字段。可复算的凭据必须真露在界面上 —— 光在记录里有不算，
+//      用户（和答辩老师）要能看到"这分是哪版标准、哪个模型、各老师什么温度算出来的"。
+await evaluate(`
+(() => {
+  const d = [...document.querySelectorAll('details')].find((x) => x.innerText.includes('批改依据'))
+  if (d) d.open = true
+  return !!d
+})()
+`)
+await new Promise((r) => setTimeout(r, 300))
+const prov = await evaluate(`
+(() => {
+  const d = [...document.querySelectorAll('details')].find((x) => x.innerText.includes('批改依据'))
+  return d ? d.innerText : ''
+})()
+`)
+console.log('===== 溯源卡（展开后）=====')
+console.log(prov.slice(0, 700) || '(未找到溯源卡)')
+const provOk = ['评分标准', '阅卷老师', '评分来源', '冻结时间'].filter((k) => !prov.includes(k))
+console.log(provOk.length ? `❌ 溯源卡缺字段：${provOk.join('、')}` : '✅ 溯源卡字段齐全')
+
 console.log('===== 关键元素 =====')
 const checks = await evaluate(`
 (() => {
