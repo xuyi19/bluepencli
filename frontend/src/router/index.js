@@ -35,6 +35,7 @@ import TeachersView from '../views/TeachersView.vue'
 import ArticlesView from '../views/ArticlesView.vue'
 import QuestionsView from '../views/QuestionsView.vue'
 import ReadView from '../views/ReadView.vue'
+import LexiconView from '../views/LexiconView.vue'
 import PracticeView from '../views/PracticeView.vue'
 import RecordsView from '../views/RecordsView.vue'
 import StatsView from '../views/StatsView.vue'
@@ -54,6 +55,8 @@ export default createRouter({
     { path: '/questions', name: 'questions', component: QuestionsView },
     // M4 精读训练：划要点句 → 对照采分点，练"找点"（2026-10-08）
     { path: '/read', name: 'read', component: ReadView },
+    // M2 素材本/规范词库：9 主题规范表述对照，可收藏、可打印（2026-10-08）
+    { path: '/lexicon', name: 'lexicon', component: LexiconView },
     // compact: 答题三态共用的「一屏布局」页 —— App.vue 的 main 据此收紧上下 padding
     { path: '/practice', name: 'practice', component: PracticeView, meta: { compact: true } },
     // 考场模式：与练习批改共用组件，靠路由名切成计时形态

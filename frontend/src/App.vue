@@ -11,7 +11,7 @@
     <button
       v-if="!drawerOpen"
       @click="drawerOpen = true"
-      class="md:hidden fixed top-3 left-3 z-50 w-11 h-11 rounded-full bg-c-paper
+      class="md:hidden fixed top-3 left-3 z-50 w-11 h-11 rounded-full bg-c-paper no-print
         border border-c-line shadow-[0_1px_2px_rgba(120,113,108,0.06)]
         flex items-center justify-center text-c-body
         transition-colors duration-300 active:translate-y-px active:bg-c-barkSoft"
@@ -82,6 +82,8 @@ const NAV = [
   { group: '学习', path: '/articles', label: '文章库' },
   // M4 精读训练：学侧第一个"训练型"功能 —— 练的是材料阅读与找点，不是展示信息
   { group: '学习', path: '/read', label: '精读训练' },
+  // M2 素材本：规范词库 + 收藏 + 打印（学侧"积累表达"一环）
+  { group: '学习', path: '/lexicon', label: '素材本' },
   // 分组名与条目名不能同名：分组头也是"复盘"，条目再叫"复盘"，
   // 侧边栏会出现两行一模一样的字，看着像重复项。
   { group: '复盘', path: '/records', label: '历史批改' },
