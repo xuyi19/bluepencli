@@ -478,7 +478,11 @@ const PDF_FONT_BASE = (typeof import.meta !== 'undefined' && import.meta.env?.BA
 // （顶层 import 'node:url' 会进浏览器 bundle，炸构建）。
 const PDF_FONT_DIR_PATH = (() => {
   if (typeof window !== 'undefined') return ''
-  const p = decodeURIComponent(new URL('../../public/fonts/', import.meta.url).pathname)
+  // spec 用变量拼接：vite 只对「字面量 spec」做构建期资产解析，目录 URL 解析不到
+  // 文件就打警告（本分支只有 node 护栏才执行，浏览器 bundle 里是死代码）；
+  // 拆成变量即跳过静态分析，node 下解析结果不变。
+  const spec = '../../public/fonts/'
+  const p = decodeURIComponent(new URL(spec, import.meta.url).pathname)
   return p.replace(/^\/([A-Za-z]:)/, '$1')
 })()
 const pdfFontSrc = (file) =>
