@@ -93,6 +93,12 @@
           class="px-4 py-2.5 rounded-xl text-xs font-medium neu-sm text-c-body">
           清空重练
         </button>
+        <button v-if="marks.length && qid" @click="sendMarksToOutline"
+          title="把划过的句子追加到练习页提纲（同一道题）"
+          class="px-4 py-2.5 rounded-xl text-xs font-medium neu-sm text-c-body hover:text-c-bark transition-colors">
+          📎 收进练习提纲
+        </button>
+        <span v-if="sentNote" class="text-xs" style="color:#4f7d5e">{{ sentNote }}</span>
         <span class="text-xs text-c-muted tnum ml-auto">
           已划 {{ marks.length }} 处<template v-if="standard && phase === 'mark'"> · 划完点「对照采分点」</template>
         </span>
@@ -304,6 +310,35 @@ function submit() {
       at: Date.now(),
     }))
   } catch { /* 忽略 */ }
+}
+
+// M8 规格增强一（跨页版）：把精读划的句子收进**练习页**的提纲。
+// 同一道题（同 qid）：精读划的是"答案候选"，练习页提纲是动笔前的骨架——两侧天然衔接。
+// 与 PracticeView.marksToOutline 同格式（• 句子）；重复句子不重复收（按行文本去重）。
+const sentNote = ref('')
+let sentTimer = null
+function sendMarksToOutline() {
+  const id = qid.value
+  if (!id) return
+  const texts = marks.value.map((m) => (m.text || '').trim()).filter(Boolean)
+  if (!texts.length) return
+  let cur = ''
+  try { cur = localStorage.getItem(`bp-outline:${id}`) || '' } catch { /* 读不到按空提纲处理 */ }
+  const seen = new Set(cur.split('\n').map((l) => l.replace(/^•\s*/, '').trim()).filter(Boolean))
+  const fresh = texts.filter((t) => !seen.has(t))
+  if (!fresh.length) {
+    sentNote.value = '这些句子都已经在提纲里了'
+  } else {
+    const next = (cur.trim() ? cur.replace(/\s*$/, '\n') + '\n' : '') + fresh.map((t) => `• ${t}`).join('\n') + '\n'
+    try {
+      localStorage.setItem(`bp-outline:${id}`, next)
+      sentNote.value = `已收进练习提纲 ${fresh.length} 句，去练习页看看`
+    } catch {
+      sentNote.value = '没存进去（浏览器存储满了）'
+    }
+  }
+  clearTimeout(sentTimer)
+  sentTimer = setTimeout(() => { sentNote.value = '' }, 3000)
 }
 
 function restart() {

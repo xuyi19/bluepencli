@@ -108,6 +108,7 @@
 //     素材收藏是跨题的长期资产。
 import { computed, ref, reactive } from 'vue'
 import { LEXICON_THEMES, LEXICON_ITEMS, LEXICON_COUNT } from '../data/lexicon'
+import { FAV_AT_KEY } from '../utils/workbench'
 import { buildLexiconModel, exportLexicon, exportLexiconPdf } from '../utils/exportDoc'
 import ExportOptionsDialog from '../components/ExportOptionsDialog.vue'
 
@@ -130,8 +131,32 @@ function persistFavs() {
     localStorage.setItem('bp-fav-lexicon', JSON.stringify([...fav]))
   } catch { /* 存储满：收藏属增强数据，静默可接受 */ }
 }
+// M1 学习中心联动：收藏动作旁路记时间戳（FAV_AT_KEY = 'bp-fav-at'，{id: 毫秒}）——
+// 首页「积累一组」任务卡要判「今天有没有收藏」。老收藏没有时间戳就不算今天（不编造）。
+function markFavAt(id) {
+  try {
+    const raw = JSON.parse(localStorage.getItem(FAV_AT_KEY) || '{}')
+    const map = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {}
+    map[id] = Date.now()
+    localStorage.setItem(FAV_AT_KEY, JSON.stringify(map))
+  } catch { /* 旁路表属增强数据，静默可接受 */ }
+}
+function clearFavAt(id) {
+  try {
+    const raw = JSON.parse(localStorage.getItem(FAV_AT_KEY) || '{}')
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw) || !(id in raw)) return
+    delete raw[id]
+    localStorage.setItem(FAV_AT_KEY, JSON.stringify(raw))
+  } catch { /* 同上 */ }
+}
 function toggleFav(id) {
-  fav.has(id) ? fav.delete(id) : fav.add(id)
+  if (fav.has(id)) {
+    fav.delete(id)
+    clearFavAt(id)
+  } else {
+    fav.add(id)
+    markFavAt(id)
+  }
   persistFavs()
 }
 function toggleTheme(key) {

@@ -2,9 +2,9 @@
   <div class="w-full max-w-6xl">
 
     <!-- 首屏 hero：一句话说清这个工具和别的 AI 批改的分界（不是多一层包装，是模拟一场阅卷）。
-         按钮三个：主行动（开始批改）/ 使用文档（新用户第一步）/ 题库（老用户找题）。 -->
-    <section class="mb-10">
-      <div class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full neu-sm text-xs text-c-muted mb-5">
+         M1 之后这页是"工作台"，hero 收窄成一行标语 + 主行动，把首屏让给今日任务。 -->
+    <section class="mb-8">
+      <div class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full neu-sm text-xs text-c-muted mb-4">
         <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor"
           stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
           <circle cx="9" cy="8" r="3.2" /><circle cx="16.5" cy="9.5" r="2.6" />
@@ -12,15 +12,13 @@
         </svg>
         五位老师圆桌合议 · 数据存本机 · 无需注册
       </div>
-      <h1 class="font-serif text-4xl md:text-5xl font-semibold text-c-ink leading-tight tracking-tight">
-        申论批改，<br />
-        <span class="text-c-bark">不该只有一个分数</span>
+      <h1 class="font-serif text-3xl md:text-4xl font-semibold text-c-ink leading-tight tracking-tight">
+        申论批改，<span class="text-c-bark">不该只有一个分数</span>
       </h1>
-      <p class="text-sm md:text-base text-c-muted mt-4 leading-7 max-w-xl">
-        五位申论老师各按自己的方法论独立阅卷，分数会真的分歧——分歧自动复核、圆桌合议；
-        采分点锚点与纯代码校验兜底，每个分数都给得出依据。
+      <p class="text-sm text-c-muted mt-3 leading-7 max-w-xl">
+        五位老师各按自己的方法论独立阅卷，分歧自动复核、圆桌合议；每个分数都给得出依据。
       </p>
-      <div class="flex flex-wrap items-center gap-3 mt-7">
+      <div class="flex flex-wrap items-center gap-3 mt-5">
         <RouterLink to="/practice"
           class="px-6 py-3 rounded-full text-sm font-medium text-c-cream bg-c-bark
             shadow-[0_4px_14px_rgba(92,64,51,0.28)] hover:translate-y-px transition-all duration-300">
@@ -37,40 +35,151 @@
           </svg>
           使用文档
         </RouterLink>
-        <RouterLink to="/questions"
-          class="px-5 py-3 rounded-full text-sm text-c-muted hover:text-c-bark transition-colors duration-300">
-          去题库挑题 →
-        </RouterLink>
       </div>
     </section>
 
-    <!-- 今日一练：首页最显眼的位置，进来就能开始 -->
-    <section v-if="todayQ" class="rounded-2xl p-6 md:p-7 neu mb-8">
-      <div class="flex flex-wrap items-start justify-between gap-6">
-        <div class="min-w-0 flex-1">
-          <div class="flex flex-wrap items-center gap-2 mb-3">
-            <span class="px-2.5 py-1 rounded-full text-xs font-medium"
-              style="background: #f2ebe2; color: #5c4033">今日一练</span>
-            <span class="text-xs text-c-muted tnum">{{ todayLabel }}</span>
-            <span class="text-xs px-1.5 py-0.5 rounded"
-              style="background: #e8ecdf; color: #3d5a7a">{{ todayQ.type }}</span>
-            <span v-if="todayQ.kind" class="text-xs px-1.5 py-0.5 rounded"
-              :style="todayQ.kind === '真题' ? 'background:#f7eddc;color:#9c6b2f' : 'background:#f2ebe2;color:#78716c'">
-              {{ todayQ.kind }}</span>
-            <span v-if="doneToday" class="text-xs" style="color: #4f7d5e">✓ 今天已经练过一次</span>
+    <!-- ==================== M1 学习中心 · 今日工作台 ====================
+         三张状态卡（倒计时/打卡/画像）+ 三张任务卡（练一题/精读一则/积累一组）。
+         铁律：状态与真实数据一致——做完的任务不假装没做，没数据的明说没数据。 -->
+    <section data-testid="workbench" class="mb-10">
+      <div class="flex items-baseline justify-between mb-4">
+        <h2 class="text-sm font-medium text-c-body">今日工作台</h2>
+        <span class="text-xs text-c-muted tnum">{{ todayLabel }}</span>
+      </div>
+
+      <!-- 状态行：倒计时 / 打卡 / 画像 -->
+      <div class="grid md:grid-cols-3 gap-4 mb-4">
+        <!-- 备考倒计时：没设日期不显示倒计时（不编造）；只存本机 -->
+        <div data-testid="countdown-card" class="rounded-2xl p-5 neu">
+          <div class="text-xs text-c-muted mb-2">备考倒计时</div>
+          <template v-if="countdown === null">
+            <div class="flex items-center gap-2">
+              <input v-model="examInput" type="date"
+                class="px-2.5 py-1.5 rounded-xl text-xs neu-inset outline-none text-c-body tnum" />
+              <button @click="saveExamDate"
+                class="px-3 py-1.5 rounded-xl text-xs font-medium neu-sm text-c-bark hover:translate-y-px transition-transform">
+                设目标
+              </button>
+            </div>
+            <p class="text-[11px] text-c-muted mt-2 leading-4">
+              填考试日期，每天打开先看还剩几天。只存本机，随时可改。
+            </p>
+          </template>
+          <template v-else>
+            <div class="flex items-baseline gap-2">
+              <span class="text-3xl font-semibold tnum"
+                :class="countdown >= 0 ? 'text-c-ink' : 'text-c-muted'">
+                {{ countdown > 0 ? `D-${countdown}` : (countdown === 0 ? '就是今天' : `已过 ${-countdown} 天`) }}
+              </span>
+            </div>
+            <div class="text-xs text-c-muted tnum mt-1">{{ examDate }}</div>
+            <div class="flex items-center gap-3 mt-2">
+              <button @click="examInput = examDate" class="text-[11px] text-c-muted hover:text-c-bark">改日期</button>
+              <button @click="clearExamDate" class="text-[11px] text-c-muted hover:text-c-bark">清除</button>
+            </div>
+          </template>
+        </div>
+
+        <!-- 打卡连击：练习/精读/收藏任一都算一天；今天没做不断签（从昨天起算） -->
+        <div data-testid="streak-card" class="rounded-2xl p-5 neu">
+          <div class="text-xs text-c-muted mb-1">连续打卡</div>
+          <div class="flex items-baseline gap-1">
+            <span class="text-3xl font-semibold tnum text-c-ink">{{ streak }}</span>
+            <span class="text-sm text-c-muted">天</span>
           </div>
-          <h2 class="font-serif text-lg md:text-xl text-c-ink leading-8">{{ todayQ.title }}</h2>
-          <div class="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-c-muted mt-3.5">
-            <span>{{ todayQ.exam }}</span>
-            <span class="tnum">满分 {{ todayQ.maxScore }}</span>
-            <span v-if="todayQ.wordLimit" class="tnum">≤ {{ todayQ.wordLimit }} 字</span>
-            <span v-if="todayQ.difficulty">{{ DIFFICULTY_LABEL[todayQ.difficulty] }}</span>
-          </div>        </div>
-        <RouterLink :to="`/practice?questionId=${todayQ.id}`"
-          class="shrink-0 px-6 py-3 rounded-full text-sm font-medium text-c-cream
-            bg-c-bark transition-colors duration-300">
-          {{ doneToday ? '再练一遍' : '开始今日一练' }}
-        </RouterLink>
+          <div class="flex flex-wrap gap-1 mt-3" data-testid="streak-dots">
+            <span v-for="d in last14" :key="d.key" :title="d.key"
+              class="w-2.5 h-2.5 rounded-full"
+              :style="d.active ? 'background:#5c8a64' : (d.isToday ? 'background:#ddd5c7' : 'background:#ece7de')" />
+          </div>
+          <p class="text-[11px] text-c-muted mt-2 leading-4">练一题 / 精读一则 / 收藏一条，任一都算打卡。</p>
+        </div>
+
+        <!-- 画像速览：样本不足就明说，不硬画 -->
+        <div data-testid="profile-glance" class="rounded-2xl p-5 neu">
+          <div class="text-xs text-c-muted mb-2">能力画像</div>
+          <template v-if="profile.ready">
+            <div class="space-y-1.5">
+              <div v-for="d in profile.dimensions" :key="d.id" class="flex items-center gap-2">
+                <span class="w-16 shrink-0 text-[11px] text-c-muted truncate">{{ d.label }}</span>
+                <div class="flex-1 h-1.5 rounded-full" style="background:#ece7de">
+                  <div class="h-full rounded-full" :style="{ width: (d.score ?? 0) + '%', background: '#8a9a6b' }" />
+                </div>
+                <span class="w-8 text-right text-[11px] tnum text-c-muted">{{ d.score ?? '—' }}</span>
+              </div>
+            </div>
+            <p v-if="weakest" class="text-[11px] mt-2" style="color:#8b6d4b">
+              先补：{{ weakest.label }}（{{ weakest.score }}）
+            </p>
+            <RouterLink to="/stats" class="text-[11px] text-c-muted hover:text-c-bark">看完整画像 →</RouterLink>
+          </template>
+          <template v-else>
+            <p class="text-xs text-c-muted leading-5">
+              批改满 {{ profile.need + (profile.recordCount || 0) }} 篇后出画像——样本不够不硬编。
+            </p>
+            <RouterLink to="/practice" class="text-[11px] text-c-muted hover:text-c-bark">先去练一篇 →</RouterLink>
+          </template>
+        </div>
+      </div>
+
+      <!-- 任务行：练一题 / 精读一则 / 积累一组（点击直达，状态真实） -->
+      <div class="grid sm:grid-cols-3 gap-4">
+        <!-- 练一题（原「今日一练」折进来） -->
+        <div data-testid="task-practice" class="rounded-2xl p-5 neu flex flex-col">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="px-2 py-0.5 rounded-full text-[11px] font-medium" style="background:#f2ebe2;color:#5c4033">练一题</span>
+            <span v-if="tasks.practice.done" class="text-[11px]" style="color:#4f7d5e">✓ 已练 {{ tasks.practice.count }} 次</span>
+          </div>
+          <template v-if="todayQ">
+            <div class="flex-1">
+              <div class="text-sm text-c-body leading-6 line-clamp-2">{{ todayQ.title }}</div>
+              <div class="text-[11px] text-c-muted mt-1.5 tnum">
+                {{ todayQ.exam }}<template v-if="todayQ.maxScore"> · {{ todayQ.maxScore }} 分</template>
+              </div>
+            </div>
+            <RouterLink :to="`/practice?questionId=${todayQ.id}`"
+              class="mt-3 inline-flex justify-center px-4 py-2.5 rounded-xl text-xs font-medium text-c-cream bg-c-bark">
+              {{ tasks.practice.done ? '再练一遍' : '开始今日一练' }}
+            </RouterLink>
+          </template>
+          <template v-else>
+            <div class="flex-1 text-xs text-c-muted leading-5">题库是空的——先去题库看看。</div>
+            <RouterLink to="/questions"
+              class="mt-3 inline-flex justify-center px-4 py-2.5 rounded-xl text-xs font-medium neu-sm text-c-bark">
+              去题库
+            </RouterLink>
+          </template>
+        </div>
+
+        <!-- 精读一则 -->
+        <div data-testid="task-read" class="rounded-2xl p-5 neu flex flex-col">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="px-2 py-0.5 rounded-full text-[11px] font-medium" style="background:#e8ecdf;color:#3d5a7a">精读一则</span>
+            <span v-if="tasks.read.done" class="text-[11px]" style="color:#4f7d5e">✓ 已读 {{ tasks.read.count }} 则</span>
+          </div>
+          <div class="flex-1 text-xs text-c-muted leading-5">
+            在材料里划出「要点句」，对照采分点看找点正确率——分数一半在动笔之前。
+          </div>
+          <RouterLink to="/read"
+            class="mt-3 inline-flex justify-center px-4 py-2.5 rounded-xl text-xs font-medium neu-sm text-c-bark">
+            {{ tasks.read.done ? '再读一则' : '去精读' }}
+          </RouterLink>
+        </div>
+
+        <!-- 积累一组 -->
+        <div data-testid="task-lexicon" class="rounded-2xl p-5 neu flex flex-col">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="px-2 py-0.5 rounded-full text-[11px] font-medium" style="background:#f7eddc;color:#9c6b2f">积累一组</span>
+            <span v-if="tasks.lexicon.done" class="text-[11px]" style="color:#4f7d5e">✓ 已收 {{ tasks.lexicon.count }} 条</span>
+          </div>
+          <div class="flex-1 text-xs text-c-muted leading-5">
+            从规范词库收藏一组表述；导出打印就是随身小册子。
+          </div>
+          <RouterLink to="/lexicon"
+            class="mt-3 inline-flex justify-center px-4 py-2.5 rounded-xl text-xs font-medium neu-sm text-c-bark">
+            {{ tasks.lexicon.done ? '再收一组' : '去词库' }}
+          </RouterLink>
+        </div>
       </div>
     </section>
 
@@ -138,15 +247,13 @@
         </div>
 
         <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
-          <!-- 微信入口：二维码在弹层里。首页不摊大图 —— 这页是"开始做事"的地方，
-               联系方式够得着就行，别抢主视觉。 -->
           <button @click="openWeChat()"
             class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs
               text-c-body neu-sm hover:text-c-bark transition-colors duration-300">
             <svg class="w-3.5 h-3.5 shrink-0" style="color: #07c160" viewBox="0 0 24 24"
               fill="currentColor" aria-hidden="true">
-              <path d="M9.1 3C5.2 3 2 5.7 2 9c0 1.9 1 3.6 2.7 4.7l-.7 2.2 2.5-1.3c.6.2 1.3.3 2 .3h.5c-.1-.4-.2-.9-.2-1.4 0-3 2.9-5.4 6.5-5.4h.5C15.1 5.4 12.4 3 9.1 3zM6.7 7.6a.9.9 0 110-1.8.9.9 0 010 1.8zm4.8 0a.9.9 0 110-1.8.9.9 0 010 1.8z"/>
-              <path d="M22 13.5c0-2.7-2.7-4.9-6-4.9s-6 2.2-6 4.9 2.7 4.9 6 4.9c.7 0 1.4-.1 2-.3l2.1 1.1-.6-1.8c1.5-.9 2.5-2.3 2.5-3.9zm-8-1.2a.8.8 0 110-1.6.8.8 0 010 1.6zm4 0a.8.8 0 110-1.6.8.8 0 010 1.6z"/>
+              <path d="M9.1 3C5.2 3 2 5.7 2 9c0 1.9 1 3.6 2.7 4.7l-.7 2.2 2.5-1.3c.6.2 1.3.3 2 .3h.5c-.1-.4-.2-.9-.2-1.4 0-3 2.9-5.4 6.5-5.4h.5C15.1 5.4 12.4 3 9.1 3zM6.7 7.6a.9.9 0 110-1.8.9.9 0 010-1.8zm4.8 0a.9.9 0 110-1.8.9.9 0 010-1.8z"/>
+              <path d="M22 13.5c0-2.7-2.7-4.9-6-4.9s-6 2.2-6 4.9 2.7 4.9 6 4.9c.7 0 1.4-.1 2-.3l2.1 1.1-.6-1.8c1.5-.9 2.5-2.3 2.5-3.9zm-8-1.2a.8.8 0 110-1.6.8.8 0 010-1.6zm4 0a.8.8 0 110-1.6.8.8 0 010-1.6z"/>
             </svg>
             加微信 / 交流群
           </button>
@@ -190,7 +297,12 @@ import { listAllRecords, fmtDateTime } from '../utils/record'
 import { getAll, STORES } from '../store/db'
 import { DIFFICULTY_LABEL } from '../data/builtin-questions'
 import { BUILTIN_POOL, REAL_EXAMS, SIM_QUESTIONS } from '../data/questions'
-import { pickDaily, practicedToday } from '../data/daily'
+import { pickDaily } from '../data/daily'
+import { buildProfile, weakestDimension } from '../utils/grading/profile'
+import {
+  EXAM_DATE_KEY, dayKey, daysUntil, loadReadResults, loadFavTimes,
+  activityDays, calcStreak, lastNDays, taskStatus,
+} from '../utils/workbench'
 import { APP_NAME, APP_SLOGAN } from '../data/site'
 import { AUTHOR } from '../data/author'
 import { CURRENT_VERSION } from '../data/changelog'
@@ -202,7 +314,10 @@ import { openWeChat } from '../utils/wechatPanel'
 const records = ref([])
 const mine = ref([])
 const todayQ = ref(null)
-const doneToday = ref(false)
+const readResults = ref([])
+const favTimes = ref({})
+const examDate = ref('')
+const examInput = ref('')
 
 const { ready: hasKey, probeReadiness } = useReadiness()
 
@@ -219,6 +334,45 @@ async function onCopyStamp() {
   if (ok) toast.success('已复制作者联系方式')
   else toast.warning('浏览器不允许自动复制，请手动记录')
 }
+
+/** 设目标日期：非法输入不写盘（daysUntil 返回 null 就是格式不对） */
+function saveExamDate() {
+  const v = (examInput.value || '').trim()
+  const n = daysUntil(v)
+  if (n === null) {
+    toast.warning('日期格式不对，用日期选择器选一下就好')
+    return
+  }
+  examDate.value = v
+  try { localStorage.setItem(EXAM_DATE_KEY, v) } catch { /* 存不下不拦流程 */ }
+}
+function clearExamDate() {
+  examDate.value = ''
+  examInput.value = ''
+  try { localStorage.removeItem(EXAM_DATE_KEY) } catch { /* 同上 */ }
+}
+
+const countdown = computed(() => (examDate.value ? daysUntil(examDate.value) : null))
+
+/** 打卡：三源并集 → 连击 + 近 14 天点阵 */
+const activity = computed(() => activityDays({
+  records: records.value,
+  readResults: readResults.value,
+  favTimes: favTimes.value,
+}))
+const streak = computed(() => calcStreak(activity.value))
+const last14 = computed(() => lastNDays(activity.value, 14))
+
+/** 三任务卡状态（纯派生，诚实） */
+const tasks = computed(() => taskStatus({
+  records: records.value,
+  readResults: readResults.value,
+  favTimes: favTimes.value,
+}))
+
+/** 画像速览（buildProfile 有 MIN_RECORDS 门槛，不足时 ready=false） */
+const profile = computed(() => buildProfile(records.value))
+const weakest = computed(() => weakestDimension(profile.value))
 
 const ACTIONS = [
   {
@@ -272,6 +426,14 @@ onMounted(async () => {
   mine.value = (await getAll(STORES.questions)).map((q) => ({ kind: '自建', ...q }))
   todayQ.value = pickDaily(pool.value)
   records.value = await listAllRecords()
-  doneToday.value = practicedToday(records.value)
+  readResults.value = loadReadResults()
+  favTimes.value = loadFavTimes()
+  try {
+    const saved = localStorage.getItem(EXAM_DATE_KEY)
+    if (saved && daysUntil(saved) !== null) {
+      examDate.value = saved
+      examInput.value = saved
+    }
+  } catch { /* 读不到就当没设过 */ }
 })
 </script>

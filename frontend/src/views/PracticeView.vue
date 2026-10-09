@@ -237,12 +237,17 @@
               <span class="transition-transform duration-200 group-open:rotate-90 inline-block mr-1">▸</span>
               <span class="font-medium">提纲</span>
               <span class="text-c-muted/70 ml-2">先列提纲再动笔</span>
-              <span v-if="outline.trim()" class="tnum ml-auto">{{ outline.length }} 字</span>
+              <span v-if="outline.trim()" class="tnum ml-auto" :style="outlineOver ? 'color:#b4552d' : ''">
+                {{ countChars(outline) }} 字<template v-if="outlineBudget"> / 建议 ≤ {{ outlineBudget }}</template>
+              </span>
             </summary>
             <textarea v-model="outline" rows="8"
               placeholder="立论一句 → 分论点（附材料依据）→ 结尾收束。&#10;提纲只存在本机，批改不看它。"
               class="w-full mt-1.5 px-3 py-2 rounded-xl text-xs neu-inset outline-none resize-y
                 text-c-body placeholder:text-c-muted leading-6" />
+            <p v-if="outlineOver" class="text-[11px] mt-1" style="color:#b4552d">
+              提纲写得太细了——骨架 ≤ 正文两成，细节留给方格纸。
+            </p>
           </details>
 
           <div v-if="loadedMeta.topics?.length" class="flex flex-wrap gap-1.5 mt-4 pt-4 border-t border-c-line">
@@ -415,7 +420,10 @@
                 <span class="text-xs font-medium text-c-body">提纲
                   <span class="text-c-muted/70 font-normal ml-1">先列提纲再动笔 · 批改不看它</span>
                 </span>
-                <span v-if="outline.trim()" class="text-xs text-c-muted tnum">{{ outline.length }} 字</span>
+                <span v-if="outline.trim()" class="text-xs text-c-muted tnum"
+                  :style="outlineOver ? 'color:#b4552d' : ''">
+                  {{ countChars(outline) }} 字<template v-if="outlineBudget"> / ≤ {{ outlineBudget }}</template>
+                </span>
               </div>
               <textarea v-model="outline"
                 placeholder="立论一句 → 分论点（附材料依据）→ 结尾收束。"
@@ -1433,6 +1441,17 @@ watch(outline, () => {
     /* 存不下就算了：提纲是辅助功能，不该因为它让做题流程报错 */
   }
 })
+
+// M8 规格增强二：提纲字数预算（纯本地，零成本）。
+// 口径：提纲是骨架不是正文，建议上限 = 题目字数上限的 20%（向下取整到 10，下限 20）。
+// 没限字数的题不显示建议（没依据不开口）；超限只提醒、不拦截。
+const outlineBudget = computed(() => {
+  const wl = Number(form.wordLimit)
+  if (!Number.isFinite(wl) || wl <= 0) return null
+  return Math.max(20, Math.floor((wl * 0.2) / 10) * 10)
+})
+const outlineOver = computed(() =>
+  outlineBudget.value != null && countChars(outline.value) > outlineBudget.value)
 
 let controller = null
 let timer = null
