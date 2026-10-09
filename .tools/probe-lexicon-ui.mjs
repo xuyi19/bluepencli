@@ -54,7 +54,7 @@ await new Promise((r) => setTimeout(r, 1200))
 
 // ── 1. 词条渲染 ──
 const itemCount = await page.evaluate(() => document.querySelectorAll('.lex-item').length)
-check('全量词条渲染（135 条）', itemCount === 135, `实际 ${itemCount}`)
+check('全量词条渲染（180 条）', itemCount === 180, `实际 ${itemCount}`)
 const themeCount = await page.evaluate(() => document.querySelectorAll('.lex-theme').length)
 check('九大主题分组齐全', themeCount === 9, `实际 ${themeCount}`)
 
@@ -65,7 +65,7 @@ await page.evaluate(() => {
 })
 await new Promise((r) => setTimeout(r, 300))
 const msCount = await page.evaluate(() => document.querySelectorAll('.lex-item').length)
-check('主题筛选（民生保障 15 条）', msCount === 15, `实际 ${msCount}`)
+check('主题筛选（民生保障 20 条）', msCount === 20, `实际 ${msCount}`)
 await page.evaluate(() => {
   const chip = [...document.querySelectorAll('button')].find((b) => b.textContent.includes('民生保障'))
   chip?.click()
