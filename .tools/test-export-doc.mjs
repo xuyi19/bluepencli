@@ -16,7 +16,7 @@ const req = createRequire(new URL('../frontend/package.json', import.meta.url))
 const { Packer } = req('docx')
 const { unzipSync, strFromU8 } = req('fflate')
 
-const { buildReviewDocument, buildLexiconDocument, buildReviewModel, buildLexiconModel, renderPdfBlob, locateQuote, tint, MARK_FILL } = await import(
+const { buildReviewDocument, buildLexiconDocument, buildReviewModel, buildLexiconModel, renderPdfBlob, locateQuote, tint, MARK_FILL, buildHtmlPreview } = await import(
   '../frontend/src/utils/exportDoc.js'
 )
 
@@ -177,6 +177,28 @@ async function docXml(doc) {
   ])
   const lex = await pdfText(await renderPdfBlob(lexNodes, '规范词库'))
   check('PDF：词库文档也走同一渲染器', lex.latin.startsWith('%PDF-') && lex.buf.length > 20000)
+
+  // ── 排版选项（2026-10-09）：黑白/彩色/字号/行距 + HTML 预览 ──
+  const { resolveStyle } = await import('../frontend/src/utils/exportStyle.js')
+  const stBw = resolveStyle(null)
+  check('样式：缺省=黑白小五标准行距', stBw.colorMode === false && stBw.sizeDelta === 0 && stBw.line === 260)
+  const stColor = resolveStyle({ color: 'color', size: 'normal', spacing: 'loose' })
+  check('样式：彩色+五号+宽松解析正确', stColor.colorMode === true && stColor.sizeDelta === 3 && stColor.line === 310)
+
+  const revNodes = buildReviewModel(reviewData)
+  const htmlBw = buildHtmlPreview(revNodes, { color: 'bw' })
+  check('预览：黑白模式荧光转下划线、无底色', htmlBw.includes('text-decoration:underline') && !htmlBw.includes('background:#FDE68A'))
+  const htmlColor = buildHtmlPreview(
+    buildReviewModel({ ...reviewData, marks: { material: [], answer: [{ text: '压实各级责任', color: 'yellow' }] } }),
+    { color: 'color' },
+  )
+  check('预览：彩色模式荧光是底色', htmlColor.includes('background:#FDE68A'))
+  check('预览：黑白模式无荧光底色（同一份模型对照）', !htmlBw.includes('background:#FDE68A'))
+  check('预览：文本转义（& < > 不裸奔）', buildHtmlPreview(buildLexiconModel([{ key: 't', name: 'A<B>&C', items: [{ formal: 'x', plain: 'y' }] }]), null).includes('A&lt;B&gt;&amp;C'))
+  const htmlBig = buildHtmlPreview(revNodes, { size: 'normal' })
+  const sizeBw = (htmlBw.match(/font-size:([\d.]+)pt/) || [])[1]
+  const sizeBig = (htmlBig.match(/font-size:([\d.]+)pt/) || [])[1]
+  check('预览：五号比小五大 1.5pt', Number(sizeBig) === Number(sizeBw) + 1.5, `bw=${sizeBw} big=${sizeBig}`)
 }
 
 console.log(`\n结果：${pass} 通过 / ${fail} 失败`)

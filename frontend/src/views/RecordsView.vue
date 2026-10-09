@@ -31,23 +31,10 @@
         ← 返回列表
       </button>
       <div class="flex items-center gap-3 min-w-0">
-        <span v-if="exportState" class="text-xs max-w-[16rem] truncate"
-          :style="{ color: exportState.startsWith('err') ? '#b4552d' : '#4f7d5e' }"
-          :title="exportState.startsWith('ok:') ? exportState.slice(3) : exportState">
-          {{ exportState === 'busy' ? '正在生成文档…'
-            : exportState.startsWith('err') ? '导出失败：' + exportState.slice(4)
-            : exportState === 'ok:web' ? '已开始下载'
-            : '已保存：' + exportState.slice(3) }}
-        </span>
-        <button @click="doExport('docx')" :disabled="exportState === 'busy'"
+        <button v-if="detail" @click="openExport"
           class="px-4 h-8 rounded-xl text-xs font-medium neu-sm text-c-bark
-            hover:translate-y-px transition-transform disabled:opacity-40 shrink-0">
-          ⬇ 下载 Word
-        </button>
-        <button @click="doExport('pdf')" :disabled="exportState === 'busy'"
-          class="px-4 h-8 rounded-xl text-xs font-medium neu-sm text-c-bark
-            hover:translate-y-px transition-transform disabled:opacity-40 shrink-0">
-          ⬇ 下载 PDF
+            hover:translate-y-px transition-transform shrink-0">
+          ⬇ 导出 / 打印
         </button>
         <button v-if="detail" @click="del(detail.id)"
           class="text-xs text-c-muted hover:text-[#b4552d] shrink-0">
@@ -287,6 +274,13 @@
           正在读取详情…
         </div>
     </div>
+
+    <!-- 排版导出弹窗：字体/字号/行距/配色 + 实时预览，Word/PDF 双下载 -->
+    <ExportOptionsDialog v-if="showExport" title="练习复盘"
+      :build="() => buildReviewModel(exportData)"
+      :do-word="(st) => exportReview(exportData, st)"
+      :do-pdf="(st) => exportReviewPdf(exportData, st)"
+      @close="showExport = false" />
   </div>
 </template>
 
@@ -307,7 +301,8 @@ import {
   countChars,
   fmtDateTime,
 } from '../utils/record'
-import { exportReview, exportReviewPdf } from '../utils/exportDoc'
+import { buildReviewModel, exportReview, exportReviewPdf } from '../utils/exportDoc'
+import ExportOptionsDialog from '../components/ExportOptionsDialog.vue'
 
 const route = useRoute()
 const records = ref([])
@@ -381,29 +376,25 @@ async function del(id) {
 // ── M9 导出复盘文档（Word / PDF，2026-10-08 起 PDF 与 Word 同一份内容模型）──
 // 网页版直接下载；桌面版写到设置里的导出目录（分类「练习复盘」）。
 // 荧光标记按题存（bp-marks:<qid>），老记录没存 questionId 就如实不带标记导出。
-const exportState = ref('')
+// 排版导出弹窗（2026-10-09）：预览与字体/字号/行距/配色选项在 ExportOptionsDialog
+const showExport = ref(false)
+const exportMarks = ref({ material: [], answer: [] })
 
-async function doExport(format = 'docx') {
+function openExport() {
   const d = detail.value
-  if (!d || exportState.value === 'busy') return
-  exportState.value = 'busy'
-  try {
-    let marks = { material: [], answer: [] }
-    if (d.questionId) {
-      try {
-        marks = JSON.parse(localStorage.getItem(`bp-marks:${d.questionId}`) || 'null') || marks
-      } catch { /* 坏档当没标记，导出不因此失败 */ }
-    }
-    const res = format === 'pdf'
-      ? await exportReviewPdf({ ...d, marks })
-      : await exportReview({ ...d, marks })
-    exportState.value = res.ok
-      ? (res.way === 'desktop' ? `ok:${res.path}` : 'ok:web')
-      : `err:${res.error || '未知错误'}`
-  } catch (e) {
-    exportState.value = `err:${e?.message || e}`
+  if (!d) return
+  // 荧光标记按题存（bp-marks:<qid>），老记录没存 questionId 就如实不带标记导出
+  exportMarks.value = { material: [], answer: [] }
+  if (d.questionId) {
+    try {
+      exportMarks.value = JSON.parse(localStorage.getItem('bp-marks:' + d.questionId) || 'null') || exportMarks.value
+    } catch { /* 坏档当没标记 */ }
   }
+  showExport.value = true
 }
+
+const exportData = computed(() => (detail.value ? { ...detail.value, marks: exportMarks.value } : null))
+
 
 watch(() => route.query.id, load)
 onMounted(load)

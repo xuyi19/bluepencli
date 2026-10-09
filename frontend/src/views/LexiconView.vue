@@ -16,21 +16,9 @@
         </p>
       </div>
       <div class="flex items-center gap-2">
-        <span v-if="exportState" class="text-xs max-w-[16rem] truncate"
-          :style="{ color: exportState.startsWith('err') ? '#b4552d' : '#4f7d5e' }"
-          :title="exportState.startsWith('ok:') ? exportState.slice(3) : exportState">
-          {{ exportState === 'busy' ? '正在生成文档…'
-            : exportState.startsWith('err') ? '导出失败：' + exportState.slice(4)
-            : exportState === 'ok:web' ? '已开始下载'
-            : '已保存：' + exportState.slice(3) }}
-        </span>
-        <button @click="doExport('pdf')"
+        <button @click="showExport = true"
           class="px-4 py-2 rounded-xl text-xs font-medium neu-sm text-c-bark hover:translate-y-px transition-transform">
-          {{ exportState === 'busy' ? '正在生成…' : '⬇ 导出 PDF' }}
-        </button>
-        <button @click="doExport('docx')"
-          class="px-4 py-2 rounded-xl text-xs font-medium neu-sm text-c-bark hover:translate-y-px transition-transform">
-          {{ exportState === 'busy' ? '正在生成…' : '⬇ 导出 Word' }}
+          ⬇ 导出 / 打印
         </button>
         <button @click="printNow"
           class="px-4 py-2 rounded-xl text-xs font-medium neu-sm text-c-bark hover:translate-y-px transition-transform">
@@ -98,6 +86,13 @@
         没有匹配的词条 —— 换个词试试
       </div>
     </div>
+
+    <!-- 排版导出弹窗：导出「当前筛选」，字体/字号/行距/配色可选 + 实时预览 -->
+    <ExportOptionsDialog v-if="showExport" title="规范词库"
+      :build="() => buildLexiconModel(groups, lexOpts)"
+      :do-word="(st) => exportLexicon(groups, lexOpts, st)"
+      :do-pdf="(st) => exportLexiconPdf(groups, lexOpts, st)"
+      @close="showExport = false" />
   </div>
 </template>
 
@@ -113,7 +108,8 @@
 //     素材收藏是跨题的长期资产。
 import { computed, ref, reactive } from 'vue'
 import { LEXICON_THEMES, LEXICON_ITEMS, LEXICON_COUNT } from '../data/lexicon'
-import { exportLexicon, exportLexiconPdf } from '../utils/exportDoc'
+import { buildLexiconModel, exportLexicon, exportLexiconPdf } from '../utils/exportDoc'
+import ExportOptionsDialog from '../components/ExportOptionsDialog.vue'
 
 const themes = LEXICON_THEMES
 const favOnly = ref(false)
@@ -168,22 +164,9 @@ function printNow() {
 
 // ── M9 导出 Word / PDF（2026-10-08；同日 PDF 与 Word 合并到同一份内容模型）──
 // 导出「当前筛选」（收藏 tab / 主题勾选 / 搜索都生效），桌面版写进导出目录的「素材本」分类。
-const exportState = ref('')
-
-async function doExport(format = 'docx') {
-  if (exportState.value === 'busy') return
-  exportState.value = 'busy'
-  try {
-    const res = format === 'pdf'
-      ? await exportLexiconPdf(groups.value, { favOnly: favOnly.value })
-      : await exportLexicon(groups.value, { favOnly: favOnly.value })
-    exportState.value = res.ok
-      ? (res.way === 'desktop' ? `ok:${res.path}` : 'ok:web')
-      : `err:${res.error || '未知错误'}`
-  } catch (e) {
-    exportState.value = `err:${e?.message || e}`
-  }
-}
+// 排版导出弹窗（2026-10-09）：导出「当前筛选」（收藏 tab / 主题勾选 / 搜索都生效）
+const showExport = ref(false)
+const lexOpts = computed(() => ({ favOnly: favOnly.value }))
 </script>
 
 <style scoped>

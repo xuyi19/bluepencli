@@ -113,6 +113,16 @@ export function errorTypeLabel(id) {
 }
 
 /**
+ * 批注类型的展示名：LLM 输出的 type 可能是 taxonomy id（'expression'），
+ * 也可能是中文自由词（'亮点'/'问题'）。id → label，非 id 原样透传。
+ * （errorTypeLabel 会把未知值兜成「其他问题」，不适合这里。）
+ */
+export function annotationTypeLabel(type) {
+  if (!type) return '批注'
+  return BY_ID.has(type) ? BY_ID.get(type).label : type
+}
+
+/**
  * 归一化规则：**按顺序**匹配，先命中先算。
  *
  * 顺序是这里唯一容易出错的地方，两条原则：

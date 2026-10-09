@@ -99,11 +99,19 @@ await page.evaluate(() => localStorage.removeItem('bp-export-dir'))
 // headless 的 CDP 下载落盘不稳定 → 劫持 createObjectURL 拿到 blob 本体，
 // 验「点导出 → 生成合法 docx（zip PK 头、体积合理、文件名对）」——
 // 磁盘落盘是浏览器/桌面的职责，不属于本页要测的范围。
+// 2026-10-09：导出改走「排版选项弹窗」（⬇ 导出/打印 → 选项 + ⬇ 下载 Word）。
 await page.goto(`${BASE}/#/lexicon`, { waitUntil: 'networkidle2' })
 await new Promise((r) => setTimeout(r, 800))
 await page.evaluate(() => {
-  const btn = [...document.querySelectorAll('button')].find((b) => b.textContent.includes('导出 Word'))
-  btn?.click()
+  ;[...document.querySelectorAll('button')].find((b) => b.textContent.includes('导出 / 打印'))?.click()
+})
+await new Promise((r) => setTimeout(r, 600))
+const dialogOpen = await page.evaluate(() =>
+  [...document.querySelectorAll('div')].some((d) => d.className?.includes?.('fixed inset-0') && d.innerText.includes('排版与预览')),
+)
+check('点导出打开排版选项弹窗（预览在）', dialogOpen)
+await page.evaluate(() => {
+  ;[...document.querySelectorAll('button')].find((b) => b.textContent.includes('下载 Word'))?.click()
 })
 // docx 动态 import + 打包生成要一点时间
 let dl = null
@@ -120,6 +128,22 @@ check('点击导出生成 docx blob（zip PK 头）', !!dl && dl.head === 'PK' &
 check('文件名带「规范词库」与日期标签', !!dl && /规范词库-全册-\d{8}-\d{4}\.docx/.test(dl.fileName || ''), dl?.fileName)
 const statusText = await page.evaluate(() => document.body.innerText.includes('已开始下载'))
 check('界面上显示「已开始下载」反馈', statusText)
+
+// ── 2b. 排版选项：预览真渲染 + 选项持久化 ──
+const preview = await page.evaluate(() => {
+  const box = [...document.querySelectorAll('div')].find((d) => d.className?.includes?.('max-w-[620px]'))
+  return { has: !!box, paras: box ? box.querySelectorAll('p').length : 0, pt: box ? box.innerHTML.includes('pt') : false }
+})
+check('预览真渲染出段落（内联样式含 pt 字号）', preview.has && preview.paras > 3 && preview.pt, JSON.stringify(preview))
+await page.evaluate(() => {
+  ;[...document.querySelectorAll('button')].find((b) => b.textContent.includes('楷体'))?.click()
+})
+await new Promise((r) => setTimeout(r, 200))
+const styleSaved = await page.evaluate(() => {
+  try { return JSON.parse(localStorage.getItem('bp-export-style') || 'null') } catch { return null }
+})
+check('字体选项点楷体即持久化（bp-export-style）', styleSaved?.font === 'kai', JSON.stringify(styleSaved))
+await page.evaluate(() => localStorage.removeItem('bp-export-style'))
 
 // ── 3. M2 打印回归：print 题头仍在 ──
 const printHead = await page.evaluate(() => !!document.querySelector('.print-head'))

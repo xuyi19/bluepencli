@@ -50,6 +50,7 @@
 <script setup>
 import { computed } from 'vue'
 import { TEACHERS } from '../agents/teachers'
+import { annotationTypeLabel } from '../data/error-taxonomy'
 import { colorById, findRange, normalizeHighlight, locateQuote } from '../utils/highlight'
 
 const props = defineProps({
@@ -86,7 +87,7 @@ const marks = computed(() => {
         teacherId: r.teacherId,
         teacherName: m.name,
         color: m.color,
-        type: a.type || '问题',
+        type: annotationTypeLabel(a.type),
         comment: a.comment || '',
         fix: a.fix || '',
       }

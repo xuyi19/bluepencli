@@ -52,14 +52,14 @@ await page.evaluate(() => { [...document.querySelectorAll('.grid > div')].find((
 await new Promise(r => setTimeout(r, 1200))
 s = await page.evaluate(() => ({
   back: [...document.querySelectorAll('button')].some((b) => b.textContent.includes('返回列表')),
-  downloads: [...document.querySelectorAll('button')].filter((b) => b.textContent.includes('下载')).length,
+  exportBtn: [...document.querySelectorAll('button')].some((b) => b.textContent.includes('导出 / 打印')),
   textW: (() => {
     const p = document.querySelector('.max-w-4xl .whitespace-pre-wrap')
     return p ? p.getBoundingClientRect().width : 0
   })(),
 }))
 check('详情：返回列表按钮', s.back)
-check('详情：下载 Word/PDF', s.downloads >= 2)
+check('详情：导出 / 打印入口', s.exportBtn)
 check('详情：长文本宽度 >500px（竖排已修）', s.textW > 500, `w=${Math.round(s.textW)}`)
 await page.screenshot({ path: 'E:/code/bluepencil/.shots/records-detail.png' })
 await page.evaluate(() => { [...document.querySelectorAll('button')].find((b) => b.textContent.includes('返回列表'))?.click() })

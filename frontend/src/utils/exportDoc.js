@@ -29,6 +29,8 @@
 import { HIGHLIGHT_COLORS, splitByMarks, normalizeHighlight, findRange, locateQuote } from './highlight'
 import { materialBlocks } from './materialBlocks'
 import { TEACHERS } from '../agents/teachers'
+import { annotationTypeLabel } from '../data/error-taxonomy'
+import { resolveStyle } from './exportStyle'
 
 // 批注引文定位与屏幕端 AnnotatedAnswer 共用同一实现（含「」退让），这里只转出口
 export { locateQuote }
@@ -137,7 +139,8 @@ function fmtCn(ts) {
 const GRAY_MAP = { '1F3A2E': '2B2B2B', '5B5B4A': '5B5B5B', '8A8578': '8A8A8A', 'B0AA9A': 'AAAAAA' }
 const GRAY_KEEP = new Set(['2B2B2B', '3A3A3A', '4A4A4A', '8A8A8A', 'AAAAAA', '5B5B5B'])
 
-function toPrint(nodes) {
+function toPrint(nodes, colorMode = false) {
+  if (colorMode) return nodes // 彩色模式：模型即所得（用户选「彩色」给屏幕阅读/彩打）
   return nodes.map((n) => ({
     ...n,
     runs: n.runs.map(({ fill, ...r }) => ({
@@ -230,7 +233,7 @@ export function buildReviewModel(data) {
       const info = {
         teacherName: meta.name,
         colorHex: meta.color,
-        type: a.type || '问题',
+        type: annotationTypeLabel(a.type),
         comment: a.comment || '',
         fix: a.fix || '',
       }
@@ -331,7 +334,7 @@ export function buildReviewModel(data) {
         R({ text: `〔${a.teacherName}·${a.type}〕`, size: NOTE_SIZE, color: '4A4A4A' }),
         R({ text: a.comment || '', size: NOTE_SIZE, color: '3A3A3A' }),
         ...(a.fix ? [R({ text: `　改：${a.fix}`, size: NOTE_SIZE, color: '3A3A3A' })] : []),
-      ], { after: 60 }))
+      ], { after: 40 }))
     }
     if (unlocated.length) {
       nodes.push(mkNode([R({ text: '以下批注未能定位到原文片段（AI 引句与作答有出入）：', color: '8A8578', size: 14 })], { before: 120, after: 60 }))
@@ -339,7 +342,7 @@ export function buildReviewModel(data) {
         nodes.push(mkNode([
           R({ text: `■ ${a.teacherName}·${a.type}　`, bold: true, size: 14 }),
           R({ text: a.comment + (a.fix ? '　改：' + a.fix : ''), size: 16, color: '4A4A4A' }),
-        ], { after: 60 }))
+        ], { after: 40 }))
       }
     }
   }
@@ -425,39 +428,40 @@ export function buildLexiconModel(themes, { favOnly = false, favSet = null } = {
 
 // ─────────────────────────── Word 渲染器（docx） ───────────────────────────
 
-export async function buildReviewDocument(data) {
+export async function buildReviewDocument(data, style = null) {
   const { Document } = await import('docx')
-  return renderDocxDocument(buildReviewModel(data))
+  return renderDocxDocument(buildReviewModel(data), style)
 }
 
-export async function buildLexiconDocument(themes, opts = {}) {
+export async function buildLexiconDocument(themes, opts = {}, style = null) {
   const { Document } = await import('docx')
-  return renderDocxDocument(buildLexiconModel(themes, opts))
+  return renderDocxDocument(buildLexiconModel(themes, opts), style)
 }
 
-async function renderDocxDocument(nodes) {
+async function renderDocxDocument(nodes, style = null) {
+  const st = resolveStyle(style)
   const { Document, Paragraph, TextRun, BorderStyle } = await import('docx')
-  const children = toPrint(nodes).map((node) => {
+  const children = toPrint(nodes, st.colorMode).map((node) => {
     const runs = node.runs.map((r) =>
       new TextRun({
         text: r.text,
-        size: r.size || BODY_SIZE,
+        size: (r.size || BODY_SIZE) + st.sizeDelta,
         color: r.color || '2B2B2B',
         ...(r.bold ? { bold: true } : {}),
         ...(r.underline ? { underline: {} } : {}),
-        font: '宋体',
+        font: st.font.docx,
       })
     )
     return new Paragraph({
       children: runs,
-      spacing: { before: node.before, after: node.after, line: 280 },
+      spacing: { before: node.before, after: node.after, line: st.line },
       ...(node.border
         ? { border: { bottom: { style: BorderStyle.SINGLE, size: 4, color: 'C9C4B4' } } }
         : {}),
     })
   })
   return new Document({
-    styles: { default: { document: { run: { font: '宋体', size: BODY_SIZE, color: '2B2B2B' }, paragraph: { spacing: { line: 280 } } } } },
+    styles: { default: { document: { run: { font: st.font.docx, size: BODY_SIZE + st.sizeDelta, color: '2B2B2B' }, paragraph: { spacing: { line: st.line } } } } },
     sections: [{ properties: { page: { margin: { top: 1000, bottom: 1000, left: 1100, right: 1100 } } }, children }],
   })
 }
@@ -499,25 +503,27 @@ async function ensurePdfFont() {
   pdfFontRegistered = true
 }
 
-export async function renderPdfBlob(nodes, title) {
+export async function renderPdfBlob(nodes, title, style = null) {
   await ensurePdfFont()
+  const st = resolveStyle(style)
   const R = await import('@react-pdf/renderer')
   const { createElement: h } = await import('react')
   const pt = (twip) => (twip || 0) / 20
 
-  const children = toPrint(nodes).map((node, ni) => {
+  const children = toPrint(nodes, st.colorMode).map((node, ni) => {
     const runs = node.runs.map((r, ri) =>
       h(R.Text, {
         key: ri,
         style: {
           color: r.color ? `#${r.color}` : '#2B2B2B',
           textDecoration: r.underline ? 'underline' : undefined,
+          backgroundColor: st.colorMode && r.fill ? `#${r.fill}` : undefined,
           fontWeight: r.bold ? 700 : 400,
-          fontSize: (r.size || BODY_SIZE) / 2,
+          fontSize: (r.size || BODY_SIZE) / 2 + st.sizeDelta / 2,
         },
       }, r.text)
     )
-    const spacing = { marginTop: pt(node.before), marginBottom: pt(node.after), lineHeight: 1.45 }
+    const spacing = { marginTop: pt(node.before), marginBottom: pt(node.after), lineHeight: st.pdfLine }
     if (node.border) {
       // 标题：底下一条分隔线（Word 端是段落 bottom border）
       return h(R.View, {
@@ -552,9 +558,9 @@ export async function renderPdfBlob(nodes, title) {
 // ─────────────────────────── 高层入口 ───────────────────────────
 
 /** 复盘 · Word */
-export async function exportReview(data) {
+export async function exportReview(data, style = null) {
   const { Packer } = await import('docx')
-  const doc = await buildReviewDocument(data)
+  const doc = await buildReviewDocument(data, style)
   const blob = await Packer.toBlob(doc)
   const name = safeName(`复盘-${data.title || '练习'}-${dateTag(data.createdAt)}`) + '.docx'
   const res = await exportBlob(name, '练习复盘', blob)
@@ -562,17 +568,17 @@ export async function exportReview(data) {
 }
 
 /** 复盘 · PDF（内容与 Word 同一份模型，样式等价） */
-export async function exportReviewPdf(data) {
-  const blob = await renderPdfBlob(buildReviewModel(data), `复盘 · ${data.title || '练习'}`)
+export async function exportReviewPdf(data, style = null) {
+  const blob = await renderPdfBlob(buildReviewModel(data), `复盘 · ${data.title || '练习'}`, style)
   const name = safeName(`复盘-${data.title || '练习'}-${dateTag(data.createdAt)}`) + '.pdf'
   const res = await exportBlob(name, '练习复盘', blob)
   return { ...res, fileName: name }
 }
 
 /** 词库 · Word */
-export async function exportLexicon(themes, opts = {}) {
+export async function exportLexicon(themes, opts = {}, style = null) {
   const { Packer } = await import('docx')
-  const doc = await buildLexiconDocument(themes, opts)
+  const doc = await buildLexiconDocument(themes, opts, style)
   const blob = await Packer.toBlob(doc)
   const scope = opts.favOnly ? '我的收藏' : '全册'
   const name = safeName(`规范词库-${scope}-${dateTag()}`) + '.docx'
@@ -581,10 +587,45 @@ export async function exportLexicon(themes, opts = {}) {
 }
 
 /** 词库 · PDF */
-export async function exportLexiconPdf(themes, opts = {}) {
+export async function exportLexiconPdf(themes, opts = {}, style = null) {
   const scope = opts.favOnly ? '我的收藏' : '全册'
-  const blob = await renderPdfBlob(buildLexiconModel(themes, opts), `蓝笔申论 · 规范词库（${scope}）`)
+  const blob = await renderPdfBlob(buildLexiconModel(themes, opts), `蓝笔申论 · 规范词库（${scope}）`, style)
   const name = safeName(`规范词库-${scope}-${dateTag()}`) + '.pdf'
   const res = await exportBlob(name, '素材本', blob)
   return { ...res, fileName: name }
+}
+
+// ─────────────────────────── HTML 预览 ───────────────────────────
+// 排版弹窗里的「近似所见即所得」：同一份内容模型 + 同一套 resolveStyle，
+// 渲染成内联样式 HTML。只求字号/行距/黑白/底色与成品一致——
+// Word 的字体渲染、PDF 的分页细节以实际文件为准（弹窗里有注明）。
+
+function escHtml(t) {
+  return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
+export function buildHtmlPreview(nodes, style = null) {
+  const st = resolveStyle(style)
+  const pt = (twip) => (twip || 0) / 20
+  const printed = toPrint(nodes, st.colorMode)
+  const paras = printed
+    .map((node) => {
+      const runs = node.runs
+        .map((r) => {
+          const size = ((r.size || BODY_SIZE) + st.sizeDelta) / 2
+          const css = [
+            `font-size:${size}pt`,
+            `color:#${r.color || '2B2B2B'}`,
+            r.bold ? 'font-weight:700' : '',
+            r.underline ? 'text-decoration:underline' : '',
+            r.fill && st.colorMode ? `background:#${r.fill}` : '',
+          ].filter(Boolean).join(';')
+          return `<span style="${css}">${escHtml(r.text)}</span>`
+        })
+        .join('')
+      const border = node.border ? 'border-bottom:1px solid #C9C4B4;padding-bottom:2pt;' : ''
+      return `<p style="margin:${pt(node.before)}pt 0 ${pt(node.after)}pt;line-height:${st.pdfLine};${border}">${runs || '&nbsp;'}</p>`
+    })
+    .join('\n')
+  return `<div style="font-family:${st.font.css};color:#2B2B2B">${paras}</div>`
 }

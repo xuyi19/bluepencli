@@ -33,6 +33,14 @@ export const LEXICON_THEMES = [
       { id: 'lex-ms-06', formal: '健全基本公共服务体系', plain: '上学、看病、养老这些服务要成体系' },
       { id: 'lex-ms-07', formal: '坚持尽力而为、量力而行', plain: '民生实事要办，但不能乱开空头支票' },
       { id: 'lex-ms-08', formal: '兜住兜准兜牢民生底线', plain: '该保的人一个不能漏，钱要花在刀刃上' },
+
+      { id: 'lex-ms-09', formal: '完善"一老一小"服务体系', plain: '老人和孩子的难处要有人专门管' },
+      { id: 'lex-ms-10', formal: '推进健康中国建设', plain: '让群众看得上病、看得好病' },
+      { id: 'lex-ms-11', formal: '坚持房子是用来住的、不是用来炒的定位', plain: '房子是住的不是炒的' },
+      { id: 'lex-ms-12', formal: '加快补齐农村基础设施和公共服务短板', plain: '村里的路、水、网、学校、医院不能差城里太多' },
+      { id: 'lex-ms-13', formal: '健全分层分类的社会救助体系', plain: '困难群众按困难程度有人拉一把' },
+      { id: 'lex-ms-14', formal: '发展普惠托育服务', plain: '送孩子上托班不再难、不再贵' },
+      { id: 'lex-ms-15', formal: '扎实推进老旧小区改造', plain: '老房子装电梯、修管网、添车位' },
     ],
   },
   {
@@ -47,6 +55,14 @@ export const LEXICON_THEMES = [
       { id: 'lex-kj-06', formal: '加快科技成果转化应用', plain: '实验室的成果要变成生产线上的产品' },
       { id: 'lex-kj-07', formal: '营造良好创新生态', plain: '让创新者有平台、有回报、失败也被宽容' },
       { id: 'lex-kj-08', formal: '培育壮大新质生产力', plain: '用新技术、新模式催生新产业' },
+
+      { id: 'lex-kj-09', formal: '实现高水平科技自立自强', plain: '关键技术要自己说了算' },
+      { id: 'lex-kj-10', formal: '加强基础研究和原始创新', plain: '甘坐冷板凳，干从 0 到 1 的事' },
+      { id: 'lex-kj-11', formal: '统筹推进教育科技人才体制机制一体改革', plain: '出人才、出成果要一盘棋' },
+      { id: 'lex-kj-12', formal: '完善科技人才评价和激励机制', plain: '让搞科研的人有尊严、有回报' },
+      { id: 'lex-kj-13', formal: '支持科技型中小企业创新发展', plain: '小企业搞研发要有帮扶' },
+      { id: 'lex-kj-14', formal: '前瞻布局未来产业', plain: '下一个风口要提前占位' },
+      { id: 'lex-kj-15', formal: '促进数字经济与实体经济深度融合', plain: '网上的技术要落到工厂车间' },
     ],
   },
   {
@@ -61,6 +77,14 @@ export const LEXICON_THEMES = [
       { id: 'lex-dj-06', formal: '密切党群干群关系', plain: '干部要跟群众坐一条板凳' },
       { id: 'lex-dj-07', formal: '健全干部担当作为激励和保护机制', plain: '让实干的人不吃亏、敢干事' },
       { id: 'lex-dj-08', formal: '力戒形式主义、官僚主义', plain: '别让报表、留痕把实干压垮' },
+
+      { id: 'lex-dj-09', formal: '持续为基层减负赋能', plain: '别让基层干部陷在文山会海里' },
+      { id: 'lex-dj-10', formal: '树牢造福人民的政绩观', plain: '干事为了老百姓，不是为了个人升迁' },
+      { id: 'lex-dj-11', formal: '勇于自我革命', plain: '敢于直面并改正自己的问题' },
+      { id: 'lex-dj-12', formal: '加强年轻干部实践锻炼', plain: '年轻干部要到吃劲岗位上练' },
+      { id: 'lex-dj-13', formal: '健全全面从严治党体系', plain: '管党治党要有章法、成体系' },
+      { id: 'lex-dj-14', formal: '推进政治监督具体化、精准化、常态化', plain: '监督要落到具体事上，不能空转' },
+      { id: 'lex-dj-15', formal: '坚持严管和厚爱结合', plain: '对干部既要有要求，也要有温度' },
     ],
   },
   {
@@ -75,6 +99,14 @@ export const LEXICON_THEMES = [
       { id: 'lex-fz-06', formal: '着力扩大国内需求', plain: '让老百姓愿意消费、消费得起' },
       { id: 'lex-fz-07', formal: '推动经济发展质量变革、效率变革、动力变革', plain: '发展要讲质效，不能靠拼资源' },
       { id: 'lex-fz-08', formal: '构建高水平社会主义市场经济体制', plain: '市场能办的交给市场，政府管该管的' },
+
+      { id: 'lex-fz-09', formal: '因地制宜发展新质生产力', plain: '有啥条件干啥事，不一哄而上' },
+      { id: 'lex-fz-10', formal: '建设全国统一大市场', plain: '不能搞地方保护、各搭各的小圈子' },
+      { id: 'lex-fz-11', formal: '统筹发展和安全', plain: '发展要快，风险要防得住' },
+      { id: 'lex-fz-12', formal: '提升产业链供应链韧性和安全水平', plain: '断供卡脖子要有备手' },
+      { id: 'lex-fz-13', formal: '推进以县城为重要载体的新型城镇化建设', plain: '县城承接进城农民，公共服务跟上' },
+      { id: 'lex-fz-14', formal: '培育壮大经营主体', plain: '让市场主体多起来、强起来' },
+      { id: 'lex-fz-15', formal: '持续优化市场化法治化国际化营商环境', plain: '让企业愿意来、留得住、干得好' },
     ],
   },
   {
@@ -89,6 +121,14 @@ export const LEXICON_THEMES = [
       { id: 'lex-st-06', formal: '健全生态保护补偿机制', plain: '谁保护环境，谁就该得实惠' },
       { id: 'lex-st-07', formal: '促进人与自然和谐共生', plain: '发展不能跟自然对着干' },
       { id: 'lex-st-08', formal: '协同推进降碳、减污、扩绿、增长', plain: '减碳、治污、添绿、发展四件事一起干' },
+
+      { id: 'lex-st-09', formal: '全面落实河湖长制、林长制', plain: '每条河、每片林都有人负责' },
+      { id: 'lex-st-10', formal: '统筹山水林田湖草沙一体化保护和系统治理', plain: '山、水、林、田是一个整体，不能头疼医头' },
+      { id: 'lex-st-11', formal: '发展生态旅游等绿色富民产业', plain: '好山好水能变成老百姓的票子' },
+      { id: 'lex-st-12', formal: '倡导绿色低碳的生产生活方式', plain: '少用一次性用品、多坐公交' },
+      { id: 'lex-st-13', formal: '推动能耗双控向碳排放双控转变', plain: '管排碳比只管用电用煤更科学' },
+      { id: 'lex-st-14', formal: '加强生物多样性保护', plain: '珍稀动植物不能在我们手里没了' },
+      { id: 'lex-st-15', formal: '深入实施主体功能区战略', plain: '该开发的地方开发，该保护的地方保护' },
     ],
   },
   {
@@ -103,6 +143,14 @@ export const LEXICON_THEMES = [
       { id: 'lex-ls-06', formal: '打好种业振兴行动攻坚战', plain: '种子不能被人卡脖子' },
       { id: 'lex-ls-07', formal: '坚决遏制耕地"非农化"、有效防止"非粮化"', plain: '好地必须用来种粮' },
       { id: 'lex-ls-08', formal: '树立大食物观', plain: '肉蛋菜果水产都要稳产保供' },
+
+      { id: 'lex-ls-09', formal: '加快高标准农田建设', plain: '土地平整连片、旱涝保收' },
+      { id: 'lex-ls-10', formal: '健全粮食产销区省际横向利益补偿机制', plain: '产粮大省吃了亏，要有制度性补偿' },
+      { id: 'lex-ls-11', formal: '深入开展粮食节约行动', plain: '从餐桌到田间都别浪费' },
+      { id: 'lex-ls-12', formal: '培育壮大新型农业经营主体', plain: '种粮大户、合作社、家庭农场唱主角' },
+      { id: 'lex-ls-13', formal: '强化农业科技和装备支撑', plain: '良种、农机顶大用' },
+      { id: 'lex-ls-14', formal: '保障农资供应和价格稳定', plain: '种子化肥不能断供、不能乱涨价' },
+      { id: 'lex-ls-15', formal: '统筹做好粮食和重要农产品保供稳价', plain: '米袋子、菜篮子要稳得住' },
     ],
   },
   {
@@ -117,6 +165,14 @@ export const LEXICON_THEMES = [
       { id: 'lex-fz2-06', formal: '把权力关进制度的笼子', plain: '政府权力要受监督' },
       { id: 'lex-fz2-07', formal: '完善行政执法监督体系', plain: '谁执法，谁就要被监督' },
       { id: 'lex-fz2-08', formal: '引导群众依法表达诉求', plain: '有事走法律途径，不靠闹' },
+
+      { id: 'lex-fz2-09', formal: '健全重大行政决策程序制度', plain: '政府大事不能拍脑袋' },
+      { id: 'lex-fz2-10', formal: '全面推行行政执法公示、全过程记录、重大执法决定法制审核制度', plain: '执法要亮明身份、全程留痕' },
+      { id: 'lex-fz2-11', formal: '持续优化政务服务', plain: '群众和企业办事少跑腿、材料少交' },
+      { id: 'lex-fz2-12', formal: '健全现代公共法律服务体系', plain: '找律师、办公证、要法律援助有地方' },
+      { id: 'lex-fz2-13', formal: '坚持严格执法、公正司法、全民守法', plain: '执行、审判、守法三个环节都要硬' },
+      { id: 'lex-fz2-14', formal: '完善人民调解、行政调解、司法调解联动工作机制', plain: '调解要成体系，别各管一段' },
+      { id: 'lex-fz2-15', formal: '依法保护民营企业产权和企业家权益', plain: '民企的合法财产不能随便动' },
     ],
   },
   {
@@ -131,6 +187,14 @@ export const LEXICON_THEMES = [
       { id: 'lex-zl-06', formal: '畅通和规范群众诉求表达渠道', plain: '老百姓说话要有人听、有回音' },
       { id: 'lex-zl-07', formal: '推进社会治理数字化、智能化', plain: '用技术把治理做到精细' },
       { id: 'lex-zl-08', formal: '推动资源、服务、管理向基层下沉', plain: '基层要有权、有钱、有人办事' },
+
+      { id: 'lex-zl-09', formal: '坚持关口前移、源头治理', plain: '有苗头就处理，别等闹大' },
+      { id: 'lex-zl-10', formal: '加强社区工作者队伍建设', plain: '社区要有专业的人干专业的事' },
+      { id: 'lex-zl-11', formal: '完善社会治安整体防控体系', plain: '打、防、管、控一起抓' },
+      { id: 'lex-zl-12', formal: '健全应急预案和应急救援力量体系', plain: '灾害来了拉得出、顶得上' },
+      { id: 'lex-zl-13', formal: '推进信访工作法治化', plain: '反映问题要依法，办理信访也要依法' },
+      { id: 'lex-zl-14', formal: '健全社会组织参与治理的机制', plain: '让专业组织有渠道帮上忙' },
+      { id: 'lex-zl-15', formal: '依法保障妇女儿童合法权益', plain: '妇女儿童的事不是小事' },
     ],
   },
   {
@@ -145,6 +209,14 @@ export const LEXICON_THEMES = [
       { id: 'lex-jy-06', formal: '以创业带动就业', plain: '一个人创业能带动一群人就业' },
       { id: 'lex-jy-07', formal: '构建和谐劳动关系', plain: '欠薪、克扣这些事不能有' },
       { id: 'lex-jy-08', formal: '拓宽市场化社会化就业渠道', plain: '多开几条就业的路子' },
+
+      { id: 'lex-jy-09', formal: '支持多渠道灵活就业', plain: '自由职业、兼职也是正经就业路' },
+      { id: 'lex-jy-10', formal: '健全终身职业技能培训制度', plain: '干到老、学到老，技能一直有人教' },
+      { id: 'lex-jy-11', formal: '完善新就业形态劳动者权益保障', plain: '外卖骑手、网约车司机要有保障' },
+      { id: 'lex-jy-12', formal: '消除影响平等就业的不合理限制和就业歧视', plain: '招人不能看性别、年龄、出身' },
+      { id: 'lex-jy-13', formal: '健全就业失业统计监测体系', plain: '就业形势要看得清、报得准' },
+      { id: 'lex-jy-14', formal: '打造高质量充分就业社区（村）', plain: '就业服务落到家门口' },
+      { id: 'lex-jy-15', formal: '做好高校毕业生等青年就业工作', plain: '大学生就业是重中之重' },
     ],
   },
 ]
