@@ -10,7 +10,9 @@
 import { createRequire } from 'node:module'
 
 const puppeteer = createRequire('C:/Users/许/.workbuddy/binaries/node/workspace/node_modules/')('puppeteer-core')
-const BASE = 'http://127.0.0.1:5280'
+// BASE 可用 argv 覆盖（与 probe-settings-ui 同约定）；缺省 5280。
+// ⚠️ 探针端口曾被写死——dev server 换端口就 CONNECTION_REFUSED，还容易被误读成功能挂了。
+const BASE = process.argv[2] || 'http://127.0.0.1:5280'
 const OUT = 'E:/code/bluepencil/.shots'
 
 let pass = 0

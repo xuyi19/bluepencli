@@ -1,12 +1,13 @@
 <template>
   <div class="w-full">
 
-    <div class="flex flex-wrap items-end justify-between gap-4 mb-6">
+    <!-- 头部：列表模式 = 标题 + 搜索筛选；详情模式 = 返回 + 下载操作 -->
+    <div v-if="viewMode === 'list'" class="flex flex-wrap items-end justify-between gap-4 mb-6">
       <div>
         <h1 class="text-xl font-semibold text-c-ink">历史批改</h1>
         <p class="text-sm text-c-muted mt-1.5">
           共 {{ filtered.length }} 篇 ·
-          <span class="text-c-muted">归档在 docs/practice/，也可在这里回看</span>
+          <span class="text-c-muted">点一篇回看作答与批注，可导出 Word / PDF 打印复盘</span>
         </p>
       </div>
       <div class="flex items-center gap-2">
@@ -24,76 +25,88 @@
       </div>
     </div>
 
+    <div v-else class="flex flex-wrap items-center justify-between gap-4 mb-6">
+      <button @click="backToList"
+        class="text-sm text-c-muted hover:text-c-bark transition-colors shrink-0">
+        ← 返回列表
+      </button>
+      <div class="flex items-center gap-3 min-w-0">
+        <span v-if="exportState" class="text-xs max-w-[16rem] truncate"
+          :style="{ color: exportState.startsWith('err') ? '#b4552d' : '#4f7d5e' }"
+          :title="exportState.startsWith('ok:') ? exportState.slice(3) : exportState">
+          {{ exportState === 'busy' ? '正在生成文档…'
+            : exportState.startsWith('err') ? '导出失败：' + exportState.slice(4)
+            : exportState === 'ok:web' ? '已开始下载'
+            : '已保存：' + exportState.slice(3) }}
+        </span>
+        <button @click="doExport('docx')" :disabled="exportState === 'busy'"
+          class="px-4 h-8 rounded-xl text-xs font-medium neu-sm text-c-bark
+            hover:translate-y-px transition-transform disabled:opacity-40 shrink-0">
+          ⬇ 下载 Word
+        </button>
+        <button @click="doExport('pdf')" :disabled="exportState === 'busy'"
+          class="px-4 h-8 rounded-xl text-xs font-medium neu-sm text-c-bark
+            hover:translate-y-px transition-transform disabled:opacity-40 shrink-0">
+          ⬇ 下载 PDF
+        </button>
+        <button v-if="detail" @click="del(detail.id)"
+          class="text-xs text-c-muted hover:text-[#b4552d] shrink-0">
+          删除
+        </button>
+      </div>
+    </div>
+
     <div v-if="loading" class="rounded-2xl p-16 neu text-center text-c-muted text-sm">
       正在读取记录…
     </div>
 
-    <div v-else-if="filtered.length" class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
-      <!-- 左：列表 -->
-      <div class="lg:col-span-1 space-y-3">
-        <div v-for="r in filtered" :key="r.id" @click="select(r.id)"
-          class="rounded-2xl p-4 cursor-pointer transition-all duration-300"
-          :class="currentId === r.id
-            ? 'neu-inset'
-            : 'neu-sm hover:translate-y-px'">
-          <div class="flex items-center gap-3">
-            <ScoreRing :score="r.finalScore" :max="r.maxScore || 40" :size="40" :stroke="4" />
-            <div class="min-w-0 flex-1">
-              <div class="text-sm text-c-body truncate">{{ r.title || '未命名练习' }}</div>
-              <div class="flex items-center gap-1.5 mt-1">
-                <span v-for="id in r.teacherIds || []" :key="id"
-                  class="w-4 h-4 rounded-full flex items-center justify-center shrink-0"
-                  :style="{ background: teacherColor(id) + '20', color: teacherColor(id), fontSize: '9px' }">
-                  {{ teacherAvatar(id) }}
-                </span>
-                <span class="text-xs text-c-muted tnum ml-1">{{ fmtDateTime(r.createdAt) }}</span>
-              </div>
+    <!-- ── 列表模式：先看题目，点进去再看作答与批注 ── -->
+    <div v-else-if="viewMode === 'list' && filtered.length" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div v-for="r in filtered" :key="r.id" @click="select(r.id)"
+        class="rounded-2xl p-4 cursor-pointer transition-all duration-300 neu-sm hover:translate-y-px">
+        <div class="flex items-start gap-3">
+          <ScoreRing :score="r.finalScore" :max="r.maxScore || 40" :size="44" :stroke="4" />
+          <div class="min-w-0 flex-1">
+            <div class="text-sm font-medium text-c-ink leading-6 line-clamp-2">{{ r.title || '未命名练习' }}</div>
+            <div class="flex items-center gap-1.5 mt-1.5 flex-wrap">
+              <span class="text-[11px] px-1.5 py-0.5 rounded neu-inset text-c-muted">{{ MODE_LABEL[r.mode] || r.mode || '练习' }}</span>
+              <span v-for="id in r.teacherIds || []" :key="id"
+                class="w-4 h-4 rounded-full flex items-center justify-center shrink-0"
+                :style="{ background: teacherColor(id) + '20', color: teacherColor(id), fontSize: '9px' }">
+                {{ teacherAvatar(id) }}
+              </span>
+              <span class="text-xs text-c-muted tnum ml-auto">{{ fmtDateTime(r.createdAt) }}</span>
             </div>
-            <span v-if="r.source === 'docs' || r.source === 'both'"
-              class="text-xs px-1.5 py-0.5 rounded shrink-0"
-              style="background: #e8ecdf; color: #4f7d5e" title="已归档到 docs/practice/">docs</span>
           </div>
+          <span v-if="r.source === 'docs' || r.source === 'both'"
+            class="text-xs px-1.5 py-0.5 rounded shrink-0"
+            style="background: #e8ecdf; color: #4f7d5e" title="已归档到 docs/practice/">docs</span>
         </div>
       </div>
+    </div>
 
-      <!-- 右：详情 -->
-      <div class="lg:col-span-2">
-        <div v-if="detail" class="rounded-2xl p-6 neu">
+    <div v-else-if="viewMode === 'list'" class="rounded-2xl p-16 neu text-center text-c-muted">
+      <div class="text-sm">{{ keyword || modeFilter ? '没有匹配的记录' : '还没有练习记录' }}</div>
+      <RouterLink v-if="!keyword && !modeFilter" to="/practice"
+        class="inline-block mt-4 px-4 py-2 rounded-xl text-xs font-medium neu text-c-bark">
+        去练习 →
+      </RouterLink>
+    </div>
 
-          <div class="flex items-start justify-between gap-4 mb-5">
-            <div class="min-w-0">
-              <div class="text-base font-medium text-c-ink">{{ detail.title || '未命名练习' }}</div>
-              <div class="text-xs text-c-muted mt-1.5 tnum">
-                {{ fmtDateTime(detail.createdAt) }} · {{ detail.wordCount }} 字
-                <span v-if="detail.elapsed"> · 耗时 {{ (detail.elapsed / 1000).toFixed(1) }}s</span>
-                · {{ MODE_LABEL[detail.mode] || detail.mode }}
-              </div>
-            </div>
-            <div class="flex items-center gap-3 shrink-0">
-              <span v-if="exportState" class="text-xs max-w-[18rem] truncate"
-                :style="{ color: exportState.startsWith('err') ? '#b4552d' : '#4f7d5e' }"
-                :title="exportState.startsWith('ok:') ? exportState.slice(3) : exportState">
-                {{ exportState === 'busy' ? '正在生成文档…'
-                  : exportState.startsWith('err') ? '导出失败：' + exportState.slice(4)
-                  : exportState === 'ok:web' ? '已开始下载'
-                  : '已保存：' + exportState.slice(3) }}
-              </span>
-              <button @click="doExport('docx')" :disabled="exportState === 'busy'"
-                class="px-4 h-8 rounded-xl text-xs font-medium neu-sm text-c-bark
-                  hover:translate-y-px transition-transform disabled:opacity-40 shrink-0">
-                ⬇ 下载 Word
-              </button>
-              <button @click="doExport('pdf')" :disabled="exportState === 'busy'"
-                class="px-4 h-8 rounded-xl text-xs font-medium neu-sm text-c-bark
-                  hover:translate-y-px transition-transform disabled:opacity-40 shrink-0">
-                ⬇ 下载 PDF
-              </button>
-              <button @click="del(detail.id)" class="text-xs text-c-muted hover:text-[#b4552d] shrink-0">
-                删除
-              </button>
+    <!-- ── 详情模式：全宽回看作答与批注 ── -->
+    <div v-else class="max-w-4xl">
+      <div v-if="detail" class="rounded-2xl p-6 neu">
+
+        <div class="flex items-start justify-between gap-4 mb-5">
+          <div class="min-w-0">
+            <div class="text-base font-medium text-c-ink">{{ detail.title || '未命名练习' }}</div>
+            <div class="text-xs text-c-muted mt-1.5 tnum">
+              {{ fmtDateTime(detail.createdAt) }} · {{ detail.wordCount }} 字
+              <span v-if="detail.elapsed"> · 耗时 {{ (detail.elapsed / 1000).toFixed(1) }}s</span>
+              · {{ MODE_LABEL[detail.mode] || detail.mode }}
             </div>
           </div>
+        </div>
 
           <!-- 分数 -->
           <div class="flex items-center gap-5 mb-6">
@@ -270,21 +283,9 @@
           </div>
         </div>
 
-        <div v-else-if="currentId" class="rounded-2xl p-16 neu text-center text-c-muted text-sm">
+        <div v-else class="rounded-2xl p-16 neu text-center text-c-muted text-sm">
           正在读取详情…
         </div>
-        <div v-else class="rounded-2xl p-20 neu text-center text-c-muted text-sm">
-          左侧选一篇查看复盘
-        </div>
-      </div>
-    </div>
-
-    <div v-else class="rounded-2xl p-16 neu text-center text-c-muted">
-      <div class="text-sm">{{ keyword || modeFilter ? '没有匹配的记录' : '还没有练习记录' }}</div>
-      <RouterLink v-if="!keyword && !modeFilter" to="/practice"
-        class="inline-block mt-4 px-4 py-2 rounded-xl text-xs font-medium neu text-c-bark">
-        去练习 →
-      </RouterLink>
     </div>
   </div>
 </template>
@@ -316,6 +317,8 @@ const currentId = ref('')
 const detail = ref(null)
 const loading = ref(true)
 const showQuestion = ref(false)
+// 两段式（2026-10-08 用户要求）：列表先展示题目拟定标题，点进去才看作答与批注
+const viewMode = ref('list') // 'list' | 'detail'
 
 const filtered = computed(() => {
   const k = keyword.value.trim().toLowerCase()
@@ -348,25 +351,30 @@ async function load() {
   records.value = await listAllRecords()
   loading.value = false
 
+  // 从别的页面带 ?id= 进来 → 直达详情；否则停在列表（不再自动选第一篇）
   const target = route.query.id
-  const pick = target && records.value.some((r) => r.id === target)
-    ? target
-    : records.value[0]?.id
-  if (pick) await select(pick)
+  if (target && records.value.some((r) => r.id === target)) await select(target)
 }
 
 async function select(id) {
   currentId.value = id
   detail.value = null
+  viewMode.value = 'detail'
+  window.scrollTo({ top: 0 })
   detail.value = await loadRecordDetail(id)
+}
+
+function backToList() {
+  viewMode.value = 'list'
+  detail.value = null
+  currentId.value = ''
 }
 
 async function del(id) {
   await deleteRecordEverywhere(id)
-  if (currentId.value === id) {
-    currentId.value = ''
-    detail.value = null
-  }
+  currentId.value = ''
+  detail.value = null
+  viewMode.value = 'list'
   await load()
 }
 

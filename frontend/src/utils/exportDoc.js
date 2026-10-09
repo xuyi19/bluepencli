@@ -144,6 +144,9 @@ function toPrint(nodes) {
       ...r,
       color: !r.color ? undefined
         : GRAY_MAP[r.color] || (GRAY_KEEP.has(r.color) ? r.color : '2B2B2B'),
+      // 正文级（≥9pt）加粗：黑白打印下宋体 9pt 偏细（用户反馈），粗体才压得住纸面；
+      // 批注小字/图例/序号（≤8pt）保持细体，粗了会糊
+      bold: r.bold || (r.size || BODY_SIZE) >= BODY_SIZE,
       ...(fill ? { underline: true } : {}),
     })),
   }))
@@ -211,7 +214,7 @@ export function buildReviewModel(data) {
   }
 
   // ── 三、我的作答（老师批注内联） ──
-  nodes.push(mkNode([R({ text: '三、我的作答（老师批注内联标注）', bold: true, size: 21, color: '1F3A2E' })], { before: 280, border: true }))
+  nodes.push(mkNode([R({ text: '三、我的作答（句尾序号对应「老师批注」）', bold: true, size: 21, color: '1F3A2E' })], { before: 280, border: true }))
   const answer = data.answer || ''
 
   // 收集批注区间（可定位/不可定位分开——和屏幕端 AnnotatedAnswer 同一套规则）
@@ -244,6 +247,12 @@ export function buildReviewModel(data) {
     const r = findRange(answer, h)
     if (r) hlRanges.push({ ...r, fill: MARK_FILL[h.color] || MARK_FILL.yellow })
   }
+
+  // 批注编号（2026-10-08 用户要求：标注与正文分开 —— 正文句尾只留序号，
+  // 批注内容集中在「老师批注」一节按序号列出，正文读起来才连贯）
+  const CIRC = '①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳'
+  annRanges.sort((a, b) => a.start - b.start || a.end - b.end)
+  annRanges.forEach((r, i) => { r.no = CIRC[i] || `[${i + 1}]` })
 
   // 图例（黑白打印：老师色块没意义，改纯文字计数）
   const legendRuns = [R({ text: '批注：', bold: true, size: 14 })]
@@ -300,11 +309,8 @@ export function buildReviewModel(data) {
         else {
           active = active.filter((r) => r !== ev.r)
           if (ev.r.isAnn) {
-            const noteText = `　〔${ev.r.teacherName}·${ev.r.type}〕${ev.r.comment}${ev.r.fix ? '　改：' + ev.r.fix : ''}`
-            runs.push(R({
-              text: noteText, color: ev.r.colorHex, size: NOTE_SIZE,
-              fill: tint(ev.r.colorHex, 0.9), // 同色浅底：小字在纸上更像"便签"，一眼扫到
-            }))
+            // 只在句尾留序号（批注内容见「老师批注」清单），正文保持连贯
+            runs.push(R({ text: ev.r.no, size: 14, color: '8A8578' }))
           }
         }
       }
@@ -316,16 +322,49 @@ export function buildReviewModel(data) {
     })
   }
 
-  // 未能定位的批注 —— 单独列出来，不能默默吞掉（与屏幕端同规矩）
-  if (unlocated.length) {
-    nodes.push(mkNode([R({ text: '以下批注未能定位到原文片段（AI 引句与作答有出入）：', color: '8A8578', size: 14 })], { before: 160, after: 60 }))
-    for (const a of unlocated) {
-      nodes.push(mkNode([R({ text: `■ ${a.teacherName}·${a.type}　`, color: a.colorHex, bold: true, size: 14 }), R({ text: a.comment + (a.fix ? '　改：' + a.fix : ''), size: 16, color: '4A4A4A' })], { after: 60 }))
+  // ── 四、老师批注（序号对应正文句尾） ──
+  if (annRanges.length || unlocated.length) {
+    nodes.push(mkNode([R({ text: '四、老师批注（序号对应作答中的标注）', bold: true, size: 21, color: '1F3A2E' })], { before: 280, border: true }))
+    for (const a of annRanges) {
+      nodes.push(mkNode([
+        R({ text: `${a.no}　`, bold: true }),
+        R({ text: `〔${a.teacherName}·${a.type}〕`, size: NOTE_SIZE, color: '4A4A4A' }),
+        R({ text: a.comment || '', size: NOTE_SIZE, color: '3A3A3A' }),
+        ...(a.fix ? [R({ text: `　改：${a.fix}`, size: NOTE_SIZE, color: '3A3A3A' })] : []),
+      ], { after: 60 }))
+    }
+    if (unlocated.length) {
+      nodes.push(mkNode([R({ text: '以下批注未能定位到原文片段（AI 引句与作答有出入）：', color: '8A8578', size: 14 })], { before: 120, after: 60 }))
+      for (const a of unlocated) {
+        nodes.push(mkNode([
+          R({ text: `■ ${a.teacherName}·${a.type}　`, bold: true, size: 14 }),
+          R({ text: a.comment + (a.fix ? '　改：' + a.fix : ''), size: 16, color: '4A4A4A' }),
+        ], { after: 60 }))
+      }
     }
   }
 
-  // ── 四、老师意见 ──
-  nodes.push(mkNode([R({ text: '四、老师意见', bold: true, size: 21, color: '1F3A2E' })], { before: 280, border: true }))
+  // ── 五、参考答案（AI 优化版）：把每条批注的「改」替换回原文生成整段可背的升级版 ──
+  if (answer && annRanges.some((r) => r.fix)) {
+    let optimized = ''
+    let cur = 0
+    for (const r of annRanges) {
+      if (!r.fix || r.start < cur) continue // 无改法/与上一处重叠 → 保留原文
+      optimized += answer.slice(cur, r.start) + r.fix
+      cur = r.end
+    }
+    optimized += answer.slice(cur)
+    if (optimized.trim() && optimized !== answer) {
+      nodes.push(mkNode([R({ text: '五、参考答案（AI 优化版，改法已合入原文）', bold: true, size: 21, color: '1F3A2E' })], { before: 280, border: true }))
+      for (const line of optimized.split('\n')) {
+        if (!line.trim()) continue
+        nodes.push(mkNode([R({ text: line })], { after: 100 }))
+      }
+    }
+  }
+
+  // ── 六、老师意见 ──
+  nodes.push(mkNode([R({ text: '六、老师意见', bold: true, size: 21, color: '1F3A2E' })], { before: 280, border: true }))
   if (data.summary) nodes.push(mkNode([R({ text: `总评：${data.summary}`, size: 18 })]))
   for (const r of data.results || []) {
     const meta = teacherMeta(r.teacherId)

@@ -4,7 +4,7 @@
     <!-- Logo 区：印章 + 纸背层次。图标是一枚「笔尖」——blue pencil 的那支笔：
          校对、批注、评阅文稿，比一个「笔」字更有辨识度。
          版本徽章挂在标题行右端，副标题独占一行不折行（曾因太长把「五位老师」折成两行）。 -->
-    <RouterLink to="/" class="block px-4 pt-4 pb-3 shrink-0 border-b border-c-line group">
+    <RouterLink to="/" class="block px-4 pt-3 pb-2 shrink-0 border-b border-c-line group">
       <div class="flex items-center gap-3">
         <!-- 印章：后面垫一张微旋的纸，做出叠纸的厚度感 -->
         <div class="relative w-11 h-11 shrink-0">
@@ -38,17 +38,18 @@
     </RouterLink>
 
     <!-- 分组导航：group 为空串的条目不带组头（首页是入口不是分类）。
-         字号 14px / 行高 py-2：侧栏是全程盯着的面板，字太小人累；
-         12 项 + 组头在一屏内放得下，overflow-y-auto 只做小屏兜底。 -->
-    <nav class="flex-1 overflow-y-auto px-3 py-3 space-y-2.5">
+         字号 14px / 行高 py-1.5：侧栏是全程盯着的面板，字不能太小；
+         间距整体收紧（2026-10-08：加入底部小胶囊行后 1080p 会出滚动条，
+         用户要求不滚动）—— 组间距 space-y-1.5 + 条目 py-1.5 一屏放得下。 -->
+    <nav class="flex-1 overflow-y-auto px-3 py-2 space-y-1.5">
       <div v-for="g in groups" :key="g.title || '_top'">
-        <div v-if="g.title" class="px-3 mb-1 text-[11px] font-medium text-c-muted tracking-widest">{{ g.title }}</div>
+        <div v-if="g.title" class="px-3 mb-0.5 text-[11px] font-medium text-c-muted tracking-widest">{{ g.title }}</div>
         <div class="space-y-0.5">
           <template v-for="item in g.items" :key="item.path">
             <!-- 带 href 的条目 = 外部链接（GitHub/Gitee 仓库），新窗口打开；其余走路由 -->
             <a v-if="item.href" :href="item.href" target="_blank" rel="noopener"
               @click="emit('navigate')"
-              class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm
+              class="flex items-center gap-2.5 px-3 py-1.5 rounded-xl text-sm
                 transition-colors duration-300 ease-in-out text-c-body hover:bg-c-barkSoft/60">
               <svg class="w-[17px] h-[17px] shrink-0 opacity-70" viewBox="0 0 24 24" fill="none"
                 stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"
@@ -57,7 +58,7 @@
             </a>
             <RouterLink v-else :to="item.path"
               @click="emit('navigate')"
-              class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm
+              class="flex items-center gap-2.5 px-3 py-1.5 rounded-xl text-sm
                 transition-colors duration-300 ease-in-out"
               :class="isActive(item.path)
                 ? 'bg-c-barkSoft text-c-bark font-medium'
@@ -73,7 +74,7 @@
     </nav>
 
     <!-- 底部：开源入口 + 设置 + 作者水印 -->
-    <div class="px-3 py-2.5 border-t border-c-line space-y-1.5 shrink-0">
+    <div class="px-3 py-2 border-t border-c-line space-y-1.5 shrink-0">
 
       <!-- 微信入口：单占一行。四个胶囊并排的话每个只剩 ~45px，
            "GitHub" 都塞不下，所以它自己一行、用整行按钮。

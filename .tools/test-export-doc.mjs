@@ -94,7 +94,11 @@ async function docXml(doc) {
   check('复盘：得分行在文档里', xml.includes('14 / 20'))
   check('复盘：题目要求在文档里', xml.includes('观点明确，条理清楚'))
   check('复盘：材料分则标题在文档里', xml.includes('材料1') && xml.includes('材料2'))
-  check('复盘：批注内联小字在文档里', xml.includes('〔袁东·问题〕批注内容甲'), '内联批注文本未找到')
+  // 批注与正文分离（2026-10-08）：正文句尾只有序号，批注集中在「四、老师批注」清单
+  check('复盘：批注清单在文档里', xml.includes('〔袁东·问题〕') && xml.includes('批注内容甲'), '批注清单文本未找到')
+  check('复盘：正文不再内联批注全文', !/〔袁东·问题〕批注内容甲/.test(xml.replace(/<\/w:t>/g, '')) || xml.split('〔袁东·问题〕').length === 2, '批注全文仍内联在正文')
+  check('复盘：作答句尾有批注序号（①）', xml.includes('①'), '序号未找到')
+  check('复盘：优化版参考答案节在文档里', xml.includes('五、参考答案'), '优化答案节未找到')
   check('复盘：改法在文档里', xml.includes('改：改成更规范的说法'))
   check('复盘：老师意见段在文档里', xml.includes('建议先找全要点再动笔'))
   check('复盘：改进清单在文档里', xml.includes('建议一：多划材料'))

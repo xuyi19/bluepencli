@@ -52,6 +52,12 @@
             hover:text-c-bark transition-colors duration-200">
           清空
         </button>
+        <!-- M8 全屏作答入口：答题态才有（材料/作答/提纲三件套就位后才有意义） -->
+        <button v-if="step === 'answer'" @click="fsOn = true" title="全屏三栏：材料+提纲+作答（Esc 退出）"
+          class="px-4 py-2 rounded-xl text-xs font-medium text-c-body neu-sm
+            hover:text-c-bark transition-colors duration-200">
+          ⛶ 全屏
+        </button>
       </div>
     </div>
 
@@ -318,6 +324,194 @@
       </div>
 
       </div><!-- /答题壳（lg 一屏固定） -->
+
+      <!-- ==================== M8 全屏三栏作答（2026-10-08） ====================
+           fixed 覆盖层（z-40），导航壳与主布局完全不动 —— 进出全屏零迁移成本。
+           ≥1280px：左栏（材料 : 提纲 = 7:3 可拖，宽 24~40rem 可拖）+ 右作答；
+           <1280px：单列堆叠（材料/提纲/作答），规格 3.2 坑 2 的降级档。
+           生命线常驻（坑 3）：题型 · 考场计时 · 字数 · 批改 · 退出，全屏不藏交卷。
+           Esc 与按钮双通道退出。比例与栏宽存本机记忆。 -->
+      <div v-if="fsOn" class="fixed inset-0 z-40 bg-c-paper flex flex-col p-3 gap-2">
+
+        <!-- 生命线 -->
+        <div class="shrink-0 flex items-center gap-3 rounded-xl px-3 py-2 neu">
+          <span class="text-sm font-medium text-c-ink shrink-0">全屏作答</span>
+          <span v-if="loadedMeta.type" class="text-xs px-1.5 py-0.5 rounded shrink-0"
+            style="background: #e8ecdf; color: #3d5a7a">{{ loadedMeta.type }}</span>
+          <span v-if="isExamMode" class="tnum text-sm font-semibold shrink-0"
+            :class="examUrgent ? 'text-[#b91c1c]' : 'text-c-ink'">{{ examClock }}</span>
+          <span class="text-xs text-c-muted tnum ml-auto shrink-0">
+            作答 {{ countChars(form.answer) }} 字<template v-if="form.wordLimit"> / {{ form.wordLimit }}</template><span
+              v-if="overLimit" class="text-[#b4552d]">（超 {{ countChars(form.answer) - form.wordLimit }}）</span>
+          </span>
+          <button @click="fsOn = false"
+            class="text-xs px-2.5 py-1.5 rounded-lg neu-sm text-c-muted hover:text-c-bark transition-colors shrink-0">
+            退出全屏 (Esc)
+          </button>
+          <button v-if="isExamMode && confirmSubmit" @click="startExam"
+            class="text-xs px-3 py-1.5 rounded-lg font-medium text-white shrink-0" style="background: #b91c1c">
+            确认交卷
+          </button>
+          <button v-else-if="isExamMode" @click="startExam" :disabled="!canGrade"
+            class="text-xs px-3 py-1.5 rounded-lg font-medium neu-sm shrink-0
+              disabled:opacity-40 disabled:cursor-not-allowed"
+            :class="canGrade ? 'text-c-bark hover:translate-y-px transition-transform' : 'text-c-muted'">
+            交卷（{{ examClock }}）
+          </button>
+          <button v-else @click="start" :disabled="!canGrade"
+            class="text-xs px-3 py-1.5 rounded-lg font-medium neu-sm shrink-0
+              disabled:opacity-40 disabled:cursor-not-allowed"
+            :class="canGrade ? 'text-c-bark hover:translate-y-px transition-transform' : 'text-c-muted'">
+            开始批改
+          </button>
+        </div>
+
+        <!-- 三栏（≥1280）：左栏 材料/提纲 上下分割 + 右作答 -->
+        <div v-if="fsWide" class="flex-1 min-h-0 flex gap-1.5">
+          <div class="flex flex-col min-h-0 shrink-0" :style="{ width: fsLeftW + 'rem' }">
+            <!-- 左上：材料（可滚动 + 荧光标注） -->
+            <section class="rounded-2xl p-4 neu flex flex-col min-h-0" :style="{ flex: `0 0 ${fsSplit * 100}%` }">
+              <div class="flex items-center justify-between gap-2 mb-2 shrink-0">
+                <span class="text-sm font-medium text-c-body shrink-0">
+                  给定资料
+                  <span v-if="form.material" class="text-xs text-c-muted font-normal tnum ml-1">{{ countChars(form.material) }} 字</span>
+                </span>
+                <div class="flex items-center gap-2 shrink-0">
+                  <button v-if="trimState.trimmed" @click="toggleTrim"
+                    class="text-xs text-c-muted hover:text-c-bark transition-colors">
+                    {{ trimState.active ? '查看整卷' : '只用本题材料' }}
+                  </button>
+                  <button v-if="marks.material?.length" @click="marksToOutline" title="把划过荧光的句子追加到提纲"
+                    class="text-xs text-c-muted hover:text-c-bark transition-colors">
+                    📎 收进提纲（{{ marks.material.length }}）
+                  </button>
+                  <button v-if="form.material" @click="materialEdit = !materialEdit"
+                    class="text-xs text-c-muted hover:text-c-bark transition-colors">
+                    {{ materialEdit ? '完成' : '编辑' }}
+                  </button>
+                </div>
+              </div>
+              <textarea v-if="materialEdit" v-model="form.material"
+                class="flex-1 min-h-0 w-full px-3 py-2 rounded-xl text-xs neu-inset outline-none resize-none text-c-body leading-7" />
+              <div v-else-if="form.material" class="flex-1 min-h-0 overflow-y-auto pr-1">
+                <Highlightable :blocks="materialBlocks(form.material)" :marks="marks.material"
+                  @change="(l) => onMarksChange('material', l)" class="space-y-3.5" />
+              </div>
+              <div v-else class="flex-1 flex items-center justify-center text-xs text-c-muted">
+                还没有材料 —— 退出全屏选一题，或粘一段材料进来
+              </div>
+            </section>
+
+            <!-- 纵向分割线（拖拽调材料:提纲比例） -->
+            <div @mousedown="fsDragTop" title="拖拽调整材料 / 提纲高度"
+              class="shrink-0 h-2 -my-0.5 cursor-row-resize rounded
+                flex items-center justify-center group">
+              <div class="w-10 h-1 rounded-full bg-c-line group-hover:bg-c-bark/40 transition-colors" />
+            </div>
+
+            <!-- 左下：提纲 -->
+            <section class="flex-1 min-h-0 rounded-2xl px-4 py-3 neu flex flex-col">
+              <div class="flex items-center justify-between mb-1.5 shrink-0">
+                <span class="text-xs font-medium text-c-body">提纲
+                  <span class="text-c-muted/70 font-normal ml-1">先列提纲再动笔 · 批改不看它</span>
+                </span>
+                <span v-if="outline.trim()" class="text-xs text-c-muted tnum">{{ outline.length }} 字</span>
+              </div>
+              <textarea v-model="outline"
+                placeholder="立论一句 → 分论点（附材料依据）→ 结尾收束。"
+                class="flex-1 min-h-0 w-full px-3 py-2 rounded-xl text-xs neu-inset outline-none resize-none
+                  text-c-body placeholder:text-c-muted leading-6" />
+            </section>
+          </div>
+
+          <!-- 左右分割线（拖拽调左栏宽度） -->
+          <div @mousedown="fsDragSide" title="拖拽调整左栏宽度"
+            class="shrink-0 w-2 -mx-0.5 cursor-col-resize rounded
+              flex items-center justify-center group">
+            <div class="h-10 w-1 rounded-full bg-c-line group-hover:bg-c-bark/40 transition-colors" />
+          </div>
+
+          <!-- 右：题干 + 作答主战场 -->
+          <section class="flex-1 min-w-0 rounded-2xl p-4 neu flex flex-col min-h-0">
+            <div class="shrink-0 mb-2">
+              <div class="text-sm font-medium text-c-ink leading-6">{{ form.title || '未命名题' }}</div>
+              <div v-if="form.requirement" class="text-xs text-c-muted leading-5 mt-0.5">{{ form.requirement }}</div>
+              <div class="text-[11px] text-c-muted tnum mt-1">
+                满分 {{ form.maxScore }} 分<template v-if="form.wordLimit"> · 限 {{ form.wordLimit }} 字</template>
+              </div>
+            </div>
+            <div class="flex-1 min-h-0 flex flex-col">
+              <div v-if="!answerMarkMode" class="flex items-center justify-end mb-1 shrink-0">
+                <button v-if="form.answer.trim()" @click="answerMarkMode = true"
+                  class="text-xs text-c-muted hover:text-c-bark underline underline-offset-2 transition-colors">
+                  🖍️ 荧光标注<template v-if="markCount">（{{ markCount }}）</template>
+                </button>
+              </div>
+              <div v-else class="flex items-center justify-between mb-1 shrink-0 text-xs text-c-muted">
+                <span>选中文字划荧光；标记存在本机，批改不受影响</span>
+                <button @click="answerMarkMode = false"
+                  class="underline underline-offset-2 hover:text-c-bark transition-colors">返回编辑</button>
+              </div>
+              <div class="flex-1 min-h-0 overflow-y-auto mx-auto w-full max-w-[760px]">
+                <GridPaper v-if="!answerMarkMode" v-model="form.answer" :word-limit="form.wordLimit || 0" />
+                <Highlightable v-else :blocks="[{ body: form.answer }]" :marks="marks.answer"
+                  @change="(l) => onMarksChange('answer', l)"
+                  class="rounded-xl neu-inset px-3.5 py-2.5" />
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <!-- 单列降级（<1280）：材料 / 提纲 / 作答 堆叠滚动 -->
+        <div v-else class="flex-1 min-h-0 overflow-y-auto flex flex-col gap-2 pr-0.5">
+          <section class="rounded-2xl p-4 neu shrink-0">
+            <div class="flex items-center justify-between gap-2 mb-2">
+              <span class="text-sm font-medium text-c-body">给定资料</span>
+              <div class="flex items-center gap-2">
+                <button v-if="marks.material?.length" @click="marksToOutline"
+                  class="text-xs text-c-muted hover:text-c-bark transition-colors">📎 收进提纲</button>
+                <button v-if="form.material" @click="materialEdit = !materialEdit"
+                  class="text-xs text-c-muted hover:text-c-bark transition-colors">{{ materialEdit ? '完成' : '编辑' }}</button>
+              </div>
+            </div>
+            <textarea v-if="materialEdit" v-model="form.material" rows="10"
+              class="w-full px-3 py-2 rounded-xl text-xs neu-inset outline-none resize-none text-c-body leading-7" />
+            <div v-else-if="form.material" class="max-h-[46vh] overflow-y-auto pr-1">
+              <Highlightable :blocks="materialBlocks(form.material)" :marks="marks.material"
+                @change="(l) => onMarksChange('material', l)" class="space-y-3.5" />
+            </div>
+            <div v-else class="text-xs text-c-muted py-6 text-center">还没有材料</div>
+          </section>
+
+          <section class="rounded-2xl px-4 py-3 neu shrink-0">
+            <div class="flex items-center justify-between mb-1.5">
+              <span class="text-xs font-medium text-c-body">提纲</span>
+              <span v-if="outline.trim()" class="text-xs text-c-muted tnum">{{ outline.length }} 字</span>
+            </div>
+            <textarea v-model="outline" rows="5"
+              placeholder="立论一句 → 分论点（附材料依据）→ 结尾收束。"
+              class="w-full px-3 py-2 rounded-xl text-xs neu-inset outline-none resize-y text-c-body leading-6" />
+          </section>
+
+          <section class="rounded-2xl p-4 neu shrink-0">
+            <div class="text-sm font-medium text-c-ink leading-6 mb-0.5">{{ form.title || '未命名题' }}</div>
+            <div v-if="form.requirement" class="text-xs text-c-muted leading-5 mb-2">{{ form.requirement }}</div>
+            <div v-if="!answerMarkMode" class="flex justify-end mb-1">
+              <button v-if="form.answer.trim()" @click="answerMarkMode = true"
+                class="text-xs text-c-muted hover:text-c-bark underline underline-offset-2">🖍️ 荧光标注</button>
+            </div>
+            <div v-else class="flex items-center justify-between mb-1 text-xs text-c-muted">
+              <span>选中文字划荧光</span>
+              <button @click="answerMarkMode = false" class="underline underline-offset-2 hover:text-c-bark">返回编辑</button>
+            </div>
+            <GridPaper v-if="!answerMarkMode" v-model="form.answer" :word-limit="form.wordLimit || 0" />
+            <Highlightable v-else :blocks="[{ body: form.answer }]" :marks="marks.answer"
+              @change="(l) => onMarksChange('answer', l)" class="rounded-xl neu-inset px-3.5 py-2.5" />
+          </section>
+        </div>
+      </div>
+
+      <!-- 全屏开关挂在页头（见上方按钮区），这里只放覆盖层 -->
 
       <!-- 选题弹窗：进入/切换模式即弹出，按题型分类选题。
            分类从题池现算（题型是自由文本，别写死枚举——自建题什么类型都可能有）；
@@ -1159,6 +1353,63 @@ function onMarksChange(which, list) {
 }
 /** 划了多少处（供工具条显示；0 时不显示那一行，别占地方） */
 const markCount = computed(() => (marks.material?.length || 0) + (marks.answer?.length || 0))
+
+// ── M8 全屏三栏作答（2026-10-08）────────────────────────────
+// fixed 覆盖层，导航壳不动。生命线常驻（题型/计时/字数/批改/退出），
+// 材料:提纲默认 7:3 可拖、左栏 24~40rem 可拖，均按本机记忆（规格 3.3/3.4）。
+const fsOn = ref(false)
+const fsWide = ref(typeof window !== 'undefined' && window.innerWidth >= 1280)
+const clampNum = (v, min, max, dft) => (Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : dft)
+const fsSplit = ref(clampNum(parseFloat(localStorage.getItem('bp-fs-split')), 0.25, 0.8, 0.7))
+const fsLeftW = ref(clampNum(parseFloat(localStorage.getItem('bp-fs-leftw')), 24, 40, 32))
+function fsMedia(e) { fsWide.value = e.matches }
+function fsKey(e) { if (e.key === 'Escape' && fsOn.value) fsOn.value = false }
+onMounted(() => {
+  window.addEventListener('keydown', fsKey)
+  window.matchMedia('(min-width: 1280px)').addEventListener?.('change', fsMedia)
+})
+onUnmounted(() => {
+  window.removeEventListener('keydown', fsKey)
+  window.matchMedia('(min-width: 1280px)').removeEventListener?.('change', fsMedia)
+})
+/** 材料/提纲纵向分割拖拽：比例 0.25~0.8，松手持久化 */
+function fsDragTop(e) {
+  e.preventDefault()
+  const rect = e.currentTarget.parentElement.getBoundingClientRect()
+  const move = (ev) => {
+    fsSplit.value = Math.min(0.8, Math.max(0.25, (ev.clientY - rect.top) / rect.height))
+  }
+  const up = () => {
+    window.removeEventListener('mousemove', move)
+    window.removeEventListener('mouseup', up)
+    try { localStorage.setItem('bp-fs-split', String(fsSplit.value)) } catch { /* 尽力记忆 */ }
+  }
+  window.addEventListener('mousemove', move)
+  window.addEventListener('mouseup', up)
+}
+/** 左栏右缘拖拽：24~40rem，松手持久化 */
+function fsDragSide(e) {
+  e.preventDefault()
+  const rect = e.currentTarget.parentElement.getBoundingClientRect()
+  const move = (ev) => {
+    fsLeftW.value = Math.min(40, Math.max(24, (ev.clientX - rect.left) / 16))
+  }
+  const up = () => {
+    window.removeEventListener('mousemove', move)
+    window.removeEventListener('mouseup', up)
+    try { localStorage.setItem('bp-fs-leftw', String(fsLeftW.value)) } catch { /* 尽力记忆 */ }
+  }
+  window.addEventListener('mousemove', move)
+  window.addEventListener('mouseup', up)
+}
+/** 荧光句子 → 提纲一键收进（规格 3.3 杠杆一）：把材料上划过的句子追加为提纲条目 */
+function marksToOutline() {
+  const qs = (marks.material || []).map((m) => (m.text || '').trim()).filter(Boolean)
+  if (!qs.length) return
+  const add = qs.map((t) => `• ${t}`).join('\n')
+  outline.value = (outline.value.trim() ? outline.value.replace(/\s*$/, '\n') + '\n' : '') + add + '\n'
+  try { localStorage.setItem(outlineKey(loadedId.value), outline.value) } catch { /* 与 loadOutline 同罪免罚 */ }
+}
 const pickKeyword = ref('')
 
 // ── 提纲（先列提纲再动笔）──
