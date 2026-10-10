@@ -148,6 +148,9 @@
             <AnnotatedAnswer :answer="detail.answer" :results="detail.results || []" />
           </div>
 
+          <!-- 升格对照：复盘时回看/补生成（存进记录） -->
+          <ElevationPanel v-if="detail.answer" :rec="detail" @save="onElevationSave" />
+
           <!-- 各老师 -->
           <div v-for="r in detail.results || []" :key="r.teacherId" class="rounded-2xl p-4 mb-4"
             :style="{ borderLeft: `4px solid ${teacherColor(r.teacherId)}` }">
@@ -292,12 +295,14 @@ import AnnotatedAnswer from '../components/AnnotatedAnswer.vue'
 import ReviewCard from '../components/ReviewCard.vue'
 import KeyPointCheck from '../components/KeyPointCheck.vue'
 import CredibilityCard from '../components/CredibilityCard.vue'
+import ElevationPanel from '../components/ElevationPanel.vue'
 import { TEACHERS, MODE_LABEL } from '../agents/teachers'
 import { mergeKeyPoints } from '../utils/grading/keyPoints'
 import {
   listAllRecords,
   loadRecordDetail,
   deleteRecordEverywhere,
+  archiveRecord,
   countChars,
   fmtDateTime,
 } from '../utils/record'
@@ -357,6 +362,13 @@ async function select(id) {
   viewMode.value = 'detail'
   window.scrollTo({ top: 0 })
   detail.value = await loadRecordDetail(id)
+}
+
+/** 升格对照生成/重生成后：写进当前详情记录并归档（id 覆盖写，幂等） */
+async function onElevationSave(elev) {
+  if (!detail.value) return
+  detail.value = { ...detail.value, elevation: elev }
+  await archiveRecord(detail.value)
 }
 
 function backToList() {

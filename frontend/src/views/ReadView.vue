@@ -174,6 +174,10 @@
         <div class="text-[11px] text-c-muted mt-3 leading-5">
           找点得分率 = 找到的采分点分值合计 ÷ 总分（{{ result.stats.hitWeight }}/{{ result.stats.totalWeight }}），
           部分命中按半分计。判定依据是标准里的材料原文证据，与你划中的位置逐字比对。
+          <div v-if="stdOrigin === 'llm'" class="mt-1.5 rounded-lg px-2.5 py-1.5"
+            style="background: #faf6f1; color: #8c6f4e">
+            ⚠️ 本题标准由 AI 预解析、尚未人工精校——标准不准时得分率也会跟着不准，遇到明显误判以老师讲解为准。
+          </div>
         </div>
       </section>
     </template>
@@ -190,7 +194,7 @@
 import { computed, ref, watch } from 'vue'
 import Highlightable from '../components/Highlightable.vue'
 import { BUILTIN_POOL, loadFullQuestion } from '../data/questions'
-import { getStandard } from '../data/standards/index'
+import { getStandard, standardOrigin } from '../data/standards/index'
 import { trimMaterial } from '../utils/grading/materialTrim'
 import { materialBlocks } from '../utils/materialBlocks'
 import { countOccurrences } from '../utils/highlight'
@@ -213,6 +217,8 @@ const result = ref(null)
 const overlayMissing = ref(0)
 
 const standard = computed(() => (qid.value ? getStandard(qid.value) : null))
+// 标准来源：'llm' = AI 预解析、未人工精校 —— 得分率的可信度随之打折，必须明说（不假装）
+const stdOrigin = computed(() => (qid.value ? standardOrigin(qid.value) : null))
 
 // ── 标注存储：按题独立（bp-read:），与练习批改的 bp-marks: 分开 ——
 //    精读划的是"答案候选"，练习划的是"自己的阅读笔记"，混在一起两边都会失真。

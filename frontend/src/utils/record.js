@@ -171,6 +171,8 @@ function toBackend(rec) {
     debate: rec.debate,
     credibility: rec.credibility || null,
     provenance: rec.provenance || null,
+    // 升格对照（agents/elevate.js 产物，按需生成后随记录存档）
+    elevation: rec.elevation || null,
     teacher_results: rec.results,
     elapsed_ms: rec.elapsed,
   }
@@ -208,6 +210,7 @@ function fromBackend(data) {
     debate: data.debate || null,
     credibility: data.credibility || null,
     provenance: data.provenance || null,
+    elevation: data.elevation || null,
     results: (data.teacher_results || []).map((r) => ({
       ...r,
       teacherId: r.teacherId || r.teacher_id || '',
@@ -273,6 +276,7 @@ export function ensureCanonical(r) {
     // 老形态的记录不可能有可信度，落到 null（UI 一律不显示，不猜不算）
     credibility: r.credibility || null,
     provenance: r.provenance || null,
+    elevation: r.elevation || null,
     results: (r.teacherResults || []).map((t) => ({
       ...t,
       annotations: t.annotations || [],

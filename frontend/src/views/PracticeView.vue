@@ -1117,6 +1117,9 @@
         </div>
       </section>
 
+      <!-- 升格对照：从这份答案到高分答案的逐句桥梁（按需生成，存进记录） -->
+      <ElevationPanel v-if="record" :rec="record" @save="onElevationSave" />
+
       <!-- 追问 / 示范答案 -->
       <section class="rounded-2xl p-5 neu mb-6">
         <div class="flex gap-3">
@@ -1163,6 +1166,7 @@ import AnnotatedAnswer from '../components/AnnotatedAnswer.vue'
 import Highlightable from '../components/Highlightable.vue'
 import ReviewCard from '../components/ReviewCard.vue'
 import CredibilityCard from '../components/CredibilityCard.vue'
+import ElevationPanel from '../components/ElevationPanel.vue'
 import GridPaper from '../components/GridPaper.vue'
 import { chat } from '../api/llm'
 import { buildFollowupMessages, buildSampleMessages } from '../prompts'
@@ -2144,6 +2148,14 @@ async function genSample() {
   } finally {
     sampling.value = false
   }
+}
+
+/** 升格对照生成完成：写进当前记录并重新归档（id 覆盖写，幂等） */
+async function onElevationSave(elev) {
+  if (!record.value) return
+  record.value = { ...record.value, elevation: elev }
+  const ok = await archiveRecord(record.value)
+  if (ok) archiveState.value = 'docs'
 }
 
 onMounted(async () => {

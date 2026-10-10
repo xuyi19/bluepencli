@@ -192,6 +192,9 @@ class PracticeRecordIn(BaseModel):
     # 结果冻结：标准版本 / 提示词版本 / 模型 / 温度（前端 orchestrator.buildProvenance 组装）
     # ⚠️ 同理必须显式声明，否则同上静默丢弃
     provenance: dict | None = None
+    # 升格对照（前端按需生成后随记录存档，agents/elevate.js 产物）
+    # ⚠️ 同理必须显式声明，否则静默丢弃
+    elevation: dict | None = None
 
 
 class PracticeRecordSummary(BaseModel):

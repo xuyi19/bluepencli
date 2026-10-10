@@ -60,6 +60,24 @@ export function standardCount() {
   return Object.values(ALL_STANDARDS).filter((s) => s && (s.points || []).length > 0).length
 }
 
+/**
+ * 某题标准的**来源层**（合并后从哪一层胜出）。
+ * 合并是覆盖式的，从 ALL_STANDARDS 里已看不出来源 —— 精读/批改页据此
+ * 决定「这份标准可不可信」的提示口径：
+ *   manual（校准工作台人工精校）/ private（私有卷人工标准）/ public（仓库内人工精校）
+ *   → 'llm'（AI 预解析、未人工精校——给分仅供参考）/ null（无标准）
+ * ⚠️ 判据用「有没有采分点」而非「键在不在」（同 standardCount 的空壳坑）。
+ */
+export function standardOrigin(questionId) {
+  if (!questionId) return null
+  const has = (t) => t && (t.points || []).length > 0
+  if (has(MANUAL_STANDARDS[questionId])) return 'manual'
+  if (has(PRIVATE_STANDARDS[questionId])) return 'private'
+  if (has(PUBLIC_STANDARDS[questionId])) return 'public'
+  if (has(GENERATED_STANDARDS[questionId])) return 'llm'
+  return null
+}
+
 // TODO(后续)：.bpq 私有包可携带采分点标准（作者侧导出时一并打包），
 // 用户导入后写入 IndexedDB（store: standards），再由 resolver 合并。
 // 现在私有标准只服务于本机 --mode full 构建，分发出去的题没有标准，属已知缺口。
