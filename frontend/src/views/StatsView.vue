@@ -22,6 +22,68 @@
         </div>
       </section>
 
+      <!-- M7 学习周报：纯本地规则派生，零 LLM 成本。数据不足时 weekly.js 自己明说
+           「样本不够」，这里只展示不加工 —— 每条结论的依据都随字段给出 -->
+      <section class="rounded-2xl p-6 neu mb-6">
+        <div class="flex items-baseline justify-between gap-3 mb-4">
+          <div class="text-sm font-medium text-c-body">本周周报</div>
+          <div class="text-[11px] text-c-muted tnum">{{ weekly.label }}</div>
+        </div>
+
+        <div v-if="weekly.empty" class="rounded-xl p-5 text-xs leading-6"
+          style="background: #faf6f1; color: #78716c">
+          {{ weekly.advice }}
+          <!-- 上周事实照报：让人分得清「本周没练」和「从没练过」，负向信息也有用 -->
+          <span class="block mt-1 tnum">
+            {{ weekly.lastWeek.count ? `上周练了 ${weekly.lastWeek.count} 篇。` : '上周也没练。' }}
+          </span>
+        </div>
+
+        <template v-else>
+          <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <div class="rounded-xl p-4 neu-inset">
+              <div class="text-xs text-c-muted mb-1">本周练习</div>
+              <div class="text-xl font-semibold tnum text-c-ink">{{ weekly.thisWeek.count }} 篇</div>
+            </div>
+            <div class="rounded-xl p-4 neu-inset">
+              <div class="text-xs text-c-muted mb-1">本周平均得分率</div>
+              <div class="text-xl font-semibold tnum text-c-ink">
+                {{ weekly.thisWeek.avgRate != null ? weekly.thisWeek.avgRate + '%' : '—' }}
+              </div>
+            </div>
+            <div class="rounded-xl p-4 neu-inset">
+              <div class="text-xs text-c-muted mb-1">对比上周</div>
+              <div v-if="weekly.compare" class="text-xl font-semibold tnum"
+                :style="{ color: weekly.compare.delta > 0 ? '#8b9d77' : weekly.compare.delta < 0 ? '#b4552d' : '#78716c' }">
+                {{ weekly.compare.delta > 0 ? '+' : '' }}{{ weekly.compare.delta }}
+              </div>
+              <div v-else class="text-sm text-c-muted">—</div>
+              <div class="text-[11px] text-c-muted mt-1">
+                {{ weekly.compare ? weekly.compare.basis : '两边样本都够 3 篇才谈升降' }}
+              </div>
+            </div>
+          </div>
+
+          <div v-if="weekly.topErrors.length" class="mt-4">
+            <div class="text-xs text-c-muted mb-2">下周重点（本周高频批注类型）</div>
+            <div class="space-y-2">
+              <div v-for="e in weekly.topErrors" :key="e.id" class="rounded-xl p-3 neu-inset">
+                <div class="flex items-baseline gap-2">
+                  <span class="text-xs font-medium text-c-body">{{ e.label }}</span>
+                  <span class="text-[11px] text-c-muted tnum">{{ e.count }} 次</span>
+                </div>
+                <div class="text-[11px] text-c-muted mt-1 leading-5">
+                  自查：{{ e.selfCheck }}
+                  <span class="block">{{ e.basis }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="text-xs leading-6 mt-4" style="color: #5c4033">{{ weekly.advice }}</div>
+        </template>
+      </section>
+
       <!-- 得分趋势 -->
       <section class="rounded-2xl p-6 neu mb-6">
         <div class="text-sm font-medium text-c-body mb-5">得分率趋势</div>
@@ -115,6 +177,7 @@ import { RouterLink } from 'vue-router'
 import * as echarts from 'echarts'
 import { listAllRecords } from '../utils/record'
 import { buildProfile, weakestDimension } from '../utils/grading/profile'
+import { buildWeeklyReport } from '../utils/weekly'
 
 const records = ref([])
 const trendEl = ref(null)
@@ -150,6 +213,10 @@ const overview = computed(() => {
 const profile = computed(() => buildProfile(records.value))
 /** 最弱项：可用维度不足 2 个时为 null（没有比较对象，说了等于没说） */
 const weakest = computed(() => weakestDimension(profile.value))
+
+// M7 学习周报：纯本地规则派生（零 LLM 成本）。数据不足时 weekly.js 自己明说
+// 「样本不够」，这里只展示不加工 —— 每条结论的依据都在字段里（compare.basis / advice）。
+const weekly = computed(() => buildWeeklyReport(records.value))
 
 const topDeductions = computed(() => {
   const map = new Map()
