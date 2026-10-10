@@ -10,11 +10,16 @@
 // 提交后与该题采分点标准（points[].evidence = 材料原文片段）对照，
 // 判定每个采分点是否被找到、每处标注是否有效。
 //
-// 判定规则（刻意保持可解释，三条）：
-//   1. 标注 ⊇ 证据（整条证据都在标注里）→ 命中；
-//   2. 证据 ⊇ 标注 且覆盖 ≥ 50% → 命中；
-//   3. 证据 ⊇ 标注 覆盖 < 50%，但标注含该点任一关键词 → 命中
-//      （只划到证据里的一个小词，若那个词正是关键词，也算找对了地方）。
+// 判定分级（2026-10-10 从二值改成三级 —— 依据：二值判定两头都不准：
+//   划个关键词就算全中 = 太松；划了证据里过半的核心短语却不在
+//   关键词表 = 漏判。真实阅卷对"找对地方但没找全"也是部分给分）：
+//   full（全分）
+//     1. 标注 ⊇ 证据（整条证据都在标注里）
+//     2. 证据 ⊇ 标注 且覆盖 ≥ 50%
+//   partial（半分）
+//     3. 证据 ⊇ 标注 且覆盖 ≥ 25%（连续片段，找对地方但没找全）
+//     4. 覆盖 < 25%，但标注含该点关键词（且标注必须在证据片段内）
+//   都不满足 → miss。
 //
 // 刻意**不做**的：
 //   · 关键词全材料扫描 —— 关键词（如"电商"）会在无关段落反复出现，
@@ -22,6 +27,9 @@
 //   · synonyms —— 它是给**作答文字**用的等价表述，材料标注是原文划线，
 //     不存在换个说法的问题；
 //   · 模糊相似度 —— 匹配必须能向用户解释"为什么命中/没命中"。
+//
+// 宽划提示（不扣分）：命中但标注长度超过其命中证据总长的 2.5 倍，
+// 多半是"划一大段蒙要点"——统计进 stats.wideMarks，由 UI 提醒「精确到句」。
 //
 // 一条标注可以命中多个点（一句话里有多层要点）；一个点被任一标注命中即算找到。
 // 本模块零依赖、纯函数，可被 Node 直接 import（护栏：.tools/test-read-match.mjs）。
@@ -31,22 +39,24 @@ function norm(s) {
   return String(s || '').replace(/\s+/g, '')
 }
 
-/** 单条标注 × 单条证据 是否命中；返回命中的方式（用于展示）或 null */
+/** 单条标注 × 单条证据；返回 { way, grade, evidence, keyword? } 或 null */
 function hitEvidence(markText, evidence, keywords) {
   const m = norm(markText)
   const e = norm(evidence)
   if (!m || !e) return null
-  if (m.includes(e)) return { way: 'cover', evidence }
+  if (m.includes(e)) return { way: 'cover', grade: 'full', evidence }
   if (e.includes(m)) {
     const ratio = m.length / e.length
-    if (ratio >= 0.5) return { way: 'cover', evidence }
+    if (ratio >= 0.5) return { way: 'cover', grade: 'full', evidence }
+    // 关键词先于 25% 线判：划中的正是要点词，way 展示语义更准（分级同为 partial）
     const kw = (keywords || []).find((k) => k && m.includes(norm(k)))
-    if (kw) return { way: 'keyword', evidence, keyword: kw }
+    if (kw) return { way: 'keyword', grade: 'partial', evidence, keyword: kw }
+    if (ratio >= 0.25) return { way: 'partial', grade: 'partial', evidence }
   }
   return null
 }
 
-/** 单条标注 × 单个采分点：返回 [{ way, evidence, keyword? }] 或 [] */
+/** 单条标注 × 单个采分点：返回 [{ way, grade, evidence, keyword? }] 或 [] */
 function hitPoint(markText, point) {
   const outs = []
   for (const ev of point?.evidence || []) {
@@ -61,10 +71,12 @@ function hitPoint(markText, point) {
  * @param {Array} marks   用户标注 [{ text, nth, color?, id? }]
  * @param {Array} points  标准采分点 [{ id, label, weight, evidence, keywords? }]
  * @returns {{
- *   pointResults: [{ point, hit, matched: [{ markId, markText, way, evidence, keyword? }] }],
- *   markResults:  [{ mark, hitPointIds: [] }],
- *   stats: { totalPoints, hitPoints, totalWeight, hitWeight, scoreRate,
- *            totalMarks, validMarks, missMarks }
+ *   pointResults: [{ point, hit, grade: 'full'|'partial',
+ *                    matched: [{ markId, markText, way, grade, evidence, keyword? }] }],
+ *   markResults:  [{ mark, hitPointIds: [], wide: boolean }],
+ *   stats: { totalPoints, hitPoints, fullPoints, partialPoints,
+ *            totalWeight, hitWeight, scoreRate,
+ *            totalMarks, validMarks, missMarks, wideMarks }
  * }}
  */
 export function matchMarksToPoints(marks, points) {
@@ -79,21 +91,32 @@ export function matchMarksToPoints(marks, points) {
         matched.push({ markId: mark?.id || mark?.text, markText: mark?.text, ...h })
       }
     }
-    return { point, hit: matched.length > 0, matched }
+    // 点的分级取最好的一次命中：有过 full 就是 full，否则 partial
+    const grade = matched.some((h) => h.grade === 'full') ? 'full' : 'partial'
+    return { point, hit: matched.length > 0, grade, matched }
   })
 
   const markResults = ms.map((mark) => {
     const hitPointIds = pointResults
       .filter((pr) => pr.matched.some((x) => x.markText === mark?.text))
       .map((pr) => pr.point.id)
-    return { mark, hitPointIds }
+    // 宽划：命中的标注长度远超其踩中的证据总长 —— 划一大段蒙要点。
+    // 只对命中标注统计（没命中的本来就算误划，不必再背一条"宽"）。
+    const hitEvLen = pointResults
+      .reduce((s, pr) => s + pr.matched
+        .filter((x) => x.markText === mark?.text)
+        .reduce((t, x) => t + norm(x.evidence).length, 0), 0)
+    const wide = hitPointIds.length > 0
+      && norm(mark?.text).length > hitEvLen * 2.5
+    return { mark, hitPointIds, wide }
   })
 
   const totalWeight = ps.reduce((s, p) => s + (Number(p.weight) || 0), 0)
   const hitWeight = pointResults
     .filter((r) => r.hit)
-    .reduce((s, r) => s + (Number(r.point.weight) || 0), 0)
+    .reduce((s, r) => s + (Number(r.point.weight) || 0) * (r.grade === 'partial' ? 0.5 : 1), 0)
   const hitPoints = pointResults.filter((r) => r.hit).length
+  const fullPoints = pointResults.filter((r) => r.grade === 'full').length
   const validMarks = markResults.filter((r) => r.hitPointIds.length > 0).length
 
   return {
@@ -102,13 +125,16 @@ export function matchMarksToPoints(marks, points) {
     stats: {
       totalPoints: ps.length,
       hitPoints,
+      fullPoints,
+      partialPoints: hitPoints - fullPoints,
       totalWeight,
-      hitWeight,
-      // 得分率按分值加权 —— 4 分的机制要点和 1 分的细节不应同价
+      hitWeight: Math.round(hitWeight * 10) / 10,
+      // 得分率按分值加权 —— 4 分的机制要点和 1 分的细节不应同价；部分命中折半
       scoreRate: totalWeight > 0 ? Math.round((hitWeight / totalWeight) * 1000) / 10 : 0,
       totalMarks: ms.length,
       validMarks,
       missMarks: ms.length - validMarks,
+      wideMarks: markResults.filter((r) => r.wide).length,
     },
   }
 }

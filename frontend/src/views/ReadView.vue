@@ -120,7 +120,9 @@
             <div class="text-2xl font-semibold tnum text-c-bark">
               {{ result.stats.hitPoints }}<span class="text-sm text-c-muted">/{{ result.stats.totalPoints }}</span>
             </div>
-            <div class="text-[11px] text-c-muted mt-1">命中采分点</div>
+            <div class="text-[11px] text-c-muted mt-1">
+              命中采分点<template v-if="result.stats.partialPoints > 0">（部分 {{ result.stats.partialPoints }}）</template>
+            </div>
           </div>
           <div class="rounded-2xl p-4 neu text-center">
             <div class="text-2xl font-semibold tnum text-c-bark">
@@ -137,17 +139,21 @@
             :style="pr.hit ? '' : 'background: #faf3ef'">
             <div class="flex items-start gap-2.5">
               <span class="shrink-0 w-5 h-5 rounded-full text-[11px] flex items-center justify-center font-medium mt-0.5"
-                :style="pr.hit ? 'background:#e4ead8;color:#5a7247' : 'background:#f0ddd2;color:#a05a3c'">
-                {{ pr.hit ? '✓' : '✗' }}
+                :style="pr.hit
+                  ? (pr.grade === 'full' ? 'background:#e4ead8;color:#5a7247' : 'background:#f2ebe2;color:#a07d3c')
+                  : 'background:#f0ddd2;color:#a05a3c'">
+                {{ pr.hit ? (pr.grade === 'full' ? '✓' : '◐') : '✗' }}
               </span>
               <div class="min-w-0">
                 <div class="text-xs text-c-body leading-5">
                   {{ pr.point.label }}
                   <span class="text-c-muted tnum ml-1">（{{ pr.point.weight }} 分）</span>
+                  <span v-if="pr.hit && pr.grade === 'partial'" class="text-[10px] ml-1" style="color:#a07d3c">部分命中</span>
                 </div>
                 <div v-if="pr.hit" class="text-[11px] text-c-muted leading-5 mt-1">
                   命中：划了「{{ pr.matched[0].markText.slice(0, 24) }}{{ pr.matched[0].markText.length > 24 ? '…' : '' }}」
                   <template v-if="pr.matched[0].way === 'keyword'">（含关键词「{{ pr.matched[0].keyword }}」）</template>
+                  <template v-else-if="pr.matched[0].way === 'partial'">（只覆盖证据 {{ Math.round(pr.matched[0].markText.length / pr.matched[0].evidence.length * 100) }}%，找对地方但没找全）</template>
                 </div>
                 <div v-else class="text-[11px] leading-5 mt-1" style="color:#a05a3c">
                   漏掉的原文：{{ (pr.point.evidence || []).join('；') }}
@@ -160,9 +166,14 @@
         <div v-if="overlayMissing > 0" class="text-[11px] text-c-muted mt-3">
           有 {{ overlayMissing }} 条漏点原文在当前材料里定位不到（材料被裁剪过），红色叠加可能不完整 —— 可在练习批改页用「查看整卷」核对。
         </div>
+        <div v-if="result.stats.wideMarks > 0" class="text-[11px] leading-5 mt-3 rounded-xl px-3 py-2"
+          style="background:#faf3e8;color:#a07d3c">
+          有 {{ result.stats.wideMarks }} 处标注划得太宽（远超要点句长度）—— 找点尽量精确到句，
+          划半段材料等于没训练到「定位」这件事。
+        </div>
         <div class="text-[11px] text-c-muted mt-3 leading-5">
-          找点得分率 = 找到的采分点分值合计 ÷ 总分（{{ result.stats.hitWeight }}/{{ result.stats.totalWeight }}）。
-          判定依据是标准里的材料原文证据，与你划中的位置逐字比对。
+          找点得分率 = 找到的采分点分值合计 ÷ 总分（{{ result.stats.hitWeight }}/{{ result.stats.totalWeight }}），
+          部分命中按半分计。判定依据是标准里的材料原文证据，与你划中的位置逐字比对。
         </div>
       </section>
     </template>
