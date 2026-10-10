@@ -95,6 +95,7 @@
           </button>
         </div>
         <input ref="fileInput" type="file" accept=".json" class="hidden" @change="doImport" />
+        <input ref="packInput" type="file" accept=".json" class="hidden" @change="doImportPack" />
       </section>
     </div>
 
@@ -291,6 +292,7 @@ import { CURRENT_VERSION } from '../data/changelog'
 import { AUTHOR } from '../data/author'
 import { copyAuthorLine } from '../utils/watermark'
 import WeChatPanel from '../components/WeChatPanel.vue'
+import { applyPack, removePack, getPackInfo, validatePack } from '../utils/standardsPack'
 
 // 服务商预设：点了自动填 Base URL 与模型名，省得用户去查文档。
 // models 是「模型名建议」：选中预设后，模型输入框的下拉里给常见型号（仍可自由手输，
@@ -413,7 +415,7 @@ const note = computed(() =>
     : '你的 API Key 只保存在本机，不上传服务器。更换设备需要重新配置。'
 )
 
-const DATA_ACTIONS = [
+const DATA_ACTIONS = computed(() => [
   {
     key: 'export', label: '导出全部数据', desc: '存成 JSON，可换设备导入或备份',
     icon: ICONS.export, run: () => doExport(),
@@ -423,10 +425,22 @@ const DATA_ACTIONS = [
     icon: ICONS.import, run: () => fileInput.value?.click(),
   },
   {
+    key: 'stdpack', label: '导入标准更新包',
+    desc: packInfo.value
+      ? `已导入 ${packInfo.value.count} 题标准（${(packInfo.value.exportedAt || '').slice(0, 10)}）· 点击更新，导入后页面刷新生效`
+      : '导入作者发放的标准校准包，提升批改与精读划点准确度',
+    icon: ICONS.import, run: () => packInput.value?.click(),
+  },
+  ...(packInfo.value ? [{
+    key: 'stdpack-remove', label: '移除标准更新包',
+    desc: '删除导入的标准，回到软件内置标准',
+    icon: ICONS.clear, danger: true, run: () => doRemovePack(),
+  }] : []),
+  {
     key: 'clear', label: '清空所有数据', desc: '删除本机全部练习记录，无法恢复',
     icon: ICONS.clear, danger: true, run: () => doClearAll(),
   },
-]
+])
 
 onMounted(async () => {
   const saved = getConfig()
@@ -435,6 +449,7 @@ onMounted(async () => {
   cfg.model = saved.model || PRESETS[0].model
   backendUrl.value = getBackendUrl()
   await refreshBackend()
+  refreshPackInfo()
   // 服务端托管 Key 时 ready=true 不打扰；本机也没 Key 才自动弹配置窗口
   if (!ready.value) showApiModal.value = true
 })
@@ -536,6 +551,51 @@ async function doImport(e) {
     toast.error('导入失败：文件格式不对')
   }
   e.target.value = ''
+}
+
+// ── 标准更新包：校验 → 整包替换 → 刷新生效（标准表在模块加载时快照） ──
+const packInfo = ref(null)
+const packInput = ref(null)
+
+function refreshPackInfo() {
+  packInfo.value = getPackInfo()
+}
+
+async function doImportPack(e) {
+  const file = e.target.files?.[0]
+  if (!file) return
+  try {
+    const json = JSON.parse(await file.text())
+    const v = validatePack(json)
+    if (!v.ok) {
+      toast.error(`标准包校验未通过：${v.problems[0]}${v.problems.length > 1 ? `（共 ${v.problems.length} 处）` : ''}`)
+      return
+    }
+    // 整包替换语义：有旧包时明确告知会被替换
+    const old = getPackInfo()
+    if (old && !window.confirm(`已有一份标准包（${old.count} 题，${(old.exportedAt || '').slice(0, 10)}）。\n导入将整包替换（${v.count} 题），确定继续？`)) {
+      return
+    }
+    const r = applyPack(json)
+    if (!r.ok) {
+      toast.error(`导入失败：${r.problems[0]}`)
+      return
+    }
+    refreshPackInfo()
+    toast.success(`标准包已导入：${r.count} 题${r.replaced ? `（替换旧包 ${r.replaced} 题）` : ''}，页面即将刷新生效`)
+    setTimeout(() => window.location.reload(), 1200)
+  } catch (err) {
+    toast.error('导入失败：不是有效的标准包文件')
+  }
+  e.target.value = ''
+}
+
+function doRemovePack() {
+  if (!window.confirm('移除标准更新包，回到软件内置标准？')) return
+  removePack()
+  refreshPackInfo()
+  toast.success('已移除，页面即将刷新')
+  setTimeout(() => window.location.reload(), 1200)
 }
 
 async function doClearAll() {

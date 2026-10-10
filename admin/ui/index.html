@@ -49,6 +49,23 @@
             含私有卷
           </label>
         </div>
+        <!-- 标准校准（大模型）三件套：Key 只经环境变量传给子进程，不落盘不进 argv -->
+        <div class="row">
+          <label>LLM 地址</label>
+          <input id="llm-base" type="text" placeholder="https://api.deepseek.com（留空用默认）" spellcheck="false" />
+        </div>
+        <div class="row">
+          <label>模型</label>
+          <input id="llm-model" type="text" placeholder="deepseek-chat（留空用默认）" spellcheck="false" />
+        </div>
+        <div class="row">
+          <label>LLM Key</label>
+          <input id="llm-key" type="password" placeholder="校准用 · 只走环境变量" autocomplete="new-password" />
+        </div>
+        <div class="row wide">
+          <label>题目 id</label>
+          <input id="std-ids" type="text" placeholder="real-2020-guokao-1,builtin-q-01（校准用，留空配合全量按钮）" spellcheck="false" />
+        </div>
       </div>
     </fieldset>
 

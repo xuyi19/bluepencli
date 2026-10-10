@@ -24,13 +24,21 @@ import { PRIVATE_STANDARDS } from '@private-standards'
 //    （ERR_IMPORT_ATTRIBUTE_MISSING）—— .tools/ 下的工具（prompt-size、calibrate…）
 //    都是 Node 直跑并 import 本文件，漏了它整个工具链会在加载期崩。
 import MANUAL_STANDARDS from './manual.json' with { type: 'json' }
+// 标准更新包（用户在设置页导入的校准包）：最高优先级层。
+// localStorage 只在浏览器有 —— Node 直跑（.tools 工具链 import 本文件）
+// 时 loadImportedStandards 安全返回空表，不会炸加载期。
+import { loadImportedStandards } from '../../utils/standardsPack.js'
+
+// 模块加载时快照一次：standardOrigin 是高频调用，别每次都解析 localStorage JSON。
+// 导入新包后要生效 → 页面刷新（整页重载会重新执行本模块）。
+const IMPORTED_STANDARDS = loadImportedStandards()
 
 /**
  * 全量标准表：questionId -> standard
  *
  * 覆盖优先级（后者覆盖前者）：
  *   generated（工具批量产出）< public（仓库内人工精校）< manual（校准工作台产出）
- *   < private（私有卷）
+ *   < private（私有卷）< imported（用户导入的标准更新包）
  * 人工精校永远压过机器生成——质量判断上，人的判断更靠得住。
  */
 export const ALL_STANDARDS = {
@@ -38,6 +46,9 @@ export const ALL_STANDARDS = {
   ...PUBLIC_STANDARDS,
   ...MANUAL_STANDARDS,
   ...PRIVATE_STANDARDS,
+  // 导入的标准更新包压过一切内置层：它是"最新一次校准"的产物，
+  // 用户导包就是为了让新标准生效 —— 旧内置层不许反超。
+  ...IMPORTED_STANDARDS,
 }
 
 /**
@@ -71,6 +82,8 @@ export function standardCount() {
 export function standardOrigin(questionId) {
   if (!questionId) return null
   const has = (t) => t && (t.points || []).length > 0
+  // 导入包最高：它是最新校准（作者已审签），来源可信度高于一切内置层
+  if (has(IMPORTED_STANDARDS[questionId])) return 'imported'
   if (has(MANUAL_STANDARDS[questionId])) return 'manual'
   if (has(PRIVATE_STANDARDS[questionId])) return 'private'
   if (has(PUBLIC_STANDARDS[questionId])) return 'public'

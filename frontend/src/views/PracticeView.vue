@@ -1117,6 +1117,9 @@
         </div>
       </section>
 
+      <!-- 对标差距：我的作答 vs 满分答案的逐点差距（纯代码，零成本） -->
+      <GapPanel v-if="record" :rec="record" />
+
       <!-- 升格对照：从这份答案到高分答案的逐句桥梁（按需生成，存进记录） -->
       <ElevationPanel v-if="record" :rec="record" @save="onElevationSave" />
 
@@ -1167,6 +1170,7 @@ import Highlightable from '../components/Highlightable.vue'
 import ReviewCard from '../components/ReviewCard.vue'
 import CredibilityCard from '../components/CredibilityCard.vue'
 import ElevationPanel from '../components/ElevationPanel.vue'
+import GapPanel from '../components/GapPanel.vue'
 import GridPaper from '../components/GridPaper.vue'
 import { chat } from '../api/llm'
 import { buildFollowupMessages, buildSampleMessages } from '../prompts'

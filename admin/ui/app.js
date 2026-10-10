@@ -91,6 +91,50 @@ const TOOLS = [
     ],
   },
   {
+    group: '标准校准（大模型）',
+    hint: '填好 LLM 地址/模型/Key 再跑。流程：体检 → 校准 → 审签采纳 → 导出包（发给用户导入）',
+    items: [
+      {
+        name: '① 标准体检',
+        desc: '全量盘点：来源分布 + 证据定位健康度（失效=精读划点判据已坏）',
+        cmd: 'node',
+        args: () => ['.tools/admin-bank.mjs', 'calibrate', 'scan'],
+      },
+      {
+        name: '② 大模型校准',
+        desc: '逐题调 LLM 修正标准 → 纯代码复检 → 过检进待审（拒收的看 out/pending/*.rej.json）',
+        cmd: 'node',
+        args: () => {
+          const ids = $('std-ids').value.trim()
+          const a = ['.tools/admin-bank.mjs', 'calibrate', 'calibrate']
+          if (ids) a.push('--ids', ids)
+          else a.push('--all-broken')
+          a.push('--limit', '20')
+          return a
+        },
+        needLLM: true,
+      },
+      {
+        name: '③ 查看待审',
+        desc: 'pending 清单（改了几点、什么模型），确认后整批采纳',
+        cmd: 'node',
+        args: () => ['.tools/admin-bank.mjs', 'calibrate', 'pending'],
+      },
+      {
+        name: '④ 审签采纳（写 manual.json）',
+        desc: '待审 → 正式标准（先备份）；采纳前先跑「采分点校验」复查',
+        cmd: 'node',
+        args: () => ['.tools/admin-bank.mjs', 'calibrate', 'apply', '--all'],
+      },
+      {
+        name: '⑤ 导出标准更新包',
+        desc: 'manual.json → 带校验和的 .json 包，发给用户在设置页导入即生效',
+        cmd: 'node',
+        args: () => ['.tools/admin-bank.mjs', 'calibrate', 'export'],
+      },
+    ],
+  },
+  {
     group: '标准与回归',
     hint: '采分点是泄题级数据；回归测试在改完工具链后跑一遍',
     items: [
@@ -182,6 +226,9 @@ async function runTool(t) {
   if (t.needPass && !$('pass').value) {
     return log('⚠ 这个工具需要口令。口令永不写默认值 —— 留默认值等于没加密。', 'err')
   }
+  if (t.needLLM && !$('llm-key').value) {
+    return log('⚠ 校准需要 LLM Key。Key 只经环境变量传给子进程，不落盘、不进命令行。', 'err')
+  }
   consoleEl.textContent = ''
   const shown = args.join(' ').replace(/--passphrase\s+\S+/g, '--passphrase ***')
   // 回显用**语义名**（node / python），真身绝对路径由 Rust 解析后带在报错里
@@ -193,7 +240,14 @@ async function runTool(t) {
       root,
       program: t.cmd,
       args,
-      envs: t.needPass ? { BPQ_PASSPHRASE: $('pass').value } : {},
+      envs: {
+        ...(t.needPass ? { BPQ_PASSPHRASE: $('pass').value } : {}),
+        ...(t.needLLM ? {
+          LLM_API_KEY: $('llm-key').value,
+          LLM_BASE_URL: $('llm-base').value.trim(),
+          LLM_MODEL: $('llm-model').value.trim(),
+        } : {}),
+      },
     })
   } catch (err) {
     log(`⚠ ${err}`, 'err')

@@ -150,16 +150,26 @@ function docs() {
   run(NODE, args, '生成题库汇编文档')
 }
 
+// ────────────────────────────── calibrate（大模型标准校准，GUI 版工作台）
+// 转发到 .tools/standards/admin-calibrate.mjs：scan / calibrate / pending / apply / export。
+// LLM_API_KEY 等**只走环境变量**（GUI 传入），不进 argv、不落盘。
+function calibrate() {
+  const args = ['.tools/standards/admin-calibrate.mjs', ...argv.slice(1)]
+  run(NODE, args, '标准校准工作台')
+}
+
 // ────────────────────────────── main
 const usage = `用法：
   node .tools/admin-bank.mjs list
   node .tools/admin-bank.mjs pack --user "姓名<邮箱>" [--year-from N] [--year-to N] [--passphrase "..."]
   node .tools/admin-bank.mjs verify <file.bpq> [--passphrase "..."]
-  node .tools/admin-bank.mjs docs [--private]`
+  node .tools/admin-bank.mjs docs [--private]
+  node .tools/admin-bank.mjs calibrate scan|calibrate --ids …|pending|apply --all|export`
 switch (cmd) {
   case 'list': list(); break
   case 'pack': pack(); break
   case 'verify': verify(); break
   case 'docs': docs(); break
+  case 'calibrate': calibrate(); break
   default: console.log(usage); process.exit(cmd ? 1 : 0)
 }

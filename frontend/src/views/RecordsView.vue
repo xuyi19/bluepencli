@@ -148,6 +148,9 @@
             <AnnotatedAnswer :answer="detail.answer" :results="detail.results || []" />
           </div>
 
+          <!-- 对标差距：复盘时看「我的作答 vs 满分答案」逐点差在哪（纯代码，零成本） -->
+          <GapPanel v-if="detail.answer" :rec="detail" />
+
           <!-- 升格对照：复盘时回看/补生成（存进记录） -->
           <ElevationPanel v-if="detail.answer" :rec="detail" @save="onElevationSave" />
 
@@ -296,6 +299,7 @@ import ReviewCard from '../components/ReviewCard.vue'
 import KeyPointCheck from '../components/KeyPointCheck.vue'
 import CredibilityCard from '../components/CredibilityCard.vue'
 import ElevationPanel from '../components/ElevationPanel.vue'
+import GapPanel from '../components/GapPanel.vue'
 import { TEACHERS, MODE_LABEL } from '../agents/teachers'
 import { mergeKeyPoints } from '../utils/grading/keyPoints'
 import {
